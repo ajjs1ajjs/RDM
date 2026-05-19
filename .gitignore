@@ -5,6 +5,9 @@
 *.suo
 *.userosscache
 *.sln.docstates
+**/Output/
+**/InnoSetup/
+
 
 # Visual Studio cache and settings
 .vs/
