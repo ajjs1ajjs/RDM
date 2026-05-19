@@ -19,6 +19,9 @@ public partial class RdpHost : TerminalControl
     private string? _pendingPass;
     private RDPSettings? _pendingSettings;
 
+    private System.Windows.Threading.DispatcherTimer? _stateTimer;
+    private bool _wasConnected;
+
     public event EventHandler? Connected;
     public event EventHandler<string>? Disconnected;
     public event EventHandler<string>? ErrorOccurred;
@@ -34,6 +37,7 @@ public partial class RdpHost : TerminalControl
         InitializeRdp();
 
         SizeChanged += OnSizeChanged;
+        Unloaded += (s, e) => { _stateTimer?.Stop(); };
     }
 
     /// <summary>
@@ -188,6 +192,16 @@ catch (Exception) { ErrorOccurred?.Invoke(this, "Connection failed due to initia
             try { _client.DisplayScrollBars = false; } catch { }
 
             _client.Connect();
+
+            if (_stateTimer == null)
+            {
+                _stateTimer = new System.Windows.Threading.DispatcherTimer();
+                _stateTimer.Interval = TimeSpan.FromMilliseconds(500);
+                _stateTimer.Tick += OnStateTimerTick;
+            }
+            _stateTimer.Stop();
+            _stateTimer.Start();
+            _wasConnected = false;
         }
         catch (Exception ex)
         {
@@ -195,7 +209,60 @@ catch (Exception) { ErrorOccurred?.Invoke(this, "Connection failed due to initia
         }
     }
 
-    public override void Disconnect() { try { _client?.Disconnect(); Disconnected?.Invoke(this, "Disconnected"); } catch { } }
+    private void OnStateTimerTick(object? sender, EventArgs e)
+    {
+        if (_client == null) return;
+
+        try
+        {
+            int state = (int)_client.Connected;
+            if (state == 1) // Connected
+            {
+                if (!_wasConnected)
+                {
+                    _wasConnected = true;
+                    Connected?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            else if (state == 0) // Disconnected
+            {
+                if (_wasConnected)
+                {
+                    _wasConnected = false;
+
+                    int extReason = 0;
+                    try { extReason = (int)_client.ExtendedDisconnectReason; } catch { }
+
+                    string reasonMsg = extReason switch
+                    {
+                        1 => "APIInitiatedDisconnect",
+                        2 => "APIInitiatedLogoff",
+                        3 => "ServerIdleTimeout",
+                        4 => "ServerLogonTimeout",
+                        12 => "LogoffByUser",
+                        _ => $"Code {extReason}"
+                    };
+
+                    Disconnected?.Invoke(this, reasonMsg);
+                }
+            }
+        }
+        catch { }
+    }
+
+    public override void Disconnect()
+    {
+        try
+        {
+            _stateTimer?.Stop();
+            _stateTimer = null;
+            _wasConnected = false;
+            _client?.Disconnect();
+            Disconnected?.Invoke(this, "Disconnected");
+        }
+        catch { }
+    }
+
     public void ToggleFullScreen() { try { if (_client != null) { bool isFull = _client.FullScreen; _client.FullScreen = !isFull; } } catch { } }
     public void SendCtrlAltDel() { try { if (_client != null) { _client.SendKeys(17, 18, 46); } } catch { } }
 }

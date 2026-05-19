@@ -25,6 +25,35 @@ public partial class MainViewModel : ObservableObject
         _db.Initialize(settings.Current.DatabasePath);
         SyncTabSelectionCommand = new RelayCommand(OnSyncTabSelection);
         LoadData();
+
+        OpenTabs.CollectionChanged += (s, e) =>
+        {
+            if (e.NewItems != null)
+            {
+                foreach (SessionTabViewModel tab in e.NewItems)
+                {
+                    tab.CloseRequested += OnTabCloseRequested;
+                }
+            }
+            if (e.OldItems != null)
+            {
+                foreach (SessionTabViewModel tab in e.OldItems)
+                {
+                    tab.CloseRequested -= OnTabCloseRequested;
+                }
+            }
+        };
+    }
+
+    private void OnTabCloseRequested(object? sender, EventArgs e)
+    {
+        if (sender is SessionTabViewModel tab)
+        {
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                CloseTab(tab);
+            });
+        }
     }
 
     [ObservableProperty]

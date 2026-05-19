@@ -127,6 +127,21 @@ public partial class RdpSessionViewModel : SessionTabViewModel, IDisposable
         IsConnected = false;
         IsConnecting = false;
 
+        if (message == "APIInitiatedLogoff" || message == "LogoffByUser")
+        {
+            _reconnectAttempts = MaxReconnectAttempts;
+            StatusText = "Logged out";
+            RequestClose();
+            return;
+        }
+
+        if (message == "Disconnected" || message == "APIInitiatedDisconnect")
+        {
+            _reconnectAttempts = MaxReconnectAttempts;
+            StatusText = "Disconnected";
+            return;
+        }
+
         if (_reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;

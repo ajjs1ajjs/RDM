@@ -32,7 +32,7 @@ public partial class SshTerminalControl : TerminalControl
     private int _selectionStart = -1;
     private int _selectionEnd = -1;
 
-    public event EventHandler? ConnectionClosed;
+    public event EventHandler<string>? ConnectionClosed;
 
     static SshTerminalControl() =>
         DefaultStyleKeyProperty.OverrideMetadata(typeof(SshTerminalControl), new FrameworkPropertyMetadata(typeof(SshTerminalControl)));
@@ -116,7 +116,7 @@ public partial class SshTerminalControl : TerminalControl
         });
 
         AppendOutput("Disconnected.\r\n");
-        ConnectionClosed?.Invoke(this, EventArgs.Empty);
+        ConnectionClosed?.Invoke(this, "Manual");
     }
 
     public override void Clear()
@@ -132,6 +132,7 @@ public partial class SshTerminalControl : TerminalControl
 
     private async Task ReadOutputLoopAsync(CancellationToken token)
     {
+        bool hasError = false;
         while (!token.IsCancellationRequested)
         {
             var shell = _shell;
@@ -157,6 +158,7 @@ public partial class SshTerminalControl : TerminalControl
             }
             catch (Exception ex)
             {
+                hasError = true;
                 AppendOutput($"\r\n[Connection error: {ex.Message}]\r\n");
                 break;
             }
@@ -172,7 +174,7 @@ public partial class SshTerminalControl : TerminalControl
         }
 
         if (!_disconnectRequested)
-            _ = Dispatcher.BeginInvoke(() => ConnectionClosed?.Invoke(this, EventArgs.Empty));
+            _ = Dispatcher.BeginInvoke(() => ConnectionClosed?.Invoke(this, hasError ? "Error" : "Clean"));
     }
 
     private void AppendOutput(string text)

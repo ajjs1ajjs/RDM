@@ -126,10 +126,25 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
     [RelayCommand]
     private void Clear() => Terminal?.Clear();
 
-    private async void OnTerminalConnectionClosed(object? sender, EventArgs e)
+    private async void OnTerminalConnectionClosed(object? sender, string reason)
     {
         IsConnected = false;
         IsConnecting = false;
+
+        if (reason == "Clean")
+        {
+            _reconnectAttempts = MaxReconnectAttempts;
+            StatusText = "Disconnected";
+            RequestClose();
+            return;
+        }
+
+        if (reason == "Manual")
+        {
+            _reconnectAttempts = MaxReconnectAttempts;
+            StatusText = "Disconnected";
+            return;
+        }
 
         if (_reconnectAttempts < MaxReconnectAttempts)
         {

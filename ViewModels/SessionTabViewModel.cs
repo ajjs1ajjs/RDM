@@ -14,6 +14,13 @@ public partial class SessionTabViewModel : ObservableObject
     [ObservableProperty] private string _sessionInfo = "";
     [ObservableProperty] private bool _isSelected;
 
+    public event EventHandler? CloseRequested;
+
+    protected void RequestClose()
+    {
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     public virtual void Connect() { }
     public virtual Task ConnectAsync() => Task.CompletedTask;
     public virtual void Disconnect() { }
