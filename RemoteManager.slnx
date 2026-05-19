@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RemoteManager.Tests/RemoteManager.Tests.csproj" />
+  <Project Path="RemoteManager/RemoteManager.csproj" />
+</Solution>

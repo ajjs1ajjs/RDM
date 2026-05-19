@@ -1,0 +1,22 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using RemoteManager.Controls;
+using RemoteManager.Models;
+
+namespace RemoteManager.ViewModels;
+
+public partial class SessionTabViewModel : ObservableObject
+{
+    [ObservableProperty] private string _header = "";
+    [ObservableProperty] private Guid _connectionId;
+    [ObservableProperty] private bool _isConnected;
+    [ObservableProperty] private bool _isConnecting;
+    [ObservableProperty] private string _statusText = "Disconnected";
+    [ObservableProperty] private string _sessionInfo = "";
+    [ObservableProperty] private bool _isSelected;
+
+    public virtual void Connect() { }
+    public virtual Task ConnectAsync() => Task.CompletedTask;
+    public virtual void Disconnect() { }
+
+    public virtual string? GetPassword() => null;
+}

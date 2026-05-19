@@ -1,0 +1,32 @@
+# Build outputs
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache and settings
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+
+# User settings / DB / Logs / App Data
+*.db
+*.log
+**/settings.json
+**/credentials/
+**/logs/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

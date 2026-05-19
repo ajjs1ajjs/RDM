@@ -1,0 +1,15 @@
+global using TextBox = System.Windows.Controls.TextBox;
+global using RichTextBox = System.Windows.Controls.RichTextBox;
+global using Control = System.Windows.Controls.Control;
+global using UserControl = System.Windows.Controls.UserControl;
+global using Application = System.Windows.Application;
+global using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+global using Window = System.Windows.Window;
+global using Color = System.Windows.Media.Color;
+global using FontFamily = System.Windows.Media.FontFamily;
+global using MessageBox = System.Windows.MessageBox;
+global using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+global using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+global using Path = System.IO.Path;
+global using File = System.IO.File;
+global using Directory = System.IO.Directory;
