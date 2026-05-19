@@ -15,6 +15,8 @@ public partial class MainViewModel : ObservableObject
     private readonly IDatabaseService _db;
     private readonly SettingsService _settings;
     private readonly ImportExportService _importExport;
+    private string? _pendingImportPath;
+    private string? _pendingImportPassword;
 
     public MainViewModel(IDatabaseService db, SettingsService settings)
     {
@@ -22,7 +24,32 @@ public partial class MainViewModel : ObservableObject
         _settings = settings;
         _importExport = new ImportExportService(db);
 
+        if (settings.IsFirstRun)
+        {
+            PerformFirstRunSetup(settings);
+        }
+
         _db.Initialize(settings.Current.DatabasePath);
+
+        if (!string.IsNullOrEmpty(_pendingImportPath))
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_pendingImportPassword))
+                {
+                    _importExport.ImportEncrypted(_pendingImportPath, _pendingImportPassword);
+                }
+                else
+                {
+                    _importExport.ImportFromFile(_pendingImportPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Помилка імпорту: {ex.Message}", "Помилка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
         SyncTabSelectionCommand = new RelayCommand(OnSyncTabSelection);
         LoadData();
 
@@ -552,6 +579,110 @@ public partial class MainViewModel : ObservableObject
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Export failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void PerformFirstRunSetup(SettingsService settings)
+    {
+        var importType = System.Windows.MessageBox.Show(
+            "Ласкаво просимо до RemoteManager!\n\n" +
+            "Бажаєте імпортувати існуючі дані або відновитися з резервної копії?\n\n" +
+            "ТАК — Відновити всі дані (базу, налаштування, паролі) з папки автоматичного бекапу (OneDrive тощо).\n" +
+            "НІ — Імпортувати підключення з окремого файлу (.enc, .json, .xml).\n" +
+            "СКАСУВАТИ — Створити новий порожній профіль.",
+            "Початковий імпорт та відновлення",
+            System.Windows.MessageBoxButton.YesNoCancel,
+            System.Windows.MessageBoxImage.Question);
+
+        bool restoredFromFolder = false;
+
+        if (importType == System.Windows.MessageBoxResult.Yes)
+        {
+            var folderDlg = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Виберіть папку резервної копії для відновлення"
+            };
+            if (folderDlg.ShowDialog() == true)
+            {
+                try
+                {
+                    SettingsService.RestoreBackup(folderDlg.FolderName, settings);
+                    restoredFromFolder = true;
+                    System.Windows.MessageBox.Show(
+                        "Дані успішно відновлено з резервної копії!",
+                        "Успіх",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Не вдалося відновити дані: {ex.Message}",
+                        "Помилка",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                }
+            }
+        }
+        else if (importType == System.Windows.MessageBoxResult.No)
+        {
+            var openDlg = new OpenFileDialog
+            {
+                Filter = "Усі підтримувані файли (*.json, *.xml, *.rdm, *.enc)|*.json;*.xml;*.rdm;*.enc|Файли JSON (*.json)|*.json|Файли RDM XML (*.xml, *.rdm)|*.xml;*.rdm|Зашифрований бекап (*.enc)|*.enc|Усі файли (*.*)|*.*",
+                Title = "Виберіть файл для імпорту"
+            };
+
+            if (openDlg.ShowDialog() == true)
+            {
+                var fileName = openDlg.FileName;
+                if (fileName.EndsWith(".enc", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    var pwdDlg = new InputDialog("Введіть пароль для розшифрування файлу:")
+                    {
+                        Title = "Пароль бекапу"
+                    };
+                    if (pwdDlg.ShowDialog() == true)
+                    {
+                        _pendingImportPath = fileName;
+                        _pendingImportPassword = pwdDlg.Value;
+                    }
+                }
+                else
+                {
+                    _pendingImportPath = fileName;
+                }
+            }
+        }
+
+        if (!restoredFromFolder)
+        {
+            var backupSetup = System.Windows.MessageBox.Show(
+                "Бажаєте налаштувати папку для автоматичного резервного копіювання (бекапу) даних?\n\n" +
+                "Якщо налаштовано, копія бази даних, налаштувань та паролів буде автоматично оновлюватися в цій папці (наприклад, у OneDrive) після кожної зміни.",
+                "Налаштування автоматичного бекапу",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (backupSetup == System.Windows.MessageBoxResult.Yes)
+            {
+                var folderDlg = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Виберіть папку для автоматичного бекапу (наприклад, в OneDrive)"
+                };
+                if (folderDlg.ShowDialog() == true)
+                {
+                    settings.Current.BackupFolderPath = folderDlg.FolderName;
+                    settings.Save();
+                    
+                    settings.BackupData();
+
+                    System.Windows.MessageBox.Show(
+                        $"Автоматичний бекап налаштовано в папку:\n{settings.Current.BackupFolderPath}",
+                        "Резервне копіювання налаштовано",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
             }
         }
     }

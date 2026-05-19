@@ -270,4 +270,100 @@ public class ImportExportTests
                 File.Delete(backupPath);
         }
     }
+
+    [Fact]
+    public void TestAutoBackupAndRestore()
+    {
+        // Arrange
+        var backupDir = Path.Combine(Path.GetTempPath(), $"RemoteManager_Backup_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(backupDir);
+
+        var settings = new SettingsService();
+        var originalBackupFolder = settings.Current.BackupFolderPath;
+        var originalDbPath = settings.Current.DatabasePath;
+
+        var testDbPath = Path.Combine(settings.AppDataDir, $"RemoteManager_backup_test_{Guid.NewGuid():N}.db");
+        var dbService = new DatabaseService();
+
+        try
+        {
+            // Set backup folder and database
+            settings.Current.BackupFolderPath = backupDir;
+            settings.Current.DatabasePath = testDbPath;
+            settings.Save();
+
+            dbService.Initialize(testDbPath);
+
+            var parentGroup = new ConnectionGroup { Name = "Backup Group" };
+            dbService.SaveGroup(parentGroup);
+
+            var connection = new Connection
+            {
+                Name = "Backup Connection",
+                Host = "backup.local",
+                Port = 22,
+                Username = "backup_user",
+                Type = ConnectionType.SSH,
+                GroupId = parentGroup.Id
+            };
+            dbService.SaveConnection(connection);
+            var testPassword = "BackupPassword123!";
+            CredentialManager.Save(connection.Id, testPassword);
+
+            // Act - Trigger backup manually (SettingsService.Instance is set, and CredentialManager.Save already triggers BackupData)
+            settings.BackupData();
+
+            // Assert backup files exist
+            var dbFileName = Path.GetFileName(testDbPath);
+            Assert.True(File.Exists(Path.Combine(backupDir, "settings.json")), "settings.json should exist in backup folder");
+            Assert.True(File.Exists(Path.Combine(backupDir, dbFileName)), "database should exist in backup folder");
+            
+            var backupCredsFolder = Path.Combine(backupDir, "credentials");
+            Assert.True(Directory.Exists(backupCredsFolder), "credentials folder should exist in backup");
+            Assert.True(File.Exists(Path.Combine(backupCredsFolder, $"{connection.Id:N}.bin")), "connection credential should exist in backup credentials");
+
+            // Now clean local database and credentials (simulating local data loss)
+            dbService.Dispose();
+            if (File.Exists(testDbPath))
+                File.Delete(testDbPath);
+
+            var localCredPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "RemoteManager",
+                "credentials",
+                $"{connection.Id:N}.bin");
+            if (File.Exists(localCredPath))
+                File.Delete(localCredPath);
+
+            // Act - Restore backup
+            SettingsService.RestoreBackup(backupDir, settings);
+
+            // Assert files are restored locally
+            Assert.True(File.Exists(settings.Current.DatabasePath), "Restored database file should exist");
+            Assert.True(File.Exists(localCredPath), "Restored local credential file should exist");
+            
+            var restoredPassword = CredentialManager.Load(connection.Id);
+            Assert.NotNull(restoredPassword);
+            Assert.Equal(testPassword, restoredPassword);
+
+            // Cleanup restored files
+            CredentialManager.Delete(connection.Id);
+            if (File.Exists(settings.Current.DatabasePath))
+                File.Delete(settings.Current.DatabasePath);
+        }
+        finally
+        {
+            dbService.Dispose();
+            if (File.Exists(testDbPath))
+                File.Delete(testDbPath);
+
+            if (Directory.Exists(backupDir))
+                Directory.Delete(backupDir, true);
+
+            // Restore original settings
+            settings.Current.BackupFolderPath = originalBackupFolder;
+            settings.Current.DatabasePath = originalDbPath;
+            settings.Save();
+        }
+    }
 }

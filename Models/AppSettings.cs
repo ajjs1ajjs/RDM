@@ -20,6 +20,7 @@ public class AppSettings
     public string DefaultRdpPort { get; set; } = "3389";
     public string DefaultSshPort { get; set; } = "22";
     public string Language { get; set; } = "uk-UA";
+    public string BackupFolderPath { get; set; } = string.Empty;
     public System.Collections.Generic.List<DomainCredential> DomainCredentials { get; set; } = new System.Collections.Generic.List<DomainCredential>();
 
     private static readonly JsonSerializerOptions JsonOptions = new()

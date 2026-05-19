@@ -10,7 +10,7 @@ internal static class CredentialManager
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RemoteManager.Credentials.v2");
     private static readonly object SyncRoot = new();
 
-    private static string CredentialDir =>
+    internal static string CredentialDir =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RemoteManager",
@@ -36,6 +36,7 @@ internal static class CredentialManager
             var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
             WriteAtomic(path, protectedData);
         }
+        SettingsService.Instance?.BackupData();
     }
 
     public static string? Load(Guid connectionId)
@@ -81,6 +82,7 @@ internal static class CredentialManager
             DeleteIfExists(GetLegacyCredentialPath(connectionId));
             DeleteIfExists(Path.Combine(LegacyCredentialDir, $"{connectionId:N}_key.bin"));
         }
+        SettingsService.Instance?.BackupData();
     }
 
     private static string GetDomainCredentialKey(string domain) =>
@@ -101,6 +103,7 @@ internal static class CredentialManager
             var protectedData = ProtectedData.Protect(payload, Entropy, DataProtectionScope.CurrentUser);
             WriteAtomic(path, protectedData);
         }
+        SettingsService.Instance?.BackupData();
     }
 
     public static (string Username, string Password)? LoadDomainCredential(string domain)
@@ -148,6 +151,7 @@ internal static class CredentialManager
             var path = Path.Combine(CredentialDir, $"{key}.bin");
             DeleteIfExists(path);
         }
+        SettingsService.Instance?.BackupData();
     }
 
     private static string GetCredentialPath(Guid connectionId) =>

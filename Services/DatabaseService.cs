@@ -249,6 +249,15 @@ public class DatabaseService : IDatabaseService
         {
             // Silently ignore backup errors to prevent app crash
         }
+
+        try
+        {
+            SettingsService.Instance?.BackupData();
+        }
+        catch
+        {
+            // Silently ignore sync errors
+        }
     }
 
     public void Dispose()

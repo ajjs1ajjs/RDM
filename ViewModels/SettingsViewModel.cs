@@ -24,6 +24,7 @@ public partial class SettingsViewModel : ObservableObject
         _minimizeToTray = settings.Current.MinimizeToTray;
         _defaultRdpPort = settings.Current.DefaultRdpPort;
         _defaultSshPort = settings.Current.DefaultSshPort;
+        _backupFolderPath = settings.Current.BackupFolderPath;
 
         if (settings.Current.DomainCredentials != null)
         {
@@ -60,6 +61,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private string _defaultSshPort = "22";
+
+    [ObservableProperty]
+    private string _backupFolderPath = string.Empty;
 
     public string[] Themes { get; } = ["Dark", "Light"];
 
@@ -120,6 +124,7 @@ public partial class SettingsViewModel : ObservableObject
         _settings.Current.MinimizeToTray = MinimizeToTray;
         _settings.Current.DefaultRdpPort = DefaultRdpPort;
         _settings.Current.DefaultSshPort = DefaultSshPort;
+        _settings.Current.BackupFolderPath = BackupFolderPath;
 
         _settings.Current.DomainCredentials.Clear();
         foreach (var vm in DomainCredentials)
@@ -141,6 +146,26 @@ public partial class SettingsViewModel : ObservableObject
 
         System.Windows.MessageBox.Show("Settings saved!", "Success",
             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+    }
+
+    [RelayCommand]
+    private void ChangeBackupFolder()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Select backup folder"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            BackupFolderPath = dialog.FolderName;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearBackupFolder()
+    {
+        BackupFolderPath = string.Empty;
     }
 
     public event System.Action? ImportCompleted;

@@ -35,3 +35,6 @@ TestResults/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Stakpak session files
+.stakpak/session*
