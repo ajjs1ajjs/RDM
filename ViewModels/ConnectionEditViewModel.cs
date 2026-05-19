@@ -29,11 +29,11 @@ public partial class ConnectionEditViewModel : ObservableObject
     {
         _db = db;
         _existing = existing;
-        Name = existing.Name;
-        Host = existing.Host;
+        Name = existing.Name ?? "";
+        Host = existing.Host ?? "";
         Port = existing.Port;
-        UserName = existing.Username;
-        Description = existing.Description;
+        UserName = existing.Username ?? "";
+        Description = existing.Description ?? "";
         SelectedType = existing.Type;
         SelectedGroupId = existing.GroupId;
 
@@ -240,13 +240,13 @@ public partial class ConnectionEditViewModel : ObservableObject
             return;
 
         var conn = _existing ?? new Connection();
-        conn.Name = Name.Trim();
-        conn.Host = Host.Trim();
+        conn.Name = Name?.Trim() ?? "";
+        conn.Host = Host?.Trim() ?? "";
         conn.Port = Port;
-        conn.Username = UserName.Trim();
+        conn.Username = UserName?.Trim() ?? "";
         conn.Type = SelectedType;
         conn.GroupId = SelectedGroupId ?? Guid.Empty;
-        conn.Description = Description.Trim();
+        conn.Description = Description?.Trim() ?? "";
 
         if (SelectedType == ConnectionType.RDP)
         {
