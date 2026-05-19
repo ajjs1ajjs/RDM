@@ -83,114 +83,112 @@
                                 ToolTip="Settings / Налаштування"/>
                     </StackPanel>
                 </Border>
-
                 <!-- Tree -->
-                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="4,0">
-                    <TreeView ItemsSource="{Binding Groups}"
-                              Background="Transparent" BorderThickness="0">
-                        <TreeView.Resources>
-                            <HierarchicalDataTemplate DataType="{x:Type vm:GroupViewModel}" ItemsSource="{Binding Children}">
-                                <Border Padding="4,3" Background="Transparent"
-                                        Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
-                                    <Border.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Rename Group"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Delete Group"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <Separator/>
-                                            <MenuItem Header="Add RDP Connection" CommandParameter="RDP"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="🖥️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Add SSH Connection" CommandParameter="SSH"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="🔌" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </Border.ContextMenu>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📁" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}"/>
-                                        <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}"/>
+                <TreeView Grid.Row="3" ItemsSource="{Binding Groups}" Padding="4,0"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          Background="Transparent" BorderThickness="0">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type vm:GroupViewModel}" ItemsSource="{Binding Children}">
+                            <Border Padding="4,3" Background="Transparent"
+                                    Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Rename Group"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Delete Group"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Add RDP Connection" CommandParameter="RDP"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🖥️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Add SSH Connection" CommandParameter="SSH"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🔌" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📁" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </HierarchicalDataTemplate>
+                        <HierarchicalDataTemplate DataType="{x:Type vm:ConnectionItemViewModel}">
+                            <Border Padding="6,4,4,4" Margin="0,1" Background="Transparent"
+                                    Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Border.InputBindings>
+                                    <MouseBinding Gesture="LeftDoubleClick"
+                                                  Command="{Binding Tag.DataContext.OpenConnectionCommand, RelativeSource={RelativeSource AncestorType={x:Type Border}}}"
+                                                  CommandParameter="{Binding}"/>
+                                </Border.InputBindings>
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Connect"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.OpenConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="⚡" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Edit"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.EditConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Duplicate"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.DuplicateConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="📋" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Delete"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.DeleteConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
+                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{Binding IsConnected, Converter={StaticResource StatusDotConverter}}"/>
+                                    <TextBlock Text="{Binding TypeIcon}" FontSize="13" Foreground="{StaticResource FgBrush}"/>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
+                                        <TextBlock Text="{Binding Host}" FontSize="10" Foreground="{StaticResource FgDimBrush}"/>
                                     </StackPanel>
-                                </Border>
-                            </HierarchicalDataTemplate>
-                            <HierarchicalDataTemplate DataType="{x:Type vm:ConnectionItemViewModel}">
-                                <Border Padding="6,4,4,4" Margin="0,1" Background="Transparent"
-                                        Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}"
-                                        Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
-                                    <Border.InputBindings>
-                                        <MouseBinding Gesture="LeftDoubleClick"
-                                                      Command="{Binding Tag.DataContext.OpenConnectionCommand, RelativeSource={RelativeSource AncestorType={x:Type Border}}}"
-                                                      CommandParameter="{Binding}"/>
-                                    </Border.InputBindings>
-                                    <Border.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Connect"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.OpenConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="⚡" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <Separator/>
-                                            <MenuItem Header="Edit"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.EditConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Duplicate"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.DuplicateConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="📋" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <Separator/>
-                                            <MenuItem Header="Delete"
-                                                      Command="{Binding PlacementTarget.Tag.DataContext.DeleteConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </Border.ContextMenu>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
-                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
-                                                 Fill="{Binding IsConnected, Converter={StaticResource StatusDotConverter}}"/>
-                                        <TextBlock Text="{Binding TypeIcon}" FontSize="13" Foreground="{StaticResource FgBrush}"/>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-                                            <TextBlock Text="{Binding Host}" FontSize="10" Foreground="{StaticResource FgDimBrush}"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-                            </HierarchicalDataTemplate>
-                        </TreeView.Resources>
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                                <Setter Property="IsExpanded" Value="{Binding IsExpanded}"/>
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                    </TreeView>
-                </ScrollViewer>
+                                </StackPanel>
+                            </Border>
+                        </HierarchicalDataTemplate>
+                    </TreeView.Resources>
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded}"/>
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                </TreeView>
             </Grid>
         </Border>
 
