@@ -33,4 +33,15 @@
     <Resource Include="Resources\Icons\app_icon.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="RemoteManager.Tests\**" />
+    <EmbeddedResource Remove="RemoteManager.Tests\**" />
+    <None Remove="RemoteManager.Tests\**" />
+    <Page Remove="RemoteManager.Tests\**" />
+    <Compile Remove="Build\**" />
+    <EmbeddedResource Remove="Build\**" />
+    <None Remove="Build\**" />
+    <Page Remove="Build\**" />
+  </ItemGroup>
+
 </Project>
