@@ -28,6 +28,8 @@ TestResults/
 **/settings.json
 **/credentials/
 **/logs/
+**/backups/
+*.enc
 
 # OS files
 Thumbs.db

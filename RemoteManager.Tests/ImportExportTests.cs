@@ -170,4 +170,104 @@ public class ImportExportTests
                 File.Delete(xmlPath);
         }
     }
+
+    [Fact]
+    public void TestSecureExportAndImportWithPasswords()
+    {
+        // Arrange
+        var dbPath = GetTempDatabasePath();
+        var backupPath = Path.Combine(Path.GetTempPath(), $"RemoteManager_backup_{Guid.NewGuid():N}.enc");
+        var backupPassword = "SuperSecureBackupPassword123!";
+        var connPassword = "TestConnectionPassword123!";
+
+        var dbService = new DatabaseService();
+        dbService.Initialize(dbPath);
+
+        try
+        {
+            var parentGroup = new ConnectionGroup { Name = "Secure Group" };
+            dbService.SaveGroup(parentGroup);
+
+            var connection = new Connection
+            {
+                Name = "Secure Connection",
+                Host = "secure.host.local",
+                Port = 22,
+                Username = "secure_user",
+                Type = ConnectionType.SSH,
+                GroupId = parentGroup.Id
+            };
+            dbService.SaveConnection(connection);
+            CredentialManager.Save(connection.Id, connPassword);
+
+            var importExport = new ImportExportService(dbService);
+
+            // Act
+            importExport.ExportEncrypted(backupPath, backupPassword);
+
+            // Assert that file is encrypted (does not contain plain text name or host)
+            var fileContent = File.ReadAllBytes(backupPath);
+            var fileText = System.Text.Encoding.UTF8.GetString(fileContent);
+            Assert.DoesNotContain("Secure Connection", fileText);
+            Assert.DoesNotContain("secure.host.local", fileText);
+
+            // Import into a new clean database
+            var dbPathImport = GetTempDatabasePath();
+            var dbServiceImport = new DatabaseService();
+            dbServiceImport.Initialize(dbPathImport);
+
+            try
+            {
+                var importExportImport = new ImportExportService(dbServiceImport);
+                
+                // Act preview
+                var preview = importExportImport.PreviewImportEncrypted(backupPath, backupPassword);
+                Assert.Equal(1, preview.GroupCount);
+                Assert.Equal(1, preview.ConnectionCount);
+
+                // Act import
+                importExportImport.ImportEncrypted(backupPath, backupPassword);
+
+                // Assert data is imported
+                var groups = dbServiceImport.GetAllGroups();
+                var connections = dbServiceImport.GetAllConnections();
+
+                Assert.Single(groups);
+                Assert.Equal("Secure Group", groups[0].Name);
+
+                Assert.Single(connections);
+                var importedConnection = connections[0];
+                Assert.Equal("Secure Connection", importedConnection.Name);
+                Assert.Equal("secure.host.local", importedConnection.Host);
+
+                // Assert password is encrypted and saved under DPAPI for the new connections
+                var restoredPassword = CredentialManager.Load(importedConnection.Id);
+                Assert.Equal(connPassword, restoredPassword);
+
+                // Clean up credentials created for imported connection in test environment
+                CredentialManager.Delete(importedConnection.Id);
+            }
+            finally
+            {
+                dbServiceImport.Dispose();
+                if (File.Exists(dbPathImport))
+                    File.Delete(dbPathImport);
+            }
+        }
+        finally
+        {
+            // Clean up original credentials
+            var connections = dbService.GetAllConnections();
+            foreach (var conn in connections)
+            {
+                CredentialManager.Delete(conn.Id);
+            }
+
+            dbService.Dispose();
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+            if (File.Exists(backupPath))
+                File.Delete(backupPath);
+        }
+    }
 }

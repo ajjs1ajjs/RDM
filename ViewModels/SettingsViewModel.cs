@@ -233,6 +233,105 @@ public partial class SettingsViewModel : ObservableObject
             }
         }
     }
+
+    [RelayCommand]
+    private void ExportEncryptedBackup()
+    {
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Encrypted Backup files (*.enc)|*.enc|All files (*.*)|*.*",
+            Title = "Export Secure Backup (with Passwords)",
+            FileName = $"RemoteManager_backup_{System.DateTime.Now:yyyyMMdd}.enc"
+        };
+
+        if (saveDialog.ShowDialog() == true)
+        {
+            var passwordDialog = new Views.InputDialog("Enter a password to encrypt your connection profiles and passwords:")
+            {
+                Title = "Set Backup Password"
+            };
+
+            if (passwordDialog.ShowDialog() == true)
+            {
+                var password = passwordDialog.Value;
+                if (string.IsNullOrEmpty(password))
+                {
+                    System.Windows.MessageBox.Show("Password cannot be empty. Export canceled.", "Warning", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                try
+                {
+                    _importExport.ExportEncrypted(saveDialog.FileName, password);
+                    System.Windows.MessageBox.Show("Secure backup completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                catch (System.Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Secure backup failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void ImportEncryptedBackup()
+    {
+        var openDialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Encrypted Backup files (*.enc)|*.enc|All files (*.*)|*.*",
+            Title = "Import Secure Backup"
+        };
+
+        if (openDialog.ShowDialog() == true)
+        {
+            var passwordDialog = new Views.InputDialog("Enter the password to decrypt the backup file:")
+            {
+                Title = "Enter Backup Password"
+            };
+
+            if (passwordDialog.ShowDialog() == true)
+            {
+                var password = passwordDialog.Value;
+                try
+                {
+                    var preview = _importExport.PreviewImportEncrypted(openDialog.FileName, password);
+
+                    var groupsPreview = preview.Groups.Count <= 8
+                        ? string.Join("\n", preview.Groups)
+                        : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
+
+                    var connsPreview = preview.Connections.Count <= 12
+                        ? string.Join("\n", preview.Connections)
+                        : string.Join("\n", preview.Connections.Take(12)) + $"\n... (and {preview.Connections.Count - 12} more)";
+
+                    var result = System.Windows.MessageBox.Show(
+                        $"Decrypted successfully!\nFound {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +
+                        $"Groups Preview:\n{groupsPreview}\n\n" +
+                        $"Connections Preview:\n{connsPreview}\n\n" +
+                        $"Do you want to import all of them?",
+                        "Import Preview",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Question
+                    );
+
+                    if (result == System.Windows.MessageBoxResult.Yes)
+                    {
+                        _importExport.ImportEncrypted(openDialog.FileName, password);
+                        ImportCompleted?.Invoke();
+                        System.Windows.MessageBox.Show("Secure import completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                    }
+                }
+                catch (System.Security.Cryptography.CryptographicException)
+                {
+                    System.Windows.MessageBox.Show("Failed to decrypt the file. Please verify the password.", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+                catch (System.Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Import failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+        }
+    }
 }
 
 public partial class DomainCredentialViewModel : ObservableObject

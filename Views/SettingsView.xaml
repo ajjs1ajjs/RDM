@@ -28,19 +28,38 @@
             </GroupBox>
 
             <!-- Backup & Sync -->
-            <GroupBox Header="📥 Backup &amp; Sync (Імпорт та Експорт)" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="📥 Backup &amp; Sync (Резервне копіювання)" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Імпортуйте нові підключення або експортуйте поточну конфігурацію для резервної копії:" 
-                               FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="📥 Import Connections..." Padding="16,8" Margin="0,0,10,0"
+                    <TextBlock Text="Стандартний імпорт/експорт конфігурації (без паролів):" 
+                               FontWeight="SemiBold" FontSize="11" Margin="0,0,0,5"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
+                        <Button Content="📥 Import JSON/XML..." Padding="14,6" Margin="0,0,10,0"
                                 Command="{Binding ImportConnectionsCommand}"
-                                Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"
-                                FontSize="12" FontWeight="SemiBold"/>
-                        <Button Content="📤 Export Connections..." Padding="16,8"
+                                Background="Transparent" Foreground="{StaticResource AccentBrush}" 
+                                BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Cursor="Hand"
+                                FontSize="11" FontWeight="SemiBold"/>
+                        <Button Content="📤 Export JSON..." Padding="14,6"
                                 Command="{Binding ExportConnectionsCommand}"
+                                Background="Transparent" Foreground="{StaticResource AccentBrush}" 
+                                BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Cursor="Hand"
+                                FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+
+                    <Border BorderBrush="{StaticResource CtrlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,0,0,15"/>
+
+                    <TextBlock Text="🔒 Захищений бекап з паролями (Шифрування AES-256):" 
+                               FontWeight="SemiBold" FontSize="11" Margin="0,0,0,5"/>
+                    <TextBlock Text="Дозволяє зберегти підключення разом із паролями в один файл для перенесення на інший ПК або після перевстановлення Windows. Файл захищається вашим паролем." 
+                               FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="🔒 Import Secure Backup..." Padding="14,8" Margin="0,0,10,0"
+                                Command="{Binding ImportEncryptedBackupCommand}"
                                 Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"
-                                FontSize="12" FontWeight="SemiBold"/>
+                                FontSize="11" FontWeight="Bold"/>
+                        <Button Content="🔒 Export Secure Backup..." Padding="14,8"
+                                Command="{Binding ExportEncryptedBackupCommand}"
+                                Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"
+                                FontSize="11" FontWeight="Bold"/>
                     </StackPanel>
                 </StackPanel>
             </GroupBox>

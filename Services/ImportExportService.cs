@@ -260,6 +260,46 @@ public class ImportExportService
 
         _db.ImportData(data);
     }
+
+    public void ExportEncrypted(string filePath, string password)
+    {
+        var data = _db.ExportData();
+        foreach (var conn in data.Connections)
+        {
+            conn.ImportedPassword = CredentialManager.Load(conn.Id);
+        }
+        var json = JsonSerializer.Serialize(data, JsonOptions);
+        var encryptedBytes = Helpers.EncryptionHelper.Encrypt(json, password);
+        File.WriteAllBytes(filePath, encryptedBytes);
+    }
+
+    public void ImportEncrypted(string filePath, string password)
+    {
+        var encryptedBytes = File.ReadAllBytes(filePath);
+        var json = Helpers.EncryptionHelper.Decrypt(encryptedBytes, password);
+        var data = JsonSerializer.Deserialize<ExportData>(json, JsonOptions);
+        if (data == null)
+            throw new InvalidOperationException("Failed to deserialize decrypted backup data.");
+
+        _db.ImportData(data);
+    }
+
+    public ImportPreview PreviewImportEncrypted(string filePath, string password)
+    {
+        var encryptedBytes = File.ReadAllBytes(filePath);
+        var json = Helpers.EncryptionHelper.Decrypt(encryptedBytes, password);
+        var data = JsonSerializer.Deserialize<ExportData>(json, JsonOptions);
+        if (data == null)
+            throw new InvalidOperationException("Failed to deserialize decrypted backup data.");
+
+        return new ImportPreview
+        {
+            GroupCount = data.Groups.Count,
+            ConnectionCount = data.Connections.Count,
+            Groups = data.Groups.Select(g => g.Name).ToList(),
+            Connections = data.Connections.Select(c => $"{c.Name} ({c.Host}:{c.Port})").ToList()
+        };
+    }
 }
 
 public class ImportPreview

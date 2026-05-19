@@ -109,6 +109,7 @@ public class DatabaseService : IDatabaseService
                 group.Id = Guid.NewGuid();
             Groups.Upsert(group);
         });
+        TriggerAutoBackup();
     }
 
     public void DeleteGroup(Guid id)
@@ -125,6 +126,7 @@ public class DatabaseService : IDatabaseService
 
             Groups.Delete(id);
         });
+        TriggerAutoBackup();
     }
 
     public List<Connection> GetAllConnections() =>
@@ -148,6 +150,7 @@ public class DatabaseService : IDatabaseService
             }
             Connections.Upsert(connection);
         });
+        TriggerAutoBackup();
     }
 
     public void DeleteConnection(Guid id)
@@ -157,6 +160,7 @@ public class DatabaseService : IDatabaseService
             CredentialManager.Delete(id);
             Connections.Delete(id);
         });
+        TriggerAutoBackup();
     }
 
     public void ImportData(ExportData data)
@@ -196,6 +200,7 @@ public class DatabaseService : IDatabaseService
                 Connections.Insert(conn);
             }
         });
+        TriggerAutoBackup();
     }
 
     public ExportData ExportData()
@@ -205,6 +210,45 @@ public class DatabaseService : IDatabaseService
             Groups = GetAllGroups(),
             Connections = GetAllConnections()
         });
+    }
+
+    private void TriggerAutoBackup()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_currentPath) || !System.IO.File.Exists(_currentPath))
+                return;
+
+            var dir = System.IO.Path.GetDirectoryName(_currentPath);
+            if (string.IsNullOrEmpty(dir))
+                return;
+
+            var backupDir = System.IO.Path.Combine(dir, "backups");
+            if (!System.IO.Directory.Exists(backupDir))
+                System.IO.Directory.CreateDirectory(backupDir);
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var dbName = System.IO.Path.GetFileNameWithoutExtension(_currentPath);
+            var backupPath = System.IO.Path.Combine(backupDir, $"{dbName}_backup_{timestamp}.db");
+
+            System.IO.File.Copy(_currentPath, backupPath, overwrite: true);
+
+            // Keep only the last 5 backups
+            var backups = System.IO.Directory.GetFiles(backupDir, $"{dbName}_backup_*.db")
+                .Select(f => new System.IO.FileInfo(f))
+                .OrderByDescending(f => f.CreationTime)
+                .Skip(5)
+                .ToList();
+
+            foreach (var oldBackup in backups)
+            {
+                try { oldBackup.Delete(); } catch { }
+            }
+        }
+        catch
+        {
+            // Silently ignore backup errors to prevent app crash
+        }
     }
 
     public void Dispose()
