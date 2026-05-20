@@ -10,8 +10,8 @@ public class StatusDotConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is bool connected)
-            return connected ? Colors.Green : Colors.Gray;
-        return Colors.Gray;
+            return connected ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Gray;
+        return System.Windows.Media.Brushes.Gray;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

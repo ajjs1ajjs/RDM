@@ -19,18 +19,62 @@ public class SettingsService
     public SettingsService()
     {
         Instance = this;
-        AppDataDir = AppDomain.CurrentDomain.BaseDirectory;
-
+        
+        var legacySettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, SettingsFileName);
+        var targetAppDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
+        
+        AppDataDir = targetAppDataDir;
         if (!Directory.Exists(AppDataDir))
             Directory.CreateDirectory(AppDataDir);
 
         SettingsPath = Path.Combine(AppDataDir, SettingsFileName);
+
+        // Migrate legacy settings.json if it exists in the application directory but not in AppData
+        if (File.Exists(legacySettingsPath) && !File.Exists(SettingsPath))
+        {
+            try
+            {
+                File.Move(legacySettingsPath, SettingsPath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to migrate legacy settings: {ex.Message}");
+            }
+        }
+
         IsFirstRun = !File.Exists(SettingsPath);
         Current = AppSettings.Load(SettingsPath);
 
-        if (string.IsNullOrEmpty(Current.DatabasePath) || Current.DatabasePath.Contains("ApplicationData") || Current.DatabasePath.Contains("AppData"))
+        // Migrate legacy database if it exists in the application directory
+        var legacyDbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RemoteManager.db");
+        if (string.IsNullOrEmpty(Current.DatabasePath) || Current.DatabasePath.StartsWith(AppDomain.CurrentDomain.BaseDirectory, StringComparison.OrdinalIgnoreCase))
         {
-            Current.DatabasePath = Path.Combine(AppDataDir, "RemoteManager.db");
+            var defaultDbPath = Path.Combine(AppDataDir, "RemoteManager.db");
+            var currentDbFile = string.IsNullOrEmpty(Current.DatabasePath) ? legacyDbPath : Current.DatabasePath;
+
+            if (File.Exists(currentDbFile) && !string.Equals(currentDbFile, defaultDbPath, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (!File.Exists(defaultDbPath))
+                    {
+                        File.Move(currentDbFile, defaultDbPath);
+                    }
+                    Current.DatabasePath = defaultDbPath;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to migrate legacy database: {ex.Message}");
+                    Current.DatabasePath = defaultDbPath;
+                }
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Current.DatabasePath))
+                {
+                    Current.DatabasePath = defaultDbPath;
+                }
+            }
             Save();
         }
     }

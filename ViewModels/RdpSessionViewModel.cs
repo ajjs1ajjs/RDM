@@ -147,11 +147,14 @@ public partial class RdpSessionViewModel : SessionTabViewModel, IDisposable
             _reconnectAttempts++;
             StatusText = $"Connection lost, reconnecting ({_reconnectAttempts}/{MaxReconnectAttempts})...";
             Log.Info($"Auto-reconnecting RDP session to {Host} (attempt {_reconnectAttempts})");
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            _ = Task.Run(async () =>
             {
-                System.Threading.Thread.Sleep(2000 * _reconnectAttempts);
-                if (!_disposed && Connection != null)
-                    ConnectRdp();
+                await Task.Delay(2000 * _reconnectAttempts);
+                _ = System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    if (!_disposed && Connection != null)
+                        ConnectRdp();
+                });
             });
             return;
         }

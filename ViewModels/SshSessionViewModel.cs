@@ -60,9 +60,14 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
         {
             AuthType = Connection.SshSettings?.AuthType ?? SshAuthType.Password,
             PrivateKeyPath = Connection.SshSettings?.PrivateKeyPath,
-            PrivateKeyPassphrase = Connection.SshSettings?.PrivateKeyPassphrase,
+            PrivateKeyPassphrase = CredentialManager.LoadAdditional(Connection.Id, "passphrase"),
+            KeepAliveInterval = Connection.SshSettings?.KeepAliveInterval ?? 30,
             TerminalColumns = Connection.SshSettings?.TerminalColumns ?? 120,
-            TerminalRows = Connection.SshSettings?.TerminalRows ?? 40
+            TerminalRows = Connection.SshSettings?.TerminalRows ?? 40,
+            JumpHost = Connection.SshSettings?.JumpHost,
+            JumpHostPort = Connection.SshSettings?.JumpHostPort ?? 22,
+            JumpHostUsername = Connection.SshSettings?.JumpHostUsername,
+            JumpHostPassword = CredentialManager.LoadAdditional(Connection.Id, "jumphost_password")
         };
 
         if (Terminal is not SshTerminalControl ssh)

@@ -79,8 +79,80 @@ internal static class CredentialManager
         lock (SyncRoot)
         {
             DeleteIfExists(GetCredentialPath(connectionId));
+            DeleteIfExists(Path.Combine(CredentialDir, $"{connectionId:N}_passphrase.bin"));
+            DeleteIfExists(Path.Combine(CredentialDir, $"{connectionId:N}_jumphost_password.bin"));
             DeleteIfExists(GetLegacyCredentialPath(connectionId));
             DeleteIfExists(Path.Combine(LegacyCredentialDir, $"{connectionId:N}_key.bin"));
+        }
+        SettingsService.Instance?.BackupData();
+    }
+
+    public static void SaveAdditional(Guid connectionId, string key, string value)
+    {
+        if (connectionId == Guid.Empty)
+            throw new ArgumentException("Connection id cannot be empty.", nameof(connectionId));
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key cannot be empty.", nameof(key));
+
+        lock (SyncRoot)
+        {
+            Directory.CreateDirectory(CredentialDir);
+            var pathCorrect = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
+
+            if (string.IsNullOrEmpty(value))
+            {
+                DeleteIfExists(pathCorrect);
+                return;
+            }
+
+            var plainText = Encoding.UTF8.GetBytes(value);
+            var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
+            WriteAtomic(pathCorrect, protectedData);
+        }
+        SettingsService.Instance?.BackupData();
+    }
+
+    public static string? LoadAdditional(Guid connectionId, string key)
+    {
+        if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
+            return null;
+
+        lock (SyncRoot)
+        {
+            var path = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
+            if (!File.Exists(path))
+                return null;
+
+            try
+            {
+                var protectedData = File.ReadAllBytes(path);
+                var plainText = ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(plainText);
+            }
+            catch (CryptographicException)
+            {
+                return null;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+    }
+
+    public static void DeleteAdditional(Guid connectionId, string key)
+    {
+        if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
+            return;
+
+        lock (SyncRoot)
+        {
+            var path = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
+            DeleteIfExists(path);
         }
         SettingsService.Instance?.BackupData();
     }

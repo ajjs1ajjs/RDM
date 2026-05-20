@@ -37,7 +37,30 @@ public partial class RdpHost : TerminalControl
         InitializeRdp();
 
         SizeChanged += OnSizeChanged;
-        Unloaded += (s, e) => { _stateTimer?.Stop(); };
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        _stateTimer?.Stop();
+        _stateTimer = null;
+
+        if (_wfh != null)
+        {
+            _wfh.Child = null;
+            _wfh.Dispose();
+            _wfh = null;
+        }
+        if (_client != null)
+        {
+            try
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(_client);
+            }
+            catch { }
+            _client = null;
+        }
+        Content = null;
     }
 
     /// <summary>

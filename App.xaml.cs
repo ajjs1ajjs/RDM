@@ -11,6 +11,10 @@ public partial class App : Application
 {
     private NotifyIcon? _trayIcon;
     private DatabaseService? _db;
+    private IntPtr _hIcon = IntPtr.Zero;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern bool DestroyIcon(IntPtr handle);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -84,6 +88,7 @@ public partial class App : Application
         g.DrawString("R", new Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
             System.Drawing.Brushes.White, 3, 2);
         var hIcon = bmp.GetHicon();
+        _hIcon = hIcon;
         _trayIcon.Icon = Icon.FromHandle(hIcon);
 
         _trayIcon.DoubleClick += (s, args) =>
@@ -114,6 +119,11 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _trayIcon?.Dispose();
+        if (_hIcon != IntPtr.Zero)
+        {
+            DestroyIcon(_hIcon);
+            _hIcon = IntPtr.Zero;
+        }
         _db?.Dispose();
         base.OnExit(e);
     }

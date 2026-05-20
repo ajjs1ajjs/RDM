@@ -116,17 +116,25 @@ public class DatabaseService : IDatabaseService
     {
         WithDb(() =>
         {
-            var childGroups = Groups.Find(g => g.ParentId == id).ToList();
-            foreach (var child in childGroups)
-                DeleteGroup(child.Id);
-
-            var groupConnections = Connections.Find(c => c.GroupId == id).ToList();
-            foreach (var conn in groupConnections)
-                DeleteConnection(conn.Id);
-
-            Groups.Delete(id);
+            DeleteGroupInternal(id);
         });
         TriggerAutoBackup();
+    }
+
+    private void DeleteGroupInternal(Guid id)
+    {
+        var childGroups = Groups.Find(g => g.ParentId == id).ToList();
+        foreach (var child in childGroups)
+            DeleteGroupInternal(child.Id);
+
+        var groupConnections = Connections.Find(c => c.GroupId == id).ToList();
+        foreach (var conn in groupConnections)
+        {
+            CredentialManager.Delete(conn.Id);
+            Connections.Delete(conn.Id);
+        }
+
+        Groups.Delete(id);
     }
 
     public List<Connection> GetAllConnections() =>

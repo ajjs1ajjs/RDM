@@ -53,11 +53,13 @@ public class SSHSettings
 {
     public SshAuthType AuthType { get; set; } = SshAuthType.Password;
     public string? PrivateKeyPath { get; set; }
+    [BsonIgnore]
     public string? PrivateKeyPassphrase { get; set; }
     public int KeepAliveInterval { get; set; } = 30;
     public string? JumpHost { get; set; }
     public int JumpHostPort { get; set; } = 22;
     public string? JumpHostUsername { get; set; }
+    [BsonIgnore]
     public string? JumpHostPassword { get; set; }
     public int TerminalColumns { get; set; } = 120;
     public int TerminalRows { get; set; } = 40;

@@ -58,6 +58,8 @@ public partial class ConnectionEditViewModel : ObservableObject
             SshJumpHost = existing.SshSettings.JumpHost ?? "";
             SshJumpHostPort = existing.SshSettings.JumpHostPort;
             SshJumpHostUsername = existing.SshSettings.JumpHostUsername ?? "";
+            SshJumpHostPassword = CredentialManager.LoadAdditional(existing.Id, "jumphost_password") ?? "";
+            SshKeyPassphrase = CredentialManager.LoadAdditional(existing.Id, "passphrase") ?? "";
         }
 
         var password = CredentialManager.Load(existing.Id);
@@ -149,6 +151,9 @@ public partial class ConnectionEditViewModel : ObservableObject
 
     [ObservableProperty]
     private string _sshJumpHostPassword = "";
+
+    [ObservableProperty]
+    private string _sshKeyPassphrase = "";
 
     public string WindowTitle => _existing == null ? "New Connection" : $"Edit {_existing.Name}";
 
@@ -274,20 +279,27 @@ public partial class ConnectionEditViewModel : ObservableObject
                 JumpHost = string.IsNullOrEmpty(SshJumpHost) ? null : SshJumpHost,
                 JumpHostPort = SshJumpHostPort,
                 JumpHostUsername = string.IsNullOrEmpty(SshJumpHostUsername) ? null : SshJumpHostUsername,
-                JumpHostPassword = string.IsNullOrEmpty(SshJumpHostPassword) ? null : SshJumpHostPassword
+                PrivateKeyPassphrase = null,
+                JumpHostPassword = null
             };
         }
 
         _db.SaveConnection(conn);
 
-        if (SavePassword && !string.IsNullOrEmpty(Password))
-            CredentialManager.Save(conn.Id, Password);
-
-        if (!string.IsNullOrEmpty(SshJumpHostPassword))
+        if (SavePassword)
         {
-            var jumpCredId = Guid.NewGuid();
-            CredentialManager.Save(jumpCredId, SshJumpHostPassword);
-            Debug.WriteLine($"Jump host credential saved with ID: {jumpCredId}");
+            if (!string.IsNullOrEmpty(Password))
+                CredentialManager.Save(conn.Id, Password);
+        }
+        else
+        {
+            CredentialManager.Delete(conn.Id);
+        }
+
+        if (SelectedType == ConnectionType.SSH)
+        {
+            CredentialManager.SaveAdditional(conn.Id, "passphrase", SshKeyPassphrase);
+            CredentialManager.SaveAdditional(conn.Id, "jumphost_password", SshJumpHostPassword);
         }
     }
 }
