@@ -109,6 +109,20 @@ graph TD
 dotnet test
 ```
 
+### 📦 Збірка портативного EXE (один файл):
+Щоб зібрати один автономний `.exe` файл з усіма залежностями та .NET Runtime всередині (не потребує встановленого .NET на цільовому ПК):
+```bash
+dotnet publish RemoteManager.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:PublishTrimmed=false -o ./Build/SingleFile
+```
+Готовий файл буде за шляхом `Build/SingleFile/RemoteManager.exe`.
+
+> **Примітка:** Розмір файлу складає ~150-160 МБ, оскільки він містить повний .NET Runtime.
+
+Якщо на цільовому ПК вже встановлений .NET 8.0, можна зібрати легшу версію без вбудованого рантайму:
+```bash
+dotnet publish RemoteManager.csproj -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true -o ./Build/SingleFile
+```
+
 ---
 
 ## 🛡️ Ліцензія
