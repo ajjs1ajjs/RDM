@@ -142,7 +142,8 @@ public partial class RdpSessionViewModel : SessionTabViewModel, IDisposable
             return;
         }
 
-        if (_reconnectAttempts < MaxReconnectAttempts)
+        var autoReconnect = SettingsService.Instance?.Current?.AutoReconnect ?? false;
+        if (autoReconnect && _reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;
             StatusText = $"Connection lost, reconnecting ({_reconnectAttempts}/{MaxReconnectAttempts})...";

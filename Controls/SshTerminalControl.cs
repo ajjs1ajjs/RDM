@@ -31,6 +31,8 @@ public partial class SshTerminalControl : TerminalControl
     private string _selectedText = string.Empty;
     private int _selectionStart = -1;
     private int _selectionEnd = -1;
+    private uint _currentColumns = 120;
+    private uint _currentRows = 40;
 
     public event EventHandler<string>? ConnectionClosed;
 
@@ -46,6 +48,7 @@ public partial class SshTerminalControl : TerminalControl
         PreviewMouseDown -= OnPreviewMouseDown;
         MouseLeftButtonDown -= OnMouseLeftButtonDown;
         MouseLeftButtonUp -= OnMouseLeftButtonUp;
+        SizeChanged -= OnSizeChanged;
 
         _output = GetTemplateChild("PART_OutputText") as TextBlock;
         _scrollViewer = GetTemplateChild("PART_ScrollViewer") as ScrollViewer;
@@ -62,6 +65,7 @@ public partial class SshTerminalControl : TerminalControl
         PreviewMouseDown += OnPreviewMouseDown;
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseLeftButtonUp += OnMouseLeftButtonUp;
+        SizeChanged += OnSizeChanged;
     }
 
     public async Task<bool> ConnectAsync(string host, int port, string user, string pass, SSHSettings? settings)
@@ -78,9 +82,10 @@ public partial class SshTerminalControl : TerminalControl
             await Task.Run(() => _client.Connect());
             _disconnectRequested = false;
 
-            var columns = settings?.TerminalColumns ?? 120;
-            var rows = settings?.TerminalRows ?? 40;
-            _shell = _client.CreateShellStream("xterm", (uint)columns, (uint)rows, 900, 600, 4096);
+            var size = CalculateTerminalSize(settings);
+            _currentColumns = size.Columns;
+            _currentRows = size.Rows;
+            _shell = _client.CreateShellStream("xterm", _currentColumns, _currentRows, 900, 600, 4096);
 
             _readCts = new CancellationTokenSource();
             _ = Task.Run(() => ReadOutputLoopAsync(_readCts.Token));
@@ -577,5 +582,92 @@ public partial class SshTerminalControl : TerminalControl
                 _selectedText = fullText[_selectionStart.._selectionEnd].Trim();
             }
         }
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateTerminalSize();
+    }
+
+    private void UpdateTerminalSize()
+    {
+        var shell = _shell;
+        if (shell == null)
+            return;
+
+        var (cols, rows) = CalculateTerminalSize();
+        if (cols != _currentColumns || rows != _currentRows)
+        {
+            _currentColumns = cols;
+            _currentRows = rows;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var channelField = typeof(ShellStream).GetField("_channel", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var channel = channelField?.GetValue(shell);
+                    if (channel != null)
+                    {
+                        var method = channel.GetType().GetMethod("SendWindowChangeRequest", 
+                            new[] { typeof(uint), typeof(uint), typeof(uint), typeof(uint) });
+                        method?.Invoke(channel, new object[] { cols, rows, (uint)0, (uint)0 });
+                    }
+                }
+                catch
+                {
+                    // Ignore transient exceptions on closed/closing shell
+                }
+            });
+        }
+    }
+
+    private (uint Columns, uint Rows) CalculateTerminalSize(SSHSettings? settings = null)
+    {
+        uint defaultCols = (uint)(settings?.TerminalColumns ?? 120);
+        uint defaultRows = (uint)(settings?.TerminalRows ?? 40);
+
+        if (_scrollViewer == null || _output == null)
+            return (defaultCols, defaultRows);
+
+        double width = ActualWidth;
+        double height = ActualHeight;
+
+        if (_scrollViewer.Padding != default)
+        {
+            width -= (_scrollViewer.Padding.Left + _scrollViewer.Padding.Right);
+            height -= (_scrollViewer.Padding.Top + _scrollViewer.Padding.Bottom);
+        }
+        else
+        {
+            width -= 20;
+            height -= 20;
+        }
+
+        if (width <= 0 || height <= 0)
+            return (defaultCols, defaultRows);
+
+        var typeface = new Typeface(_output.FontFamily, _output.FontStyle, _output.FontWeight, _output.FontStretch);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        
+        var formattedText = new FormattedText(
+            "W",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            _output.FontSize,
+            System.Windows.Media.Brushes.Black,
+            dpi.PixelsPerDip);
+
+        double charWidth = formattedText.Width;
+        double charHeight = formattedText.Height;
+
+        if (charWidth <= 0 || charHeight <= 0)
+            return (defaultCols, defaultRows);
+
+        uint cols = (uint)Math.Max(20, Math.Floor(width / charWidth));
+        uint rows = (uint)Math.Max(5, Math.Floor(height / charHeight));
+
+        return (cols, rows);
     }
 }

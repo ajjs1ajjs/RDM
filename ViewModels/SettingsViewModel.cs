@@ -35,7 +35,8 @@ public partial class SettingsViewModel : ObservableObject
                 {
                     Domain = cred.Domain,
                     Username = cred.Username,
-                    Password = encryptedCred?.Password ?? string.Empty
+                    Password = encryptedCred?.Password ?? string.Empty,
+                    OriginalDomain = cred.Domain
                 });
             }
         }
@@ -134,10 +135,18 @@ public partial class SettingsViewModel : ObservableObject
                 Domain = vm.Domain,
                 Username = vm.Username
             });
+
+            if (!string.IsNullOrEmpty(vm.OriginalDomain) && vm.Domain != vm.OriginalDomain)
+            {
+                CredentialManager.DeleteDomainCredential(vm.OriginalDomain);
+            }
+
             if (!string.IsNullOrEmpty(vm.Password))
             {
                 CredentialManager.SaveDomainCredential(vm.Domain, vm.Username, vm.Password);
             }
+
+            vm.OriginalDomain = vm.Domain;
         }
 
         _settings.Save();
@@ -369,4 +378,6 @@ public partial class DomainCredentialViewModel : ObservableObject
 
     [ObservableProperty]
     private string _password = string.Empty;
+
+    public string? OriginalDomain { get; set; }
 }

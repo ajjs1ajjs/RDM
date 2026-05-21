@@ -22,6 +22,14 @@ public partial class ConnectionEditViewModel : ObservableObject
     {
         _db = db;
         _existing = null;
+        if (int.TryParse(SettingsService.Instance?.Current?.DefaultRdpPort, out int rdpPort))
+        {
+            Port = rdpPort;
+        }
+        else
+        {
+            Port = 3389;
+        }
         LoadGroups();
     }
 
@@ -83,7 +91,28 @@ public partial class ConnectionEditViewModel : ObservableObject
 
     partial void OnSelectedTypeChanged(ConnectionType value)
     {
-        Port = value == ConnectionType.SSH ? 22 : 3389;
+        if (value == ConnectionType.SSH)
+        {
+            if (int.TryParse(SettingsService.Instance?.Current?.DefaultSshPort, out int sshPort))
+            {
+                Port = sshPort;
+            }
+            else
+            {
+                Port = 22;
+            }
+        }
+        else
+        {
+            if (int.TryParse(SettingsService.Instance?.Current?.DefaultRdpPort, out int rdpPort))
+            {
+                Port = rdpPort;
+            }
+            else
+            {
+                Port = 3389;
+            }
+        }
     }
 
     [ObservableProperty]
