@@ -153,6 +153,11 @@ public partial class SettingsViewModel : ObservableObject
 
         App.ApplyTheme(SelectedTheme);
 
+        if (System.Windows.Application.Current is App app && app.MainWindow != null)
+        {
+            app.UpdateTrayIcon(app.MainWindow, MinimizeToTray);
+        }
+
         System.Windows.MessageBox.Show("Settings saved!", "Success",
             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }

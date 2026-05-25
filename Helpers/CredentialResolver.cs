@@ -40,12 +40,12 @@ public static class CredentialResolver
         return (username, password);
     }
 
-    private static string? ExtractDomain(string username)
+    internal static string? ExtractDomain(string username)
     {
         if (username.Contains('\\'))
             return username.Split('\\')[0].Trim();
         if (username.Contains('@'))
             return username.Split('@')[1].Trim();
-        return username.Trim();
+        return null;
     }
 }

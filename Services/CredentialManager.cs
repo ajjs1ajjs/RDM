@@ -264,14 +264,30 @@ internal static class CredentialManager
     {
         var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
         File.WriteAllBytes(tempPath, bytes);
-
-        if (File.Exists(path))
+        try
         {
-            File.Replace(tempPath, path, null);
+            if (File.Exists(path))
+            {
+                File.Replace(tempPath, path, null);
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
         }
-        else
+        finally
         {
-            File.Move(tempPath, path);
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup error
+            }
         }
     }
 

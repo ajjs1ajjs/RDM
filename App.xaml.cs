@@ -32,8 +32,17 @@ public partial class App : Application
             mainWindow.Initialize(mainVm);
             mainWindow.Show();
 
-            if (settings.Current.MinimizeToTray)
-                SetupTrayIcon(mainWindow);
+            UpdateTrayIcon(mainWindow, settings.Current.MinimizeToTray);
+
+            mainWindow.StateChanged += (s, args) =>
+            {
+                if (settings.Current.MinimizeToTray && mainWindow.WindowState == WindowState.Minimized)
+                {
+                    mainWindow.Hide();
+                    _trayIcon?.ShowBalloonTip(1000, "Remote Manager",
+                        "Application minimized to tray", ToolTipIcon.Info);
+                }
+            };
         }
         catch (Exception ex)
         {
@@ -72,48 +81,69 @@ public partial class App : Application
         app.Resources.MergedDictionaries[index] = newDictionary;
     }
 
-    private void SetupTrayIcon(Window window)
+    public void UpdateTrayIcon(Window window, bool enabled)
     {
-        _trayIcon = new NotifyIcon
+        if (enabled)
         {
-            Text = "Remote Manager",
-            Visible = true
-        };
-
-        using var bmp = new Bitmap(16, 16);
-        using var g = Graphics.FromImage(bmp);
-        g.Clear(System.Drawing.Color.Transparent);
-        using var brush = new SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
-        g.FillEllipse(brush, 0, 0, 15, 15);
-        g.DrawString("R", new Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
-            System.Drawing.Brushes.White, 3, 2);
-        var hIcon = bmp.GetHicon();
-        _hIcon = hIcon;
-        _trayIcon.Icon = Icon.FromHandle(hIcon);
-
-        _trayIcon.DoubleClick += (s, args) =>
-        {
-            window.Show();
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-        };
-
-        _trayIcon.BalloonTipClicked += (s, args) =>
-        {
-            window.Show();
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-        };
-
-        window.StateChanged += (s, args) =>
-        {
-            if (window.WindowState == WindowState.Minimized)
+            if (_trayIcon == null)
             {
-                window.Hide();
-                _trayIcon.ShowBalloonTip(1000, "Remote Manager",
-                    "Application minimized to tray", ToolTipIcon.Info);
+                _trayIcon = new NotifyIcon
+                {
+                    Text = "Remote Manager",
+                    Visible = true
+                };
+
+                try
+                {
+                    using var bmp = new Bitmap(16, 16);
+                    using var g = Graphics.FromImage(bmp);
+                    g.Clear(System.Drawing.Color.Transparent);
+                    using var brush = new SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
+                    g.FillEllipse(brush, 0, 0, 15, 15);
+                    g.DrawString("R", new Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
+                        System.Drawing.Brushes.White, 3, 2);
+                    var hIcon = bmp.GetHicon();
+                    _hIcon = hIcon;
+                    _trayIcon.Icon = Icon.FromHandle(hIcon);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to load tray icon: {ex.Message}");
+                }
+
+                _trayIcon.DoubleClick += (s, args) =>
+                {
+                    window.Show();
+                    window.WindowState = WindowState.Normal;
+                    window.Activate();
+                };
+
+                _trayIcon.BalloonTipClicked += (s, args) =>
+                {
+                    window.Show();
+                    window.WindowState = WindowState.Normal;
+                    window.Activate();
+                };
             }
-        };
+        }
+        else
+        {
+            if (_trayIcon != null)
+            {
+                _trayIcon.Visible = false;
+                _trayIcon.Dispose();
+                _trayIcon = null;
+            }
+            if (_hIcon != IntPtr.Zero)
+            {
+                try
+                {
+                    DestroyIcon(_hIcon);
+                }
+                catch { }
+                _hIcon = IntPtr.Zero;
+            }
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
