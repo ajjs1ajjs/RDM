@@ -7,7 +7,7 @@ using RemoteManager.Services;
 
 namespace RemoteManager.ViewModels;
 
-public partial class RdpSessionViewModel : SessionTabViewModel, IDisposable
+public partial class RdpSessionViewModel : SessionTabViewModel
 {
     private readonly IDatabaseService _db;
     private bool _disposed;
@@ -172,12 +172,13 @@ public partial class RdpSessionViewModel : SessionTabViewModel, IDisposable
         StatusText = message;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
         Disconnect();
         Connection = null;
+        base.Dispose();
     }
 }

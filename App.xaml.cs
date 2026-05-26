@@ -20,8 +20,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+
         var settings = new SettingsService();
-        _db = new DatabaseService();
+        _db = new DatabaseService(settings);
 
         try
         {
@@ -46,6 +50,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            Services.Log.Error("Startup failed", ex);
             System.Diagnostics.Debug.WriteLine(ex.ToString());
             MessageBox.Show(
                 $"Startup failed: {ex.Message}\n\nSee debug output for details.",
@@ -54,6 +59,24 @@ public partial class App : Application
                 MessageBoxImage.Error);
             Shutdown(1);
         }
+    }
+
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        Services.Log.Error("Unhandled UI exception", e.Exception);
+        e.Handled = true;
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        Services.Log.Error("Unobserved task exception", e.Exception);
+        e.SetObserved();
+    }
+
+    private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
+            Services.Log.Error("Unhandled AppDomain exception", ex);
     }
 
     public static void ApplyTheme(string theme)
@@ -108,7 +131,7 @@ public partial class App : Application
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to load tray icon: {ex.Message}");
+                    Services.Log.Warn("Failed to create tray icon: " + ex.Message);
                 }
 
                 _trayIcon.DoubleClick += (s, args) =>
@@ -140,7 +163,10 @@ public partial class App : Application
                 {
                     DestroyIcon(_hIcon);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Services.Log.Warn("Failed to destroy tray icon handle: " + ex.Message);
+                }
                 _hIcon = IntPtr.Zero;
             }
         }
@@ -148,10 +174,16 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _trayIcon?.Dispose();
+        if (_trayIcon != null)
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+            _trayIcon = null;
+        }
         if (_hIcon != IntPtr.Zero)
         {
-            DestroyIcon(_hIcon);
+            try { DestroyIcon(_hIcon); }
+            catch (Exception ex) { Services.Log.Warn("Failed to destroy icon on exit: " + ex.Message); }
             _hIcon = IntPtr.Zero;
         }
         _db?.Dispose();

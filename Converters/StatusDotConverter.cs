@@ -30,18 +30,3 @@ public class StatusTextConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
-
-public class ConnectionTypeIconConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is string typeStr)
-        {
-            return typeStr.ToLower() == "rdp" ? "🖥️" : "💻";
-        }
-        return "⊞";
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
-}

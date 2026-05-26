@@ -2,7 +2,7 @@ using RemoteManager.Models;
 
 namespace RemoteManager.Services;
 
-public interface IDatabaseService
+public interface IDatabaseService : IDisposable
 {
     void Initialize(string dbPath);
     void MigrateDatabase(string newPath);

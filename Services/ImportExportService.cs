@@ -9,7 +9,7 @@ using System.Xml.Linq;
 
 namespace RemoteManager.Services;
 
-public class ImportExportService
+public class ImportExportService : IImportExportService
 {
     private const long MaxImportFileSize = 50 * 1024 * 1024; // 50 MB limit
 
@@ -46,7 +46,16 @@ public class ImportExportService
         {
             return ParseDevolutionsXml(filePath);
         }
-        return JsonSerializer.Deserialize<ExportData>(content, JsonOptions);
+
+        try
+        {
+            return JsonSerializer.Deserialize<ExportData>(content, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            Log.Warn("JSON import parse error: " + ex.Message);
+            throw;
+        }
     }
 
     private ExportData ParseDevolutionsXml(string filePath)

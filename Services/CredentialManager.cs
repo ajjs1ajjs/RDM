@@ -8,7 +8,7 @@ internal static class CredentialManager
 {
     private const string LegacyCredentialDir = "RemoteManager.credentials";
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RemoteManager.Credentials.v2");
-    private static readonly object SyncRoot = new();
+    private static readonly object _syncRoot = new();
 
     internal static string CredentialDir =>
         Path.Combine(
@@ -21,7 +21,7 @@ internal static class CredentialManager
         if (connectionId == Guid.Empty)
             throw new ArgumentException("Connection id cannot be empty.", nameof(connectionId));
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             Directory.CreateDirectory(CredentialDir);
             var path = GetCredentialPath(connectionId);
@@ -44,7 +44,7 @@ internal static class CredentialManager
         if (connectionId == Guid.Empty)
             return null;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             var path = GetCredentialPath(connectionId);
             if (!File.Exists(path))
@@ -76,7 +76,7 @@ internal static class CredentialManager
         if (connectionId == Guid.Empty)
             return;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             DeleteIfExists(GetCredentialPath(connectionId));
             DeleteIfExists(Path.Combine(CredentialDir, $"{connectionId:N}_passphrase.bin"));
@@ -94,7 +94,7 @@ internal static class CredentialManager
         if (string.IsNullOrWhiteSpace(key))
             throw new ArgumentException("Key cannot be empty.", nameof(key));
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             Directory.CreateDirectory(CredentialDir);
             var pathCorrect = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
@@ -117,7 +117,7 @@ internal static class CredentialManager
         if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
             return null;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             var path = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
             if (!File.Exists(path))
@@ -149,7 +149,7 @@ internal static class CredentialManager
         if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
             return;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             var path = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
             DeleteIfExists(path);
@@ -165,7 +165,7 @@ internal static class CredentialManager
         if (string.IsNullOrWhiteSpace(domain))
             throw new ArgumentException("Domain cannot be empty.", nameof(domain));
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             Directory.CreateDirectory(CredentialDir);
             var key = GetDomainCredentialKey(domain);
@@ -183,7 +183,7 @@ internal static class CredentialManager
         if (string.IsNullOrWhiteSpace(domain))
             return null;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             var key = GetDomainCredentialKey(domain);
             var path = Path.Combine(CredentialDir, $"{key}.bin");
@@ -217,7 +217,7 @@ internal static class CredentialManager
         if (string.IsNullOrWhiteSpace(domain))
             return;
 
-        lock (SyncRoot)
+        lock (_syncRoot)
         {
             var key = GetDomainCredentialKey(domain);
             var path = Path.Combine(CredentialDir, $"{key}.bin");
@@ -284,9 +284,9 @@ internal static class CredentialManager
                     File.Delete(tempPath);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore cleanup error
+                Log.Warn("Temp file cleanup error: " + ex.Message);
             }
         }
     }
@@ -298,11 +298,13 @@ internal static class CredentialManager
             if (File.Exists(path))
                 File.Delete(path);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            Log.Debug("DeleteIfExists IO error: " + ex.Message);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
+            Log.Debug("DeleteIfExists access error: " + ex.Message);
         }
     }
 }

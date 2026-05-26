@@ -8,11 +8,11 @@ namespace RemoteManager.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
-    private readonly SettingsService _settings;
+    private readonly ISettingsService _settings;
     private readonly IDatabaseService _db;
-    private readonly ImportExportService _importExport;
+    private readonly IImportExportService _importExport;
 
-    public SettingsViewModel(SettingsService settings, IDatabaseService db)
+    public SettingsViewModel(ISettingsService settings, IDatabaseService db)
     {
         _settings = settings;
         _db = db;

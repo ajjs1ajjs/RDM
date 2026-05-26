@@ -5,13 +5,13 @@ using RemoteManager.Models;
 
 namespace RemoteManager.Services;
 
-public class SettingsService
+public class SettingsService : ISettingsService
 {
     private const string SettingsFileName = "settings.json";
 
-    public static SettingsService? Instance { get; private set; }
+    internal static SettingsService? Instance { get; private set; }
 
-    public AppSettings Current { get; private set; }
+    public AppSettings Current { get; set; }
     public string SettingsPath { get; }
     public string AppDataDir { get; }
     public bool IsFirstRun { get; private set; }
@@ -19,7 +19,6 @@ public class SettingsService
     public SettingsService()
     {
         Instance = this;
-        
         var legacySettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, SettingsFileName);
         var targetAppDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
         
@@ -89,7 +88,7 @@ public class SettingsService
 
     public void BackupData()
     {
-        if (string.IsNullOrEmpty(Current.BackupFolderPath))
+        if (Current == null || string.IsNullOrEmpty(Current.BackupFolderPath))
             return;
 
         lock (_backupLock)
@@ -153,12 +152,13 @@ public class SettingsService
             }
             catch (Exception ex)
             {
+                Log.Warn("Backup sync failed: " + ex.Message);
                 System.Diagnostics.Debug.WriteLine($"Backup sync failed: {ex.Message}");
             }
         }
     }
 
-    public static void RestoreBackup(string backupDir, SettingsService settings)
+    public static void RestoreBackup(string backupDir, ISettingsService settings)
     {
         if (string.IsNullOrEmpty(backupDir) || !Directory.Exists(backupDir))
             throw new DirectoryNotFoundException("Backup directory does not exist.");

@@ -13,12 +13,12 @@ namespace RemoteManager.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly IDatabaseService _db;
-    private readonly SettingsService _settings;
-    private readonly ImportExportService _importExport;
+    private readonly ISettingsService _settings;
+    private readonly IImportExportService _importExport;
     private string? _pendingImportPath;
     private string? _pendingImportPassword;
 
-    public MainViewModel(IDatabaseService db, SettingsService settings)
+    public MainViewModel(IDatabaseService db, ISettingsService settings)
     {
         _db = db;
         _settings = settings;
@@ -283,8 +283,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         tab.Disconnect();
-        if (tab is IDisposable disposable)
-            disposable.Dispose();
+        tab.Dispose();
 
         var idx = OpenTabs.IndexOf(tab);
         OpenTabs.Remove(tab);
@@ -583,7 +582,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void PerformFirstRunSetup(SettingsService settings)
+    private void PerformFirstRunSetup(ISettingsService settings)
     {
         var importType = System.Windows.MessageBox.Show(
             "Ласкаво просимо до RemoteManager!\n\n" +

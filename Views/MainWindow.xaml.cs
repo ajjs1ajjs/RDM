@@ -19,8 +19,8 @@ public partial class MainWindow : Window
         {
             if (e.NewItems?.Count > 0)
                 vm.SelectedTab = e.NewItems[0];
-            else if (e.OldItems?.Count > 0 && e.OldItems[0] == vm.SelectedTab)
-                vm.SelectedTab = e.OldItems.Count > 0 ? e.OldItems[e.OldItems.Count - 1] : null;
+            else if (e.OldItems?.Count > 0)
+                vm.SelectedTab = vm.OpenTabs.Count > 0 ? vm.OpenTabs[^1] : null;
         };
     }
 }

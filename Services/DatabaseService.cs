@@ -7,8 +7,14 @@ namespace RemoteManager.Services;
 public class DatabaseService : IDatabaseService
 {
     private readonly object _syncRoot = new();
+    private readonly ISettingsService? _settings;
     private LiteDatabase? _db;
     private string _currentPath = string.Empty;
+
+    public DatabaseService(ISettingsService? settings = null)
+    {
+        _settings = settings;
+    }
 
     public void Initialize(string dbPath)
     {
@@ -250,21 +256,21 @@ public class DatabaseService : IDatabaseService
 
             foreach (var oldBackup in backups)
             {
-                try { oldBackup.Delete(); } catch { }
+                try { oldBackup.Delete(); } catch (Exception ex) { Log.Debug("Old backup delete error: " + ex.Message); }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently ignore backup errors to prevent app crash
+            Log.Warn("Auto-backup trigger error: " + ex.Message);
         }
 
         try
         {
-            SettingsService.Instance?.BackupData();
+            _settings?.BackupData();
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently ignore sync errors
+            Log.Warn("Settings backup sync error: " + ex.Message);
         }
     }
 

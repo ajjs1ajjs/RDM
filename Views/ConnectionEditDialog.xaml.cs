@@ -28,7 +28,11 @@ public partial class ConnectionEditDialog : Window
         _vm.SaveCommand.Execute(null);
 
         if (!string.IsNullOrEmpty(_vm.ValidationError))
+        {
+            System.Windows.MessageBox.Show(_vm.ValidationError, "Validation Error",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             return;
+        }
 
         DialogResult = true;
         Close();

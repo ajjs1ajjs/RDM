@@ -7,13 +7,14 @@ using RemoteManager.Services;
 
 namespace RemoteManager.ViewModels;
 
-public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
+public partial class SshSessionViewModel : SessionTabViewModel
 {
     private readonly IDatabaseService _db;
     private bool _disposed;
     private SshTerminalControl? _sshTerminalRef;
     private int _reconnectAttempts;
     private const int MaxReconnectAttempts = 3;
+    private EventHandler<string>? _connectionClosedHandler;
 
     public Connection? Connection { get; set; }
 
@@ -81,7 +82,8 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
         UnsubscribeSshEvents(ssh);
 
         _sshTerminalRef = ssh;
-        ssh.ConnectionClosed += OnTerminalConnectionClosed;
+        _connectionClosedHandler = async (s, r) => await OnTerminalConnectionClosedAsync(s, r);
+        ssh.ConnectionClosed += _connectionClosedHandler;
 
         try
         {
@@ -105,7 +107,8 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
         var target = ssh ?? _sshTerminalRef;
         if (target == null) return;
 
-        target.ConnectionClosed -= OnTerminalConnectionClosed;
+        if (_connectionClosedHandler != null)
+            target.ConnectionClosed -= _connectionClosedHandler;
     }
 
     [RelayCommand]
@@ -131,7 +134,7 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
     [RelayCommand]
     private void Clear() => Terminal?.Clear();
 
-    private async void OnTerminalConnectionClosed(object? sender, string reason)
+    private async Task OnTerminalConnectionClosedAsync(object? sender, string reason)
     {
         IsConnected = false;
         IsConnecting = false;
@@ -171,12 +174,13 @@ public partial class SshSessionViewModel : SessionTabViewModel, IDisposable
             : "Disconnected";
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
         Disconnect();
         Connection = null;
+        base.Dispose();
     }
 }

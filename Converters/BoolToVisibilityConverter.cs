@@ -10,14 +10,14 @@ public class BoolToVisibilityConverter : IValueConverter
     {
         if (value is bool boolValue)
             return boolValue ? Visibility.Visible : Visibility.Collapsed;
-        return Visibility.Visible;
+        return DependencyProperty.UnsetValue;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is Visibility visibility)
             return visibility == Visibility.Visible;
-        return true;
+        return DependencyProperty.UnsetValue;
     }
 }
 

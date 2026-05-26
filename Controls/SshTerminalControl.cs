@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using RemoteManager.Models;
+using RemoteManager.Services;
 using Renci.SshNet;
 
 namespace RemoteManager.Controls;
@@ -115,9 +116,9 @@ public partial class SshTerminalControl : TerminalControl
 
         _ = Task.Run(() =>
         {
-            try { shell?.Close(); } catch { }
-            try { client?.Disconnect(); } catch { }
-            try { client?.Dispose(); } catch { }
+            try { shell?.Close(); } catch (Exception ex) { Log.Debug("SSH shell close error: " + ex.Message); }
+            try { client?.Disconnect(); } catch (Exception ex) { Log.Debug("SSH disconnect error: " + ex.Message); }
+            try { client?.Dispose(); } catch (Exception ex) { Log.Debug("SSH client dispose error: " + ex.Message); }
         });
 
         AppendOutput("Disconnected.\r\n");
@@ -410,7 +411,7 @@ public partial class SshTerminalControl : TerminalControl
         {
             lock (_writeLock)
             {
-                try { shell.Write(text); } catch { }
+                try { shell.Write(text); } catch (Exception ex) { Log.Debug("SSH write error: " + ex.Message); }
             }
         });
     }
@@ -529,7 +530,7 @@ public partial class SshTerminalControl : TerminalControl
         {
             lock (_writeLock)
             {
-                try { shell.Write(bytes, 0, bytes.Length); } catch { }
+                try { shell.Write(bytes, 0, bytes.Length); } catch (Exception ex) { Log.Debug("SSH byte write error: " + ex.Message); }
             }
         });
     }
@@ -552,9 +553,9 @@ public partial class SshTerminalControl : TerminalControl
                 WriteToShell(text);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Clipboard access may fail
+            Log.Debug("Clipboard access error: " + ex.Message);
         }
     }
 
@@ -614,9 +615,9 @@ public partial class SshTerminalControl : TerminalControl
                         method?.Invoke(channel, new object[] { cols, rows, (uint)0, (uint)0 });
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore transient exceptions on closed/closing shell
+                    Log.Debug("UpdateTerminalSize error: " + ex.Message);
                 }
             });
         }

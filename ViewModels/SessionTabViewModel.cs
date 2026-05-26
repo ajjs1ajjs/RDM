@@ -4,7 +4,7 @@ using RemoteManager.Models;
 
 namespace RemoteManager.ViewModels;
 
-public partial class SessionTabViewModel : ObservableObject
+public partial class SessionTabViewModel : ObservableObject, IDisposable
 {
     [ObservableProperty] private string _header = "";
     [ObservableProperty] private Guid _connectionId;
@@ -26,4 +26,6 @@ public partial class SessionTabViewModel : ObservableObject
     public virtual void Disconnect() { }
 
     public virtual string? GetPassword() => null;
+
+    public virtual void Dispose() { }
 }

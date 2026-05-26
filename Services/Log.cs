@@ -11,7 +11,7 @@ public static class Log
         "RemoteManager",
         "logs");
 
-    private static readonly string LogFile = Path.Combine(LogDir, $"remote-manager-{DateTime.Now:yyyy-MM-dd}.log");
+    private static readonly string LogFile = Path.Combine(LogDir, $"remote-manager-{DateTime.UtcNow:yyyy-MM-dd}.log");
     private static readonly object _lock = new();
 
     static Log()
@@ -43,7 +43,7 @@ public static class Log
     {
         try
         {
-            var line = $"[{DateTime.Now:HH:mm:ss.fff}] [{level}] [{caller}] {message}";
+            var line = $"[{DateTime.UtcNow:HH:mm:ss.fff}] [{level}] [{caller}] {message}";
             System.Diagnostics.Debug.WriteLine(line);
 
             lock (_lock)

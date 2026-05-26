@@ -13,6 +13,7 @@ public partial class ConnectionEditViewModel : ObservableObject
 {
     private static readonly Regex HostnameRegex = new(@"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$", RegexOptions.Compiled);
     private static readonly Regex IpRegex = new(@"^(\d{1,3}\.){3}\d{1,3}$", RegexOptions.Compiled);
+    private static readonly Regex IPv6Regex = new(@"^\[?([0-9a-fA-F:]+)\]?$", RegexOptions.Compiled);
 
     private readonly IDatabaseService _db;
     private readonly Connection? _existing;
@@ -209,10 +210,10 @@ public partial class ConnectionEditViewModel : ObservableObject
         }
 
         var trimmedHost = Host.Trim();
-        bool isValidHost = HostnameRegex.IsMatch(trimmedHost) || IpRegex.IsMatch(trimmedHost);
+        bool isValidHost = HostnameRegex.IsMatch(trimmedHost) || IpRegex.IsMatch(trimmedHost) || IPv6Regex.IsMatch(trimmedHost);
         if (!isValidHost)
         {
-            ValidationError = "Invalid host address. Use a valid hostname (e.g., server.example.com) or IP address (e.g., 192.168.1.1).";
+            ValidationError = "Invalid host address. Use a valid hostname (e.g., server.example.com), IPv4 (e.g., 192.168.1.1), or IPv6.";
             return false;
         }
 
@@ -296,6 +297,7 @@ public partial class ConnectionEditViewModel : ObservableObject
                 GatewayHost = string.IsNullOrEmpty(RdpGatewayHost) ? null : RdpGatewayHost,
                 GatewayPort = RdpGatewayPort
             };
+            conn.SshSettings = null;
         }
 
         if (SelectedType == ConnectionType.SSH)
@@ -311,6 +313,7 @@ public partial class ConnectionEditViewModel : ObservableObject
                 PrivateKeyPassphrase = null,
                 JumpHostPassword = null
             };
+            conn.RdpSettings = null;
         }
 
         _db.SaveConnection(conn);
