@@ -1,22 +1,31 @@
+using System;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using RemoteManager.Services;
 using IOException = System.IO.IOException;
 
 namespace RemoteManager.Services;
 
-internal static class CredentialManager
+public class CredentialService : ICredentialService
 {
     private const string LegacyCredentialDir = "RemoteManager.credentials";
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RemoteManager.Credentials.v2");
-    private static readonly object _syncRoot = new();
+    private readonly object _syncRoot = new();
+    private readonly ISettingsService? _settings;
 
-    internal static string CredentialDir =>
-        Path.Combine(
+    public string CredentialDir { get; }
+
+    public CredentialService(string? credentialDir = null, ISettingsService? settings = null)
+    {
+        _settings = settings;
+        CredentialDir = credentialDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RemoteManager",
             "credentials");
+    }
 
-    public static void Save(Guid connectionId, string password)
+    public void Save(Guid connectionId, string password)
     {
         if (connectionId == Guid.Empty)
             throw new ArgumentException("Connection id cannot be empty.", nameof(connectionId));
@@ -36,10 +45,10 @@ internal static class CredentialManager
             var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
             WriteAtomic(path, protectedData);
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    public static string? Load(Guid connectionId)
+    public string? Load(Guid connectionId)
     {
         if (connectionId == Guid.Empty)
             return null;
@@ -71,7 +80,7 @@ internal static class CredentialManager
         }
     }
 
-    public static void Delete(Guid connectionId)
+    public void Delete(Guid connectionId)
     {
         if (connectionId == Guid.Empty)
             return;
@@ -84,10 +93,10 @@ internal static class CredentialManager
             DeleteIfExists(GetLegacyCredentialPath(connectionId));
             DeleteIfExists(Path.Combine(LegacyCredentialDir, $"{connectionId:N}_key.bin"));
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    public static void SaveAdditional(Guid connectionId, string key, string value)
+    public void SaveAdditional(Guid connectionId, string key, string value)
     {
         if (connectionId == Guid.Empty)
             throw new ArgumentException("Connection id cannot be empty.", nameof(connectionId));
@@ -109,10 +118,10 @@ internal static class CredentialManager
             var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
             WriteAtomic(pathCorrect, protectedData);
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    public static string? LoadAdditional(Guid connectionId, string key)
+    public string? LoadAdditional(Guid connectionId, string key)
     {
         if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
             return null;
@@ -144,7 +153,7 @@ internal static class CredentialManager
         }
     }
 
-    public static void DeleteAdditional(Guid connectionId, string key)
+    public void DeleteAdditional(Guid connectionId, string key)
     {
         if (connectionId == Guid.Empty || string.IsNullOrWhiteSpace(key))
             return;
@@ -154,13 +163,13 @@ internal static class CredentialManager
             var path = Path.Combine(CredentialDir, $"{connectionId:N}_{key}.bin");
             DeleteIfExists(path);
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    private static string GetDomainCredentialKey(string domain) =>
+    private string GetDomainCredentialKey(string domain) =>
         $"domain_{domain.ToLowerInvariant()}";
 
-    public static void SaveDomainCredential(string domain, string username, string password)
+    public void SaveDomainCredential(string domain, string username, string password)
     {
         if (string.IsNullOrWhiteSpace(domain))
             throw new ArgumentException("Domain cannot be empty.", nameof(domain));
@@ -175,10 +184,10 @@ internal static class CredentialManager
             var protectedData = ProtectedData.Protect(payload, Entropy, DataProtectionScope.CurrentUser);
             WriteAtomic(path, protectedData);
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    public static (string Username, string Password)? LoadDomainCredential(string domain)
+    public (string Username, string Password)? LoadDomainCredential(string domain)
     {
         if (string.IsNullOrWhiteSpace(domain))
             return null;
@@ -212,7 +221,7 @@ internal static class CredentialManager
         }
     }
 
-    public static void DeleteDomainCredential(string domain)
+    public void DeleteDomainCredential(string domain)
     {
         if (string.IsNullOrWhiteSpace(domain))
             return;
@@ -223,16 +232,16 @@ internal static class CredentialManager
             var path = Path.Combine(CredentialDir, $"{key}.bin");
             DeleteIfExists(path);
         }
-        SettingsService.Instance?.BackupData();
+        _settings?.BackupData();
     }
 
-    private static string GetCredentialPath(Guid connectionId) =>
+    private string GetCredentialPath(Guid connectionId) =>
         Path.Combine(CredentialDir, $"{connectionId:N}.bin");
 
-    private static string GetLegacyCredentialPath(Guid connectionId) =>
+    private string GetLegacyCredentialPath(Guid connectionId) =>
         Path.Combine(LegacyCredentialDir, connectionId.ToString("N"));
 
-    private static string? TryLoadLegacyCredential(Guid connectionId)
+    private string? TryLoadLegacyCredential(Guid connectionId)
     {
         var legacyPath = GetLegacyCredentialPath(connectionId);
         if (!File.Exists(legacyPath))
@@ -260,7 +269,7 @@ internal static class CredentialManager
         }
     }
 
-    private static void WriteAtomic(string path, byte[] bytes)
+    private void WriteAtomic(string path, byte[] bytes)
     {
         var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
         File.WriteAllBytes(tempPath, bytes);

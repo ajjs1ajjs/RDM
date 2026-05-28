@@ -8,11 +8,13 @@ public class DatabaseService : IDatabaseService
 {
     private readonly object _syncRoot = new();
     private readonly ISettingsService? _settings;
+    private readonly ICredentialService _credentialService;
     private LiteDatabase? _db;
     private string _currentPath = string.Empty;
 
-    public DatabaseService(ISettingsService? settings = null)
+    public DatabaseService(ICredentialService credentialService, ISettingsService? settings = null)
     {
+        _credentialService = credentialService;
         _settings = settings;
     }
 
@@ -136,7 +138,7 @@ public class DatabaseService : IDatabaseService
         var groupConnections = Connections.Find(c => c.GroupId == id).ToList();
         foreach (var conn in groupConnections)
         {
-            CredentialManager.Delete(conn.Id);
+            _credentialService.Delete(conn.Id);
             Connections.Delete(conn.Id);
         }
 
@@ -171,7 +173,7 @@ public class DatabaseService : IDatabaseService
     {
         WithDb(() =>
         {
-            CredentialManager.Delete(id);
+            _credentialService.Delete(id);
             Connections.Delete(id);
         });
         TriggerAutoBackup();
@@ -206,7 +208,7 @@ public class DatabaseService : IDatabaseService
 
                 if (!string.IsNullOrEmpty(conn.ImportedPassword))
                 {
-                    CredentialManager.Save(conn.Id, conn.ImportedPassword);
+                    _credentialService.Save(conn.Id, conn.ImportedPassword);
                 }
 
                 conn.CreatedAt = DateTime.UtcNow;

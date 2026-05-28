@@ -16,14 +16,18 @@ public partial class ConnectionEditViewModel : ObservableObject
     private static readonly Regex IPv6Regex = new(@"^\[?([0-9a-fA-F:]+)\]?$", RegexOptions.Compiled);
 
     private readonly IDatabaseService _db;
+    private readonly ICredentialService _credentialService;
+    private readonly ISettingsService _settings;
     private readonly Connection? _existing;
     private string? _validationError;
 
-    public ConnectionEditViewModel(IDatabaseService db)
+    public ConnectionEditViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings)
     {
         _db = db;
+        _credentialService = credentialService;
+        _settings = settings;
         _existing = null;
-        if (int.TryParse(SettingsService.Instance?.Current?.DefaultRdpPort, out int rdpPort))
+        if (int.TryParse(settings.Current?.DefaultRdpPort, out int rdpPort))
         {
             Port = rdpPort;
         }
@@ -34,9 +38,11 @@ public partial class ConnectionEditViewModel : ObservableObject
         LoadGroups();
     }
 
-    public ConnectionEditViewModel(IDatabaseService db, Connection existing)
+    public ConnectionEditViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection existing)
     {
         _db = db;
+        _credentialService = credentialService;
+        _settings = settings;
         _existing = existing;
         Name = existing.Name ?? "";
         Host = existing.Host ?? "";
@@ -67,11 +73,11 @@ public partial class ConnectionEditViewModel : ObservableObject
             SshJumpHost = existing.SshSettings.JumpHost ?? "";
             SshJumpHostPort = existing.SshSettings.JumpHostPort;
             SshJumpHostUsername = existing.SshSettings.JumpHostUsername ?? "";
-            SshJumpHostPassword = CredentialManager.LoadAdditional(existing.Id, "jumphost_password") ?? "";
-            SshKeyPassphrase = CredentialManager.LoadAdditional(existing.Id, "passphrase") ?? "";
+            SshJumpHostPassword = credentialService.LoadAdditional(existing.Id, "jumphost_password") ?? "";
+            SshKeyPassphrase = credentialService.LoadAdditional(existing.Id, "passphrase") ?? "";
         }
 
-        var password = CredentialManager.Load(existing.Id);
+        var password = credentialService.Load(existing.Id);
         if (password != null)
         {
             SavePassword = true;
@@ -94,7 +100,7 @@ public partial class ConnectionEditViewModel : ObservableObject
     {
         if (value == ConnectionType.SSH)
         {
-            if (int.TryParse(SettingsService.Instance?.Current?.DefaultSshPort, out int sshPort))
+            if (int.TryParse(_settings.Current?.DefaultSshPort, out int sshPort))
             {
                 Port = sshPort;
             }
@@ -105,7 +111,7 @@ public partial class ConnectionEditViewModel : ObservableObject
         }
         else
         {
-            if (int.TryParse(SettingsService.Instance?.Current?.DefaultRdpPort, out int rdpPort))
+            if (int.TryParse(_settings.Current?.DefaultRdpPort, out int rdpPort))
             {
                 Port = rdpPort;
             }
@@ -321,17 +327,17 @@ public partial class ConnectionEditViewModel : ObservableObject
         if (SavePassword)
         {
             if (!string.IsNullOrEmpty(Password))
-                CredentialManager.Save(conn.Id, Password);
+                _credentialService.Save(conn.Id, Password);
         }
         else
         {
-            CredentialManager.Delete(conn.Id);
+            _credentialService.Delete(conn.Id);
         }
 
         if (SelectedType == ConnectionType.SSH)
         {
-            CredentialManager.SaveAdditional(conn.Id, "passphrase", SshKeyPassphrase);
-            CredentialManager.SaveAdditional(conn.Id, "jumphost_password", SshJumpHostPassword);
+            _credentialService.SaveAdditional(conn.Id, "passphrase", SshKeyPassphrase);
+            _credentialService.SaveAdditional(conn.Id, "jumphost_password", SshJumpHostPassword);
         }
     }
 }

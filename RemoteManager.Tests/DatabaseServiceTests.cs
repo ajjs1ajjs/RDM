@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using RemoteManager.Models;
 using RemoteManager.Services;
@@ -8,12 +9,16 @@ namespace RemoteManager.Tests;
 public class DatabaseServiceTests : IDisposable
 {
     private readonly string _testDbPath;
+    private readonly string _tempCredentialsDir;
+    private readonly CredentialService _credentialService;
     private readonly DatabaseService _db;
 
     public DatabaseServiceTests()
     {
         _testDbPath = Path.Combine(Path.GetTempPath(), $"rdm_test_{Guid.NewGuid():N}.db");
-        _db = new DatabaseService();
+        _tempCredentialsDir = Path.Combine(Path.GetTempPath(), $"rdm_creds_db_test_{Guid.NewGuid():N}");
+        _credentialService = new CredentialService(_tempCredentialsDir);
+        _db = new DatabaseService(_credentialService);
         _db.Initialize(_testDbPath);
     }
 
@@ -21,6 +26,7 @@ public class DatabaseServiceTests : IDisposable
     {
         _db.Dispose();
         try { if (File.Exists(_testDbPath)) File.Delete(_testDbPath); } catch { }
+        try { if (Directory.Exists(_tempCredentialsDir)) Directory.Delete(_tempCredentialsDir, true); } catch { }
     }
 
     [Fact]
@@ -173,7 +179,7 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void Initialize_Throws_On_Empty_Path()
     {
-        var db = new DatabaseService();
+        var db = new DatabaseService(_credentialService);
         Assert.Throws<ArgumentException>(() => db.Initialize(""));
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using RemoteManager.Helpers;
 using RemoteManager.Models;
 using RemoteManager.Services;
@@ -6,8 +7,27 @@ using Xunit;
 
 namespace RemoteManager.Tests;
 
-public class CredentialResolverTests
+public class CredentialResolverTests : IDisposable
 {
+    private readonly string _tempCredentialsDir;
+    private readonly CredentialService _credentialService;
+
+    public CredentialResolverTests()
+    {
+        _tempCredentialsDir = Path.Combine(Path.GetTempPath(), $"rdm_creds_resolver_test_{Guid.NewGuid():N}");
+        _credentialService = new CredentialService(_tempCredentialsDir);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(_tempCredentialsDir))
+                Directory.Delete(_tempCredentialsDir, true);
+        }
+        catch { }
+    }
+
     [Theory]
     [InlineData("admin", null)]
     [InlineData("CONTOSO\\admin", "CONTOSO")]
@@ -40,23 +60,14 @@ public class CredentialResolverTests
         var domainUser = "domainAdmin";
         var domainPassword = "DomainPassword123!";
 
-        try
-        {
-            // Even if a domain credential with the name "admin" exists,
-            // a plain user "admin" should NOT match it as a domain.
-            CredentialManager.SaveDomainCredential(domain, domainUser, domainPassword);
+        _credentialService.SaveDomainCredential(domain, domainUser, domainPassword);
 
-            // Act
-            var resolved = CredentialResolver.ResolveCredentials(conn, connectionId);
+        // Act
+        var resolved = CredentialResolver.ResolveCredentials(_credentialService, conn, connectionId);
 
-            // Assert
-            Assert.Equal("admin", resolved.Username);
-            Assert.Equal(string.Empty, resolved.Password);
-        }
-        finally
-        {
-            CredentialManager.DeleteDomainCredential(domain);
-        }
+        // Assert
+        Assert.Equal("admin", resolved.Username);
+        Assert.Equal(string.Empty, resolved.Password);
     }
 
     [Fact]
@@ -75,23 +86,14 @@ public class CredentialResolverTests
         var domainUser = "contoso_admin";
         var domainPassword = "ContosoPassword123!";
 
-        try
-        {
-            CredentialManager.SaveDomainCredential(domain, domainUser, domainPassword);
+        _credentialService.SaveDomainCredential(domain, domainUser, domainPassword);
 
-            // Act
-            var resolved = CredentialResolver.ResolveCredentials(conn, connectionId);
+        // Act
+        var resolved = CredentialResolver.ResolveCredentials(_credentialService, conn, connectionId);
 
-            // Assert
-            // Since username was CONTOSO\admin, it has domain = CONTOSO but specifies a user.
-            // Only the password should be replaced, and username remains CONTOSO\admin.
-            Assert.Equal("CONTOSO\\admin", resolved.Username);
-            Assert.Equal(domainPassword, resolved.Password);
-        }
-        finally
-        {
-            CredentialManager.DeleteDomainCredential(domain);
-        }
+        // Assert
+        Assert.Equal("CONTOSO\\admin", resolved.Username);
+        Assert.Equal(domainPassword, resolved.Password);
     }
 
     [Fact]
@@ -110,22 +112,13 @@ public class CredentialResolverTests
         var domainUser = "contoso_admin";
         var domainPassword = "ContosoPassword123!";
 
-        try
-        {
-            CredentialManager.SaveDomainCredential(domain, domainUser, domainPassword);
+        _credentialService.SaveDomainCredential(domain, domainUser, domainPassword);
 
-            // Act
-            var resolved = CredentialResolver.ResolveCredentials(conn, connectionId);
+        // Act
+        var resolved = CredentialResolver.ResolveCredentials(_credentialService, conn, connectionId);
 
-            // Assert
-            // Since username was CONTOSO\, it is just the domain.
-            // Both username and password should be replaced.
-            Assert.Equal(domainUser, resolved.Username);
-            Assert.Equal(domainPassword, resolved.Password);
-        }
-        finally
-        {
-            CredentialManager.DeleteDomainCredential(domain);
-        }
+        // Assert
+        Assert.Equal(domainUser, resolved.Username);
+        Assert.Equal(domainPassword, resolved.Password);
     }
 }

@@ -15,14 +15,16 @@ public partial class MainViewModel : ObservableObject
     private readonly IDatabaseService _db;
     private readonly ISettingsService _settings;
     private readonly IImportExportService _importExport;
+    private readonly ICredentialService _credentialService;
     private string? _pendingImportPath;
     private string? _pendingImportPassword;
 
-    public MainViewModel(IDatabaseService db, ISettingsService settings)
+    public MainViewModel(IDatabaseService db, ISettingsService settings, IImportExportService importExport, ICredentialService credentialService)
     {
         _db = db;
         _settings = settings;
-        _importExport = new ImportExportService(db);
+        _importExport = importExport;
+        _credentialService = credentialService;
 
         if (settings.IsFirstRun)
         {
@@ -232,11 +234,11 @@ public partial class MainViewModel : ObservableObject
             SessionTabViewModel tab;
             if (item.Connection.Type == ConnectionType.RDP)
             {
-                tab = new RdpSessionViewModel(_db, item.Connection);
+                tab = new RdpSessionViewModel(_db, _credentialService, _settings, item.Connection);
             }
             else
             {
-                tab = new SshSessionViewModel(_db, item.Connection);
+                tab = new SshSessionViewModel(_db, _credentialService, _settings, item.Connection);
             }
 
             PropertyChangedEventHandler handler = (s, e) =>
@@ -294,7 +296,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowSettings()
     {
-        var settingsVm = new SettingsViewModel(_settings, _db);
+        var settingsVm = new SettingsViewModel(_settings, _db, _importExport, _credentialService);
         settingsVm.ImportCompleted += () => { LoadData(); };
         OpenTabs.Add(new SettingsTabViewModel(settingsVm));
         SelectedTab = OpenTabs.Last();
@@ -330,7 +332,7 @@ public partial class MainViewModel : ObservableObject
     private void AddConnection(string? typeStr)
     {
         var type = typeStr == "SSH" ? ConnectionType.SSH : ConnectionType.RDP;
-        var vm = new ConnectionEditViewModel(_db) { SelectedType = type };
+        var vm = new ConnectionEditViewModel(_db, _credentialService, _settings) { SelectedType = type };
 
         var dialog = new ConnectionEditDialog(vm);
         if (dialog.ShowDialog() == true)
@@ -346,7 +348,7 @@ public partial class MainViewModel : ObservableObject
         var freshConn = _db.GetConnection(item.Connection.Id);
         if (freshConn == null) return;
 
-        var vm = new ConnectionEditViewModel(_db, freshConn);
+        var vm = new ConnectionEditViewModel(_db, _credentialService, _settings, freshConn);
         var dialog = new ConnectionEditDialog(vm);
         if (dialog.ShowDialog() == true)
         {
@@ -393,10 +395,10 @@ public partial class MainViewModel : ObservableObject
         _db.SaveConnection(copy);
 
         // Copy credential if it exists
-        var existingPassword = CredentialManager.Load(original.Id);
+        var existingPassword = _credentialService.Load(original.Id);
         if (existingPassword != null)
         {
-            CredentialManager.Save(copy.Id, existingPassword);
+            _credentialService.Save(copy.Id, existingPassword);
         }
 
         RefreshTree();
@@ -490,7 +492,7 @@ public partial class MainViewModel : ObservableObject
             RdpSettings = new RDPSettings()
         };
 
-        var tab = new RdpSessionViewModel(_db, conn);
+        var tab = new RdpSessionViewModel(_db, _credentialService, _settings, conn);
         OpenTabs.Add(tab);
         SelectedTab = tab;
     }
@@ -507,7 +509,7 @@ public partial class MainViewModel : ObservableObject
             SshSettings = new SSHSettings()
         };
 
-        var tab = new SshSessionViewModel(_db, conn);
+        var tab = new SshSessionViewModel(_db, _credentialService, _settings, conn);
         OpenTabs.Add(tab);
         SelectedTab = tab;
     }

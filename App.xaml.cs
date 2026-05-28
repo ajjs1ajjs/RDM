@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.IO;
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
 using RemoteManager.Models;
 using RemoteManager.Services;
 using RemoteManager.ViewModels;
@@ -9,12 +11,26 @@ namespace RemoteManager;
 
 public partial class App : Application
 {
+    private IServiceProvider? _serviceProvider;
     private NotifyIcon? _trayIcon;
-    private DatabaseService? _db;
+    private IDatabaseService? _db;
     private IntPtr _hIcon = IntPtr.Zero;
 
     [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
     private static extern bool DestroyIcon(IntPtr handle);
+
+    private void ConfigureServices(IServiceCollection services)
+    {
+        var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
+        var credentialsDir = Path.Combine(appDataDir, "credentials");
+
+        services.AddSingleton<ISettingsService>(sp => new SettingsService(appDataDir));
+        services.AddSingleton<ICredentialService>(sp => new CredentialService(credentialsDir, sp.GetRequiredService<ISettingsService>()));
+        services.AddSingleton<IDatabaseService, DatabaseService>();
+        services.AddSingleton<IImportExportService, ImportExportService>();
+        
+        services.AddTransient<MainViewModel>();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -24,14 +40,18 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
-        var settings = new SettingsService();
-        _db = new DatabaseService(settings);
-
         try
         {
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            _serviceProvider = services.BuildServiceProvider();
+
+            var settings = _serviceProvider.GetRequiredService<ISettingsService>();
+            _db = _serviceProvider.GetRequiredService<IDatabaseService>();
+
             ApplyTheme(settings.Current.Theme);
 
-            var mainVm = new MainViewModel(_db, settings);
+            var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
             var mainWindow = new MainWindow();
             mainWindow.Initialize(mainVm);
             mainWindow.Show();

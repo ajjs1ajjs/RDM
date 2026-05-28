@@ -20,10 +20,12 @@ public class ImportExportService : IImportExportService
     };
 
     private readonly IDatabaseService _db;
+    private readonly ICredentialService _credentialService;
 
-    public ImportExportService(IDatabaseService db)
+    public ImportExportService(IDatabaseService db, ICredentialService credentialService)
     {
         _db = db;
+        _credentialService = credentialService;
     }
 
     public void ExportToFile(string filePath)
@@ -275,7 +277,7 @@ public class ImportExportService : IImportExportService
         var data = _db.ExportData();
         foreach (var conn in data.Connections)
         {
-            conn.ImportedPassword = CredentialManager.Load(conn.Id);
+            conn.ImportedPassword = _credentialService.Load(conn.Id);
         }
         var json = JsonSerializer.Serialize(data, JsonOptions);
         var encryptedBytes = Helpers.EncryptionHelper.Encrypt(json, password);

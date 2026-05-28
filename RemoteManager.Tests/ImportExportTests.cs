@@ -21,7 +21,9 @@ public class ImportExportTests
         var dbPath = GetTempDatabasePath();
         var exportPath = Path.Combine(Path.GetTempPath(), $"RemoteManager_export_{Guid.NewGuid():N}.json");
 
-        var dbService = new DatabaseService();
+        var tempCredDir = Path.Combine(Path.GetTempPath(), $"rdm_test_creds_{Guid.NewGuid():N}");
+        var credService = new CredentialService(tempCredDir);
+        var dbService = new DatabaseService(credService);
         dbService.Initialize(dbPath);
 
         try
@@ -41,19 +43,21 @@ public class ImportExportTests
             };
             dbService.SaveConnection(connection);
 
-            var importExport = new ImportExportService(dbService);
+            var importExport = new ImportExportService(dbService, credService);
 
             // Act
             importExport.ExportToFile(exportPath);
 
             // Create new DB to import into
             var dbPathImport = GetTempDatabasePath();
-            var dbServiceImport = new DatabaseService();
+            var tempCredDirImport = Path.Combine(Path.GetTempPath(), $"rdm_test_creds_{Guid.NewGuid():N}");
+            var credServiceImport = new CredentialService(tempCredDirImport);
+            var dbServiceImport = new DatabaseService(credServiceImport);
             dbServiceImport.Initialize(dbPathImport);
 
             try
             {
-                var importExport2 = new ImportExportService(dbServiceImport);
+                var importExport2 = new ImportExportService(dbServiceImport, credServiceImport);
                 importExport2.ImportFromFile(exportPath);
 
                 // Assert
@@ -75,6 +79,8 @@ public class ImportExportTests
                 dbServiceImport.Dispose();
                 if (File.Exists(dbPathImport))
                     File.Delete(dbPathImport);
+                if (Directory.Exists(tempCredDirImport))
+                    Directory.Delete(tempCredDirImport, true);
             }
         }
         finally
@@ -84,6 +90,8 @@ public class ImportExportTests
                 File.Delete(dbPath);
             if (File.Exists(exportPath))
                 File.Delete(exportPath);
+            if (Directory.Exists(tempCredDir))
+                Directory.Delete(tempCredDir, true);
         }
     }
 
@@ -94,7 +102,9 @@ public class ImportExportTests
         var dbPath = GetTempDatabasePath();
         var xmlPath = Path.Combine(Path.GetTempPath(), $"Devolutions_import_{Guid.NewGuid():N}.xml");
 
-        var dbService = new DatabaseService();
+        var tempCredDir = Path.Combine(Path.GetTempPath(), $"rdm_test_creds_{Guid.NewGuid():N}");
+        var credService = new CredentialService(tempCredDir);
+        var dbService = new DatabaseService(credService);
         dbService.Initialize(dbPath);
 
         var xmlContent = @"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -125,7 +135,7 @@ public class ImportExportTests
 
         try
         {
-            var importExport = new ImportExportService(dbService);
+            var importExport = new ImportExportService(dbService, credService);
 
             // Act
             var preview = importExport.PreviewImport(xmlPath);
@@ -168,6 +178,8 @@ public class ImportExportTests
                 File.Delete(dbPath);
             if (File.Exists(xmlPath))
                 File.Delete(xmlPath);
+            if (Directory.Exists(tempCredDir))
+                Directory.Delete(tempCredDir, true);
         }
     }
 
@@ -180,7 +192,9 @@ public class ImportExportTests
         var backupPassword = "SuperSecureBackupPassword123!";
         var connPassword = "TestConnectionPassword123!";
 
-        var dbService = new DatabaseService();
+        var tempCredDir = Path.Combine(Path.GetTempPath(), $"rdm_test_creds_{Guid.NewGuid():N}");
+        var credService = new CredentialService(tempCredDir);
+        var dbService = new DatabaseService(credService);
         dbService.Initialize(dbPath);
 
         try
@@ -198,9 +212,9 @@ public class ImportExportTests
                 GroupId = parentGroup.Id
             };
             dbService.SaveConnection(connection);
-            CredentialManager.Save(connection.Id, connPassword);
+            credService.Save(connection.Id, connPassword);
 
-            var importExport = new ImportExportService(dbService);
+            var importExport = new ImportExportService(dbService, credService);
 
             // Act
             importExport.ExportEncrypted(backupPath, backupPassword);
@@ -213,12 +227,14 @@ public class ImportExportTests
 
             // Import into a new clean database
             var dbPathImport = GetTempDatabasePath();
-            var dbServiceImport = new DatabaseService();
+            var tempCredDirImport = Path.Combine(Path.GetTempPath(), $"rdm_test_creds_{Guid.NewGuid():N}");
+            var credServiceImport = new CredentialService(tempCredDirImport);
+            var dbServiceImport = new DatabaseService(credServiceImport);
             dbServiceImport.Initialize(dbPathImport);
 
             try
             {
-                var importExportImport = new ImportExportService(dbServiceImport);
+                var importExportImport = new ImportExportService(dbServiceImport, credServiceImport);
                 
                 // Act preview
                 var preview = importExportImport.PreviewImportEncrypted(backupPath, backupPassword);
@@ -241,17 +257,19 @@ public class ImportExportTests
                 Assert.Equal("secure.host.local", importedConnection.Host);
 
                 // Assert password is encrypted and saved under DPAPI for the new connections
-                var restoredPassword = CredentialManager.Load(importedConnection.Id);
+                var restoredPassword = credServiceImport.Load(importedConnection.Id);
                 Assert.Equal(connPassword, restoredPassword);
 
                 // Clean up credentials created for imported connection in test environment
-                CredentialManager.Delete(importedConnection.Id);
+                credServiceImport.Delete(importedConnection.Id);
             }
             finally
             {
                 dbServiceImport.Dispose();
                 if (File.Exists(dbPathImport))
                     File.Delete(dbPathImport);
+                if (Directory.Exists(tempCredDirImport))
+                    Directory.Delete(tempCredDirImport, true);
             }
         }
         finally
@@ -260,7 +278,7 @@ public class ImportExportTests
             var connections = dbService.GetAllConnections();
             foreach (var conn in connections)
             {
-                CredentialManager.Delete(conn.Id);
+                credService.Delete(conn.Id);
             }
 
             dbService.Dispose();
@@ -268,6 +286,8 @@ public class ImportExportTests
                 File.Delete(dbPath);
             if (File.Exists(backupPath))
                 File.Delete(backupPath);
+            if (Directory.Exists(tempCredDir))
+                Directory.Delete(tempCredDir, true);
         }
     }
 
@@ -278,12 +298,13 @@ public class ImportExportTests
         var backupDir = Path.Combine(Path.GetTempPath(), $"RemoteManager_Backup_{Guid.NewGuid():N}");
         Directory.CreateDirectory(backupDir);
 
-        var settings = new SettingsService();
-        var originalBackupFolder = settings.Current.BackupFolderPath;
-        var originalDbPath = settings.Current.DatabasePath;
+        var tempSettingsDir = Path.Combine(Path.GetTempPath(), $"rdm_settings_test_{Guid.NewGuid():N}");
+        var settings = new SettingsService(tempSettingsDir);
 
         var testDbPath = Path.Combine(settings.AppDataDir, $"RemoteManager_backup_test_{Guid.NewGuid():N}.db");
-        var dbService = new DatabaseService();
+        var tempCredDir = Path.Combine(settings.AppDataDir, "credentials");
+        var credService = new CredentialService(tempCredDir, settings);
+        var dbService = new DatabaseService(credService, settings);
 
         try
         {
@@ -308,9 +329,9 @@ public class ImportExportTests
             };
             dbService.SaveConnection(connection);
             var testPassword = "BackupPassword123!";
-            CredentialManager.Save(connection.Id, testPassword);
+            credService.Save(connection.Id, testPassword);
 
-            // Act - Trigger backup manually (SettingsService.Instance is set, and CredentialManager.Save already triggers BackupData)
+            // Act - Trigger backup manually (SettingsService is passed, and credService.Save already triggers BackupData)
             settings.BackupData();
 
             // Assert backup files exist
@@ -327,11 +348,7 @@ public class ImportExportTests
             if (File.Exists(testDbPath))
                 File.Delete(testDbPath);
 
-            var localCredPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RemoteManager",
-                "credentials",
-                $"{connection.Id:N}.bin");
+            var localCredPath = Path.Combine(tempCredDir, $"{connection.Id:N}.bin");
             if (File.Exists(localCredPath))
                 File.Delete(localCredPath);
 
@@ -342,12 +359,12 @@ public class ImportExportTests
             Assert.True(File.Exists(settings.Current.DatabasePath), "Restored database file should exist");
             Assert.True(File.Exists(localCredPath), "Restored local credential file should exist");
             
-            var restoredPassword = CredentialManager.Load(connection.Id);
+            var restoredPassword = credService.Load(connection.Id);
             Assert.NotNull(restoredPassword);
             Assert.Equal(testPassword, restoredPassword);
 
             // Cleanup restored files
-            CredentialManager.Delete(connection.Id);
+            credService.Delete(connection.Id);
             if (File.Exists(settings.Current.DatabasePath))
                 File.Delete(settings.Current.DatabasePath);
         }
@@ -360,10 +377,8 @@ public class ImportExportTests
             if (Directory.Exists(backupDir))
                 Directory.Delete(backupDir, true);
 
-            // Restore original settings
-            settings.Current.BackupFolderPath = originalBackupFolder;
-            settings.Current.DatabasePath = originalDbPath;
-            settings.Save();
+            if (Directory.Exists(tempSettingsDir))
+                Directory.Delete(tempSettingsDir, true);
         }
     }
 }

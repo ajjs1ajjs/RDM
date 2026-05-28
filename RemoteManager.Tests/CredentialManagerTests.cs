@@ -5,8 +5,27 @@ using Xunit;
 
 namespace RemoteManager.Tests;
 
-public class CredentialManagerTests
+public class CredentialManagerTests : IDisposable
 {
+    private readonly string _tempCredentialsDir;
+    private readonly CredentialService _credentialService;
+
+    public CredentialManagerTests()
+    {
+        _tempCredentialsDir = Path.Combine(Path.GetTempPath(), $"rdm_creds_test_{Guid.NewGuid():N}");
+        _credentialService = new CredentialService(_tempCredentialsDir);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(_tempCredentialsDir))
+                Directory.Delete(_tempCredentialsDir, true);
+        }
+        catch { }
+    }
+
     [Fact]
     public void TestSaveAndLoadCredential()
     {
@@ -14,20 +33,12 @@ public class CredentialManagerTests
         var connectionId = Guid.NewGuid();
         var password = "SuperSecretPassword123!";
 
-        try
-        {
-            // Act
-            CredentialManager.Save(connectionId, password);
-            var loadedPassword = CredentialManager.Load(connectionId);
+        // Act
+        _credentialService.Save(connectionId, password);
+        var loadedPassword = _credentialService.Load(connectionId);
 
-            // Assert
-            Assert.Equal(password, loadedPassword);
-        }
-        finally
-        {
-            // Clean up
-            CredentialManager.Delete(connectionId);
-        }
+        // Assert
+        Assert.Equal(password, loadedPassword);
     }
 
     [Fact]
@@ -37,7 +48,7 @@ public class CredentialManagerTests
         var connectionId = Guid.NewGuid();
 
         // Act
-        var loadedPassword = CredentialManager.Load(connectionId);
+        var loadedPassword = _credentialService.Load(connectionId);
 
         // Assert
         Assert.Null(loadedPassword);
@@ -50,12 +61,12 @@ public class CredentialManagerTests
         var connectionId = Guid.NewGuid();
         var password = "TempPasswordToDeleted";
 
-        CredentialManager.Save(connectionId, password);
-        Assert.Equal(password, CredentialManager.Load(connectionId));
+        _credentialService.Save(connectionId, password);
+        Assert.Equal(password, _credentialService.Load(connectionId));
 
         // Act
-        CredentialManager.Delete(connectionId);
-        var loaded = CredentialManager.Load(connectionId);
+        _credentialService.Delete(connectionId);
+        var loaded = _credentialService.Load(connectionId);
 
         // Assert
         Assert.Null(loaded);
@@ -69,29 +80,21 @@ public class CredentialManagerTests
         var username = "Administrator";
         var password = "SecureDomainPassword!";
 
-        try
-        {
-            // Act
-            CredentialManager.SaveDomainCredential(domain, username, password);
-            var result = CredentialManager.LoadDomainCredential(domain);
+        // Act
+        _credentialService.SaveDomainCredential(domain, username, password);
+        var result = _credentialService.LoadDomainCredential(domain);
 
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(username, result.Value.Username);
-            Assert.Equal(password, result.Value.Password);
-        }
-        finally
-        {
-            // Clean up
-            CredentialManager.DeleteDomainCredential(domain);
-        }
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(username, result.Value.Username);
+        Assert.Equal(password, result.Value.Password);
     }
 
     [Fact]
     public void TestLoadNonExistentDomainCredentialReturnsNull()
     {
         // Act
-        var result = CredentialManager.LoadDomainCredential("NonExistentDomain123");
+        var result = _credentialService.LoadDomainCredential("NonExistentDomain123");
 
         // Assert
         Assert.Null(result);
@@ -105,12 +108,12 @@ public class CredentialManagerTests
         var username = "testuser";
         var password = "password";
 
-        CredentialManager.SaveDomainCredential(domain, username, password);
-        Assert.NotNull(CredentialManager.LoadDomainCredential(domain));
+        _credentialService.SaveDomainCredential(domain, username, password);
+        Assert.NotNull(_credentialService.LoadDomainCredential(domain));
 
         // Act
-        CredentialManager.DeleteDomainCredential(domain);
-        var result = CredentialManager.LoadDomainCredential(domain);
+        _credentialService.DeleteDomainCredential(domain);
+        var result = _credentialService.LoadDomainCredential(domain);
 
         // Assert
         Assert.Null(result);

@@ -9,18 +9,16 @@ public class SettingsService : ISettingsService
 {
     private const string SettingsFileName = "settings.json";
 
-    internal static SettingsService? Instance { get; private set; }
 
     public AppSettings Current { get; set; }
     public string SettingsPath { get; }
     public string AppDataDir { get; }
     public bool IsFirstRun { get; private set; }
 
-    public SettingsService()
+    public SettingsService(string? appDataDir = null)
     {
-        Instance = this;
+        var targetAppDataDir = appDataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
         var legacySettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, SettingsFileName);
-        var targetAppDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
         
         AppDataDir = targetAppDataDir;
         if (!Directory.Exists(AppDataDir))
@@ -115,10 +113,7 @@ public class SettingsService : ISettingsService
                 }
 
                 // 3. Backup credentials folder
-                var sourceCredentialsDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "RemoteManager",
-                    "credentials");
+                var sourceCredentialsDir = Path.Combine(AppDataDir, "credentials");
 
                 if (Directory.Exists(sourceCredentialsDir))
                 {
@@ -192,10 +187,7 @@ public class SettingsService : ISettingsService
         var backupCredentialsDir = Path.Combine(backupDir, "credentials");
         if (Directory.Exists(backupCredentialsDir))
         {
-            var targetCredentialsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RemoteManager",
-                "credentials");
+            var targetCredentialsDir = Path.Combine(settings.AppDataDir, "credentials");
 
             if (!Directory.Exists(targetCredentialsDir))
                 Directory.CreateDirectory(targetCredentialsDir);

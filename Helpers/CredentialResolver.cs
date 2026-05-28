@@ -4,10 +4,10 @@ namespace RemoteManager.Helpers;
 
 public static class CredentialResolver
 {
-    public static (string Username, string Password) ResolveCredentials(Models.Connection? connection, Guid connectionId)
+    public static (string Username, string Password) ResolveCredentials(ICredentialService credentialService, Models.Connection? connection, Guid connectionId)
     {
         string username = connection?.Username ?? "";
-        string password = CredentialManager.Load(connectionId) ?? "";
+        string password = credentialService.Load(connectionId) ?? "";
 
         if (connection != null && !string.IsNullOrEmpty(username))
         {
@@ -15,7 +15,7 @@ public static class CredentialResolver
 
             if (!string.IsNullOrEmpty(domain))
             {
-                var matchedCred = CredentialManager.LoadDomainCredential(domain);
+                var matchedCred = credentialService.LoadDomainCredential(domain);
 
                 if (matchedCred != null)
                 {

@@ -10,6 +10,8 @@ namespace RemoteManager.ViewModels;
 public partial class RdpSessionViewModel : SessionTabViewModel
 {
     private readonly IDatabaseService _db;
+    private readonly ICredentialService _credentialService;
+    private readonly ISettingsService _settings;
     private bool _disposed;
     private RdpHost? _rdpHostRef;
     private int _reconnectAttempts;
@@ -18,7 +20,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
     public Connection? Connection { get; set; }
 
     public (string Username, string Password) GetResolvedCredentials() =>
-        CredentialResolver.ResolveCredentials(Connection, ConnectionId);
+        CredentialResolver.ResolveCredentials(_credentialService, Connection, ConnectionId);
 
     public override string? GetPassword() => GetResolvedCredentials().Password;
 
@@ -34,9 +36,11 @@ public partial class RdpSessionViewModel : SessionTabViewModel
 
     public string TypeIcon => "🖥";
 
-    public RdpSessionViewModel(IDatabaseService db, Connection connection)
+    public RdpSessionViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection connection)
     {
         _db = db;
+        _credentialService = credentialService;
+        _settings = settings;
         Connection = connection;
         Name = connection.Name;
         ConnectionId = connection.Id;
@@ -142,7 +146,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
             return;
         }
 
-        var autoReconnect = SettingsService.Instance?.Current?.AutoReconnect ?? false;
+        var autoReconnect = _settings.Current?.AutoReconnect ?? false;
         if (autoReconnect && _reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;

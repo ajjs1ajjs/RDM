@@ -11,12 +11,14 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IDatabaseService _db;
     private readonly IImportExportService _importExport;
+    private readonly ICredentialService _credentialService;
 
-    public SettingsViewModel(ISettingsService settings, IDatabaseService db)
+    public SettingsViewModel(ISettingsService settings, IDatabaseService db, IImportExportService importExport, ICredentialService credentialService)
     {
         _settings = settings;
         _db = db;
-        _importExport = new ImportExportService(db);
+        _importExport = importExport;
+        _credentialService = credentialService;
 
         _currentDbPath = settings.Current.DatabasePath;
         _selectedTheme = settings.Current.Theme;
@@ -30,7 +32,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             foreach (var cred in settings.Current.DomainCredentials)
             {
-                var encryptedCred = CredentialManager.LoadDomainCredential(cred.Domain);
+                var encryptedCred = _credentialService.LoadDomainCredential(cred.Domain);
                 _domainCredentials.Add(new DomainCredentialViewModel
                 {
                     Domain = cred.Domain,
@@ -138,12 +140,12 @@ public partial class SettingsViewModel : ObservableObject
 
             if (!string.IsNullOrEmpty(vm.OriginalDomain) && vm.Domain != vm.OriginalDomain)
             {
-                CredentialManager.DeleteDomainCredential(vm.OriginalDomain);
+                _credentialService.DeleteDomainCredential(vm.OriginalDomain);
             }
 
             if (!string.IsNullOrEmpty(vm.Password))
             {
-                CredentialManager.SaveDomainCredential(vm.Domain, vm.Username, vm.Password);
+                _credentialService.SaveDomainCredential(vm.Domain, vm.Username, vm.Password);
             }
 
             vm.OriginalDomain = vm.Domain;
@@ -197,7 +199,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             if (!string.IsNullOrEmpty(cred.Domain))
             {
-                CredentialManager.DeleteDomainCredential(cred.Domain);
+                _credentialService.DeleteDomainCredential(cred.Domain);
             }
             DomainCredentials.Remove(cred);
         }

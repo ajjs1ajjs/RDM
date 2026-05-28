@@ -10,6 +10,8 @@ namespace RemoteManager.ViewModels;
 public partial class SshSessionViewModel : SessionTabViewModel
 {
     private readonly IDatabaseService _db;
+    private readonly ICredentialService _credentialService;
+    private readonly ISettingsService _settings;
     private bool _disposed;
     private SshTerminalControl? _sshTerminalRef;
     private int _reconnectAttempts;
@@ -19,7 +21,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
     public Connection? Connection { get; set; }
 
     public (string Username, string Password) GetResolvedCredentials() =>
-        CredentialResolver.ResolveCredentials(Connection, ConnectionId);
+        CredentialResolver.ResolveCredentials(_credentialService, Connection, ConnectionId);
 
     public override string? GetPassword() => GetResolvedCredentials().Password;
 
@@ -35,9 +37,11 @@ public partial class SshSessionViewModel : SessionTabViewModel
 
     public string TypeIcon => "🔌";
 
-    public SshSessionViewModel(IDatabaseService db, Connection connection)
+    public SshSessionViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection connection)
     {
         _db = db;
+        _credentialService = credentialService;
+        _settings = settings;
         Connection = connection;
         Name = connection.Name;
         ConnectionId = connection.Id;
@@ -61,14 +65,14 @@ public partial class SshSessionViewModel : SessionTabViewModel
         {
             AuthType = Connection.SshSettings?.AuthType ?? SshAuthType.Password,
             PrivateKeyPath = Connection.SshSettings?.PrivateKeyPath,
-            PrivateKeyPassphrase = CredentialManager.LoadAdditional(Connection.Id, "passphrase"),
+            PrivateKeyPassphrase = _credentialService.LoadAdditional(Connection.Id, "passphrase"),
             KeepAliveInterval = Connection.SshSettings?.KeepAliveInterval ?? 30,
             TerminalColumns = Connection.SshSettings?.TerminalColumns ?? 120,
             TerminalRows = Connection.SshSettings?.TerminalRows ?? 40,
             JumpHost = Connection.SshSettings?.JumpHost,
             JumpHostPort = Connection.SshSettings?.JumpHostPort ?? 22,
             JumpHostUsername = Connection.SshSettings?.JumpHostUsername,
-            JumpHostPassword = CredentialManager.LoadAdditional(Connection.Id, "jumphost_password")
+            JumpHostPassword = _credentialService.LoadAdditional(Connection.Id, "jumphost_password")
         };
 
         if (Terminal is not SshTerminalControl ssh)
@@ -154,7 +158,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
             return;
         }
 
-        var autoReconnect = SettingsService.Instance?.Current?.AutoReconnect ?? false;
+        var autoReconnect = _settings.Current?.AutoReconnect ?? false;
         if (autoReconnect && _reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;
