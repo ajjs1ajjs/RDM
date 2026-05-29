@@ -11,7 +11,7 @@ public static class Log
         "RemoteManager",
         "logs");
 
-    private static readonly string LogFile = Path.Combine(LogDir, $"remote-manager-{DateTime.UtcNow:yyyy-MM-dd}.log");
+    private static string LogFile => Path.Combine(LogDir, $"remote-manager-{DateTime.UtcNow:yyyy-MM-dd}.log");
     private static readonly object _lock = new();
 
     static Log()

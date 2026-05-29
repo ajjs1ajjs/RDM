@@ -198,21 +198,70 @@ public partial class MainViewModel : ObservableObject
     {
         foreach (var group in Groups)
         {
-            foreach (var item in group.Children)
+            FilterEntry(group, search);
+        }
+    }
+
+    private bool FilterEntry(TreeEntryViewModel entry, string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            entry.IsVisible = true;
+            if (entry is GroupViewModel group)
             {
-                if (string.IsNullOrWhiteSpace(search))
+                foreach (var child in group.Children)
                 {
-                    item.IsVisible = true;
+                    FilterEntry(child, search);
                 }
-                else
+            }
+            return true;
+        }
+
+        if (entry is ConnectionItemViewModel connItem)
+        {
+            var matches = (connItem.Name ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
+                       || (connItem.Host ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
+                       || (connItem.Description ?? "").Contains(search, StringComparison.OrdinalIgnoreCase);
+            connItem.IsVisible = matches;
+            return matches;
+        }
+
+        if (entry is GroupViewModel g)
+        {
+            var anyChildVisible = false;
+            foreach (var child in g.Children)
+            {
+                if (FilterEntry(child, search))
                 {
-                    if (item is ConnectionItemViewModel connItem)
-                        item.IsVisible = connItem.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                            || connItem.Host.Contains(search, StringComparison.OrdinalIgnoreCase)
-                            || connItem.Description.Contains(search, StringComparison.OrdinalIgnoreCase);
-                    else
-                        item.IsVisible = item.Name.Contains(search, StringComparison.OrdinalIgnoreCase);
+                    anyChildVisible = true;
                 }
+            }
+
+            var groupMatches = (g.Name ?? "").Contains(search, StringComparison.OrdinalIgnoreCase);
+            g.IsVisible = groupMatches || anyChildVisible;
+
+            if (groupMatches && !anyChildVisible)
+            {
+                foreach (var child in g.Children)
+                {
+                    MakeAllVisible(child);
+                }
+            }
+
+            return g.IsVisible;
+        }
+
+        return false;
+    }
+
+    private void MakeAllVisible(TreeEntryViewModel entry)
+    {
+        entry.IsVisible = true;
+        if (entry is GroupViewModel group)
+        {
+            foreach (var child in group.Children)
+            {
+                MakeAllVisible(child);
             }
         }
     }

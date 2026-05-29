@@ -64,23 +64,36 @@
                 <!-- Quick actions -->
                 <Border Grid.Row="2" Padding="12,4,12,8">
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="📁 + Group" Padding="8,4" FontSize="11" Margin="0,0,4,0"
+                        <Button Command="{Binding AddGroupCommand}" Padding="10,6" Margin="0,0,5,0"
                                 Background="{StaticResource AccentBrush}" Foreground="White"
-                                BorderThickness="0" Cursor="Hand"
-                                Command="{Binding AddGroupCommand}"/>
-                        <Button Content="🖥️ + RDP" Padding="8,4" FontSize="11" Margin="0,0,4,0"
+                                BorderThickness="0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8F4;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
+                                <TextBlock Text="Group" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding AddConnectionCommand}" CommandParameter="RDP" Padding="10,6" Margin="0,0,5,0"
                                 Background="{StaticResource AccentBrush}" Foreground="White"
-                                BorderThickness="0" Cursor="Hand"
-                                Command="{Binding AddConnectionCommand}" CommandParameter="RDP"/>
-                        <Button Content="🔌 + SSH" Padding="8,4" FontSize="11" Margin="0,0,4,0"
+                                BorderThickness="0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
+                                <TextBlock Text="RDP" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding AddConnectionCommand}" CommandParameter="SSH" Padding="10,6" Margin="0,0,5,0"
                                 Background="{StaticResource AccentBrush}" Foreground="White"
-                                BorderThickness="0" Cursor="Hand"
-                                Command="{Binding AddConnectionCommand}" CommandParameter="SSH"/>
-                        <Button Content="⚙️" Padding="8,4" FontSize="13" Margin="4,0,0,0"
+                                BorderThickness="0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE9A9;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11"/>
+                                <TextBlock Text="SSH" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ShowSettingsCommand}" Padding="10,6" Margin="4,0,0,0"
                                 Background="Transparent" Foreground="{StaticResource FgBrush}"
                                 BorderThickness="0" Cursor="Hand"
-                                Command="{Binding ShowSettingsCommand}"
-                                ToolTip="Settings / Налаштування"/>
+                                ToolTip="Settings / Налаштування">
+                            <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center"/>
+                        </Button>
                     </StackPanel>
                 </Border>
                 <!-- Tree -->
@@ -98,34 +111,34 @@
                                                   Command="{Binding PlacementTarget.Tag.DataContext.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="Delete Group"
                                                   Command="{Binding PlacementTarget.Tag.DataContext.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator/>
                                         <MenuItem Header="Add RDP Connection" CommandParameter="RDP"
                                                   Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="🖥️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="Add SSH Connection" CommandParameter="SSH"
                                                   Command="{Binding PlacementTarget.Tag.DataContext.AddConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="🔌" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE9A9;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                     </ContextMenu>
                                 </Border.ContextMenu>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📁" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}"/>
-                                    <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}"/>
+                                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                         </HierarchicalDataTemplate>
@@ -143,7 +156,7 @@
                                                   Command="{Binding PlacementTarget.Tag.DataContext.OpenConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="⚡" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator/>
@@ -151,14 +164,14 @@
                                                   Command="{Binding PlacementTarget.Tag.DataContext.EditConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="✏️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <MenuItem Header="Duplicate"
                                                   Command="{Binding PlacementTarget.Tag.DataContext.DuplicateConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="📋" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator/>
@@ -166,16 +179,16 @@
                                                   Command="{Binding PlacementTarget.Tag.DataContext.DeleteConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="🗑️" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                     </ContextMenu>
                                 </Border.ContextMenu>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
-                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0"
                                              Fill="{Binding IsConnected, Converter={StaticResource StatusDotConverter}}"/>
-                                    <TextBlock Text="{Binding TypeIcon}" FontSize="13" Foreground="{StaticResource FgBrush}"/>
-                                    <StackPanel>
+                                    <TextBlock Text="{Binding TypeIcon}" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
                                         <TextBlock Text="{Binding Host}" FontSize="10" Foreground="{StaticResource FgDimBrush}"/>
                                     </StackPanel>

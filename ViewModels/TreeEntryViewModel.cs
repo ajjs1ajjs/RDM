@@ -34,6 +34,6 @@ public partial class ConnectionItemViewModel : TreeEntryViewModel
     [ObservableProperty]
     private bool _isConnected;
 
-    public string TypeIcon => Type == ConnectionType.RDP ? "🖥" : "🔌";
+    public string TypeIcon => Type == ConnectionType.RDP ? "\uE7F4" : "\uE9A9";
     public string DisplayText => $"{Name} ({Host}:{Port})";
 }

@@ -34,7 +34,7 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "Build\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.db,*\*.db,settings.json,*.pdb,*.log,backups,backups\*"
+Source: "Build\SingleFile\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.db,*\*.db,settings.json,*.pdb,*.log,backups,backups\*"
 
 [Icons]
 Name: "{group}\{#SetupName}"; Filename: "{app}\{#SetupExeName}"

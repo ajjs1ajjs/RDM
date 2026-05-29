@@ -100,7 +100,7 @@ graph TD
 
 3. Запустіть додаток:
    ```bash
-   dotnet run --project RemoteManager/RemoteManager.csproj
+   dotnet run --project RemoteManager.csproj
    ```
 
 ### Запуск Unit-тестів:

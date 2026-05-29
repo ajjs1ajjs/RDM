@@ -209,10 +209,13 @@ public class ImportExportTests
                 Port = 22,
                 Username = "secure_user",
                 Type = ConnectionType.SSH,
-                GroupId = parentGroup.Id
+                GroupId = parentGroup.Id,
+                SshSettings = new SSHSettings()
             };
             dbService.SaveConnection(connection);
             credService.Save(connection.Id, connPassword);
+            credService.SaveAdditional(connection.Id, "passphrase", "Passphrase123!");
+            credService.SaveAdditional(connection.Id, "jumphost_password", "JumpHostPass123!");
 
             var importExport = new ImportExportService(dbService, credService);
 
@@ -259,6 +262,12 @@ public class ImportExportTests
                 // Assert password is encrypted and saved under DPAPI for the new connections
                 var restoredPassword = credServiceImport.Load(importedConnection.Id);
                 Assert.Equal(connPassword, restoredPassword);
+
+                var restoredPassphrase = credServiceImport.LoadAdditional(importedConnection.Id, "passphrase");
+                Assert.Equal("Passphrase123!", restoredPassphrase);
+
+                var restoredJumpPass = credServiceImport.LoadAdditional(importedConnection.Id, "jumphost_password");
+                Assert.Equal("JumpHostPass123!", restoredJumpPass);
 
                 // Clean up credentials created for imported connection in test environment
                 credServiceImport.Delete(importedConnection.Id);

@@ -278,6 +278,11 @@ public class ImportExportService : IImportExportService
         foreach (var conn in data.Connections)
         {
             conn.ImportedPassword = _credentialService.Load(conn.Id);
+            if (conn.Type == ConnectionType.SSH && conn.SshSettings != null)
+            {
+                conn.SshSettings.PrivateKeyPassphrase = _credentialService.LoadAdditional(conn.Id, "passphrase");
+                conn.SshSettings.JumpHostPassword = _credentialService.LoadAdditional(conn.Id, "jumphost_password");
+            }
         }
         var json = JsonSerializer.Serialize(data, JsonOptions);
         var encryptedBytes = Helpers.EncryptionHelper.Encrypt(json, password);

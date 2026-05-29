@@ -211,6 +211,18 @@ public class DatabaseService : IDatabaseService
                     _credentialService.Save(conn.Id, conn.ImportedPassword);
                 }
 
+                if (conn.Type == RemoteManager.Models.ConnectionType.SSH && conn.SshSettings != null)
+                {
+                    if (!string.IsNullOrEmpty(conn.SshSettings.PrivateKeyPassphrase))
+                    {
+                        _credentialService.SaveAdditional(conn.Id, "passphrase", conn.SshSettings.PrivateKeyPassphrase);
+                    }
+                    if (!string.IsNullOrEmpty(conn.SshSettings.JumpHostPassword))
+                    {
+                        _credentialService.SaveAdditional(conn.Id, "jumphost_password", conn.SshSettings.JumpHostPassword);
+                    }
+                }
+
                 conn.CreatedAt = DateTime.UtcNow;
                 conn.ModifiedAt = DateTime.UtcNow;
                 Connections.Insert(conn);

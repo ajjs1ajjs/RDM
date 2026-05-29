@@ -173,7 +173,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
                                     <TextBox Grid.Column="1" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <PasswordBox Grid.Column="2" h:PasswordBoxHelper.BoundPassword="{Binding Password, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
+                                    <PasswordBox Grid.Column="2" h:PasswordBoxHelper.BindPassword="True" h:PasswordBoxHelper.BoundPassword="{Binding Password, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
                                     <Button Grid.Column="3" Content="✕" FontWeight="Bold" Foreground="Red" Padding="8,4"
                                             Background="Transparent" BorderThickness="0" Cursor="Hand"
                                             Command="{Binding DataContext.DeleteDomainCredentialCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"

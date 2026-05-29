@@ -35,7 +35,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
 
     public int Port => Connection?.Port ?? 22;
 
-    public string TypeIcon => "🔌";
+    public string TypeIcon => "\uE9A9";
 
     public SshSessionViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection connection)
     {

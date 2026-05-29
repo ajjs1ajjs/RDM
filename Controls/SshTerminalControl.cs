@@ -17,6 +17,7 @@ public partial class SshTerminalControl : TerminalControl
     private static readonly Regex OscSequenceRegex = new(@"\x1B\].*?(\x07|\x1B\\)", RegexOptions.Compiled);
     private static readonly Regex CursorSequenceRegex = new(@"\x1B\[(?<count>\d*)(?<cmd>[CDHKJ])", RegexOptions.Compiled);
     private static readonly Regex SgrSequenceRegex = new(@"\x1B\[(?<params>[0-9;]*)m", RegexOptions.Compiled);
+    private static readonly Regex PromptRegex = new(@"^(?<prompt>[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-\.]+[:~][^$#]*[$#]\s*)(?<rest>.*)$", RegexOptions.Compiled);
 
     private readonly object _writeLock = new();
     private CancellationTokenSource? _readCts;
@@ -34,6 +35,8 @@ public partial class SshTerminalControl : TerminalControl
     private int _selectionEnd = -1;
     private uint _currentColumns = 120;
     private uint _currentRows = 40;
+    private readonly List<byte> _charColors = new();
+    private byte _currentForegroundColor = 0;
 
     public event EventHandler<string>? ConnectionClosed;
 
@@ -59,6 +62,8 @@ public partial class SshTerminalControl : TerminalControl
         Focusable = true;
         _output.Inlines.Clear();
         _screen.Clear();
+        _charColors.Clear();
+        _currentForegroundColor = 0;
         _lineStartIndex = 0;
         _cursorIndex = 0;
         PreviewKeyDown += OnPreviewKeyDown;
@@ -238,13 +243,43 @@ public partial class SshTerminalControl : TerminalControl
             return string.Empty;
         });
 
-        cleaned = SgrSequenceRegex.Replace(cleaned, string.Empty);
-
-        cleaned = AnsiSequenceRegex.Replace(cleaned, string.Empty);
-
         for (var i = 0; i < cleaned.Length; i++)
         {
             var c = cleaned[i];
+            if (c == '\x1B')
+            {
+                if (i + 1 < cleaned.Length && cleaned[i + 1] == '[')
+                {
+                    var endIdx = -1;
+                    for (int j = i + 2; j < cleaned.Length; j++)
+                    {
+                        var ch = cleaned[j];
+                        if (ch >= 0x40 && ch <= 0x7E)
+                        {
+                            endIdx = j;
+                            break;
+                        }
+                    }
+
+                    if (endIdx >= 0)
+                    {
+                        var cmdChar = cleaned[endIdx];
+                        if (cmdChar == 'm')
+                        {
+                            var sgrParams = cleaned[(i + 2)..endIdx];
+                            UpdateCurrentForegroundColor(sgrParams);
+                        }
+                        i = endIdx;
+                        continue;
+                    }
+                }
+                else if (i + 1 < cleaned.Length)
+                {
+                    i++;
+                    continue;
+                }
+            }
+
             switch (c)
             {
                 case '\r':
@@ -254,6 +289,8 @@ public partial class SshTerminalControl : TerminalControl
                     break;
                 case '\n':
                     _screen.Append(Environment.NewLine);
+                    _charColors.Add(0); // for \r
+                    _charColors.Add(0); // for \n
                     _lineStartIndex = _screen.Length;
                     _cursorIndex = _screen.Length;
                     break;
@@ -271,15 +308,70 @@ public partial class SshTerminalControl : TerminalControl
         }
     }
 
+    private void UpdateCurrentForegroundColor(string sgrParams)
+    {
+        if (string.IsNullOrEmpty(sgrParams))
+        {
+            _currentForegroundColor = 0;
+            return;
+        }
+        var parts = sgrParams.Split(';');
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrEmpty(part))
+            {
+                _currentForegroundColor = 0;
+                continue;
+            }
+            if (int.TryParse(part, out int code))
+            {
+                if (code == 0)
+                {
+                    _currentForegroundColor = 0;
+                }
+                else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97) || code == 39)
+                {
+                    _currentForegroundColor = (byte)code;
+                }
+            }
+        }
+    }
+
+    private static System.Windows.Media.Brush GetAnsiBrush(byte code)
+    {
+        return code switch
+        {
+            30 => System.Windows.Media.Brushes.DarkGray,
+            31 => System.Windows.Media.Brushes.IndianRed,
+            32 => System.Windows.Media.Brushes.LightGreen,
+            33 => System.Windows.Media.Brushes.Gold,
+            34 => System.Windows.Media.Brushes.LightSkyBlue,
+            35 => System.Windows.Media.Brushes.MediumOrchid,
+            36 => System.Windows.Media.Brushes.LightCyan,
+            37 => System.Windows.Media.Brushes.White,
+            90 => System.Windows.Media.Brushes.Gray,
+            91 => System.Windows.Media.Brushes.Red,
+            92 => System.Windows.Media.Brushes.LimeGreen,
+            93 => System.Windows.Media.Brushes.Yellow,
+            94 => System.Windows.Media.Brushes.DodgerBlue,
+            95 => System.Windows.Media.Brushes.Magenta,
+            96 => System.Windows.Media.Brushes.Cyan,
+            97 => System.Windows.Media.Brushes.White,
+            _ => System.Windows.Media.Brushes.Gainsboro
+        };
+    }
+
     private void PutChar(char c)
     {
         if (_cursorIndex < _screen.Length)
         {
             _screen[_cursorIndex] = c;
+            _charColors[_cursorIndex] = _currentForegroundColor;
         }
         else
         {
             _screen.Append(c);
+            _charColors.Add(_currentForegroundColor);
         }
 
         _cursorIndex++;
@@ -298,13 +390,21 @@ public partial class SshTerminalControl : TerminalControl
     private void EraseFromCursorToEndOfLine()
     {
         if (_cursorIndex < _screen.Length)
-            _screen.Remove(_cursorIndex, _screen.Length - _cursorIndex);
+        {
+            var count = _screen.Length - _cursorIndex;
+            _screen.Remove(_cursorIndex, count);
+            _charColors.RemoveRange(_cursorIndex, count);
+        }
     }
 
     private void EraseCurrentLine()
     {
         if (_lineStartIndex < _screen.Length)
-            _screen.Remove(_lineStartIndex, _screen.Length - _lineStartIndex);
+        {
+            var count = _screen.Length - _lineStartIndex;
+            _screen.Remove(_lineStartIndex, count);
+            _charColors.RemoveRange(_lineStartIndex, count);
+        }
 
         _cursorIndex = _lineStartIndex;
     }
@@ -312,6 +412,7 @@ public partial class SshTerminalControl : TerminalControl
     private void ClearScreenBuffer()
     {
         _screen.Clear();
+        _charColors.Clear();
         _lineStartIndex = 0;
         _cursorIndex = 0;
     }
@@ -461,63 +562,77 @@ public partial class SshTerminalControl : TerminalControl
         if (lines.Length > MaxScreenLines)
         {
             var skip = lines.Length - MaxScreenLines;
-            _screen.Clear();
-            _screen.Append(string.Join(Environment.NewLine, lines.Skip(skip)));
-            _lineStartIndex = 0;
-            _cursorIndex = _screen.Length;
-            lines = _screen.ToString().Split(["\r\n", "\n"], StringSplitOptions.None);
+            var charIdx = 0;
+            var lineCount = 0;
+            while (charIdx < fullText.Length && lineCount < skip)
+            {
+                if (fullText[charIdx] == '\n')
+                    lineCount++;
+                charIdx++;
+            }
+
+            _screen.Remove(0, charIdx);
+            _charColors.RemoveRange(0, charIdx);
+            _lineStartIndex = Math.Max(0, _lineStartIndex - charIdx);
+            _cursorIndex = Math.Max(0, _cursorIndex - charIdx);
+
+            fullText = _screen.ToString();
+            lines = fullText.Split(["\r\n", "\n"], StringSplitOptions.None);
         }
 
-        var linesToRender = lines;
-        if (lines.Length > MaxRenderedLines)
+        var linesToRenderCount = Math.Min(lines.Length, MaxRenderedLines);
+        var skipLines = lines.Length - linesToRenderCount;
+        var startCharIdx = 0;
+        var skipLineCount = 0;
+        while (startCharIdx < fullText.Length && skipLineCount < skipLines)
         {
-            linesToRender = lines.Skip(lines.Length - MaxRenderedLines).ToArray();
+            if (fullText[startCharIdx] == '\n')
+                skipLineCount++;
+            startCharIdx++;
         }
 
         _output.Inlines.Clear();
 
-        for (var i = 0; i < linesToRender.Length; i++)
+        var currentRunText = new StringBuilder();
+        byte currentRunColor = 0;
+
+        for (int i = startCharIdx; i < fullText.Length; i++)
         {
-            RenderLine(linesToRender[i]);
-            if (i < linesToRender.Length - 1)
+            var ch = fullText[i];
+            byte color = i < _charColors.Count ? _charColors[i] : (byte)0;
+
+            if (ch == '\r')
+            {
+                continue;
+            }
+
+            if (ch == '\n')
+            {
+                if (currentRunText.Length > 0)
+                {
+                    _output.Inlines.Add(new Run(currentRunText.ToString()) { Foreground = GetAnsiBrush(currentRunColor) });
+                    currentRunText.Clear();
+                }
                 _output.Inlines.Add(new LineBreak());
+                continue;
+            }
+
+            if (color != currentRunColor && currentRunText.Length > 0)
+            {
+                _output.Inlines.Add(new Run(currentRunText.ToString()) { Foreground = GetAnsiBrush(currentRunColor) });
+                currentRunText.Clear();
+            }
+
+            currentRunColor = color;
+            currentRunText.Append(ch);
+        }
+
+        if (currentRunText.Length > 0)
+        {
+            _output.Inlines.Add(new Run(currentRunText.ToString()) { Foreground = GetAnsiBrush(currentRunColor) });
         }
 
         _output.Inlines.Add(new Run("█") { Foreground = System.Windows.Media.Brushes.LimeGreen });
-    }
-
-    private void RenderLine(string line)
-    {
-        if (_output == null)
-            return;
-
-        if (line.StartsWith("Connected to ", StringComparison.Ordinal) || line.StartsWith("sa@", StringComparison.Ordinal))
-        {
-            var promptEnd = line.IndexOf("$ ", StringComparison.Ordinal);
-            if (promptEnd >= 0)
-            {
-                _output.Inlines.Add(new Run(line[..(promptEnd + 2)]) { Foreground = System.Windows.Media.Brushes.LimeGreen, FontWeight = FontWeights.Bold });
-                _output.Inlines.Add(new Run(line[(promptEnd + 2)..]) { Foreground = System.Windows.Media.Brushes.White });
-                return;
-            }
-
-            _output.Inlines.Add(new Run(line) { Foreground = System.Windows.Media.Brushes.LimeGreen, FontWeight = FontWeights.Bold });
-            return;
-        }
-
-        if (line.Contains("error", StringComparison.OrdinalIgnoreCase) || line.Contains("failed", StringComparison.OrdinalIgnoreCase))
-        {
-            _output.Inlines.Add(new Run(line) { Foreground = System.Windows.Media.Brushes.IndianRed });
-            return;
-        }
-
-        if (line.Contains("active (running)", StringComparison.OrdinalIgnoreCase) || line.Contains("SUCCESS", StringComparison.OrdinalIgnoreCase))
-        {
-            _output.Inlines.Add(new Run(line) { Foreground = System.Windows.Media.Brushes.LightGreen });
-            return;
-        }
-
-        _output.Inlines.Add(new Run(line) { Foreground = System.Windows.Media.Brushes.Gainsboro });
     }
 
     private void WriteToShell(byte[] bytes)
