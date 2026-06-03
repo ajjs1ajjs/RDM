@@ -345,16 +345,108 @@
         <Setter Property="Padding" Value="2,4"/>
     </Style>
 
+    <!-- Menu Separator Style -->
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1" Background="{StaticResource CtrlBorderBrush}" Margin="6,4"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="MenuItem">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-        <Setter Property="Padding" Value="8,5"/>
-        <Style.Triggers>
-            <Trigger Property="IsHighlighted" Value="True">
-                <Setter Property="Background" Value="{StaticResource SelectedBgBrush}"/>
-                <Setter Property="Foreground" Value="White"/>
-            </Trigger>
-        </Style.Triggers>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderThickness="0"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIconColumnGroup"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGestureColumnGroup"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Icon (only visible if Icon is set) -->
+                            <ContentPresenter x:Name="IconPresenter"
+                                              ContentSource="Icon"
+                                              Width="14" Height="14"
+                                              Margin="0,0,10,0"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                            
+                            <!-- Header Text -->
+                            <ContentPresenter Grid.Column="1"
+                                              ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              VerticalAlignment="Center"/>
+                            
+                            <!-- Shortcut Text -->
+                            <TextBlock Grid.Column="2"
+                                       Text="{TemplateBinding InputGestureText}"
+                                       Foreground="{StaticResource FgDimBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="20,0,10,0"/>
+
+                            <!-- Arrow for Submenus (only shown if HasItems is True) -->
+                            <Path Grid.Column="3" x:Name="RightArrow"
+                                  VerticalAlignment="Center"
+                                  Fill="{StaticResource FgDimBrush}"
+                                  Data="M 0 0 L 4 4 L 0 8 Z"
+                                  Margin="5,0,0,0"
+                                  Visibility="Collapsed"/>
+
+                            <!-- Popup for Submenus -->
+                            <Popup Grid.Column="0" x:Name="SubMenuPopup"
+                                   Placement="Right"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="#111827"
+                                        BorderBrush="{StaticResource CtrlBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="2,4">
+                                    <ScrollViewer Margin="1" SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- Role-based adjustments -->
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="RightArrow" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <!-- Hover state -->
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBgBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="RightArrow" Property="Fill" Value="White"/>
+                        </Trigger>
+                        <!-- Disabled state -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                        <!-- Hide icon presenter if no icon is specified -->
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ─── Separator ─── -->
