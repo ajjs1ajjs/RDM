@@ -10,7 +10,7 @@
         WindowState="Maximized"
         Foreground="{StaticResource FgBrush}">
     <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/RemoteManager;component/Resources/Icons/space_bg.png" Stretch="UniformToFill"/>
+        <ImageBrush ImageSource="pack://application:,,,/RemoteManager;component/Resources/Icons/space_bg.png" Stretch="UniformToFill" Opacity="0.45"/>
     </Window.Background>
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:RdpSessionViewModel}">
