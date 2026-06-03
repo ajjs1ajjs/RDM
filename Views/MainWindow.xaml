@@ -5,12 +5,12 @@
         xmlns:vm="clr-namespace:RemoteManager.ViewModels"
         xmlns:views="clr-namespace:RemoteManager.Views"
         Title="RemoteManager" Height="800" Width="1200"
-        Icon="pack://application:,,,/Resources/Icons/app_icon.png"
+        Icon="pack://application:,,,/RemoteManager;component/Resources/Icons/app_icon.png"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Foreground="{StaticResource FgBrush}">
     <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/Resources/Icons/space_bg.png" Stretch="UniformToFill"/>
+        <ImageBrush ImageSource="pack://application:,,,/RemoteManager;component/Resources/Icons/space_bg.png" Stretch="UniformToFill"/>
     </Window.Background>
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:RdpSessionViewModel}">
@@ -57,7 +57,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="0" Source="pack://application:,,,/Resources/Icons/app_icon.png" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                        <Image Grid.Column="0" Source="pack://application:,,,/RemoteManager;component/Resources/Icons/app_icon.png" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="RemoteManager" FontSize="20" FontWeight="Bold" Foreground="{StaticResource FgBrush}"/>
                             <TextBlock Text="CONNECTION CENTER" FontSize="9" FontWeight="Bold" Foreground="{StaticResource FgDimBrush}" Margin="0,2,0,0" Opacity="0.6"/>
@@ -547,7 +547,7 @@
                                     </Grid>
                                     <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,5,0,0">
                                         <TextBlock Text="Latency:" FontSize="10" Foreground="#94A3B8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Latency, StringFormat='\{0\}ms'}" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Latency, StringFormat={}{0}ms}" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
                             </Grid>

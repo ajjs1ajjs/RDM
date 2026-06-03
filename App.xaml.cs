@@ -106,13 +106,13 @@ public partial class App : Application
             return;
 
         var themeUri = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
-            ? "Resources/Styles/ThemeLight.xaml"
-            : "Resources/Styles/Theme.xaml";
+            ? "pack://application:,,,/RemoteManager;component/Resources/Styles/ThemeLight.xaml"
+            : "pack://application:,,,/RemoteManager;component/Resources/Styles/Theme.xaml";
 
         var existingTheme = app.Resources.MergedDictionaries.FirstOrDefault(d =>
-            d.Source?.OriginalString.StartsWith("Resources/Styles/Theme", StringComparison.OrdinalIgnoreCase) == true);
+            d.Source?.OriginalString.Contains("Resources/Styles/Theme", StringComparison.OrdinalIgnoreCase) == true);
 
-        var newDictionary = new ResourceDictionary { Source = new Uri(themeUri, UriKind.Relative) };
+        var newDictionary = new ResourceDictionary { Source = new Uri(themeUri, UriKind.Absolute) };
 
         if (existingTheme == null)
         {

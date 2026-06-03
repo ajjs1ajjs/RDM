@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:RemoteManager.ViewModels"
         Title="{Binding WindowTitle}" Height="560" Width="550"
-        Icon="pack://application:,,,/Resources/Icons/app_icon.png"
+        Icon="pack://application:,,,/RemoteManager;component/Resources/Icons/app_icon.png"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgBrush}"
         Foreground="{StaticResource FgBrush}">
