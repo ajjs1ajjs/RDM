@@ -32,6 +32,7 @@
   <ItemGroup>
     <Resource Include="Resources\Icons\app_icon.png" />
     <Resource Include="Resources\Icons\app_icon.ico" />
+    <Resource Include="Resources\Icons\space_bg.png" />
   </ItemGroup>
 
   <ItemGroup>
