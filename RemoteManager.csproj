@@ -43,6 +43,10 @@
     <EmbeddedResource Remove="Build\**" />
     <None Remove="Build\**" />
     <Page Remove="Build\**" />
+    <Compile Remove="TestSolution\**" />
+    <EmbeddedResource Remove="TestSolution\**" />
+    <None Remove="TestSolution\**" />
+    <Page Remove="TestSolution\**" />
   </ItemGroup>
 
 </Project>
