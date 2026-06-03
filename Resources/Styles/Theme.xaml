@@ -2,41 +2,41 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ═══════════════════════════════════════════════════════════════
-         HIGH-CONTRAST DARK THEME — Inspired by VS Code Dark+ & JetBrains
+         PREMIUM SLATE-MIDNIGHT DARK THEME
          Vibrant surfaces, highly-readable text contrast, clear accents
          ═══════════════════════════════════════════════════════════════ -->
 
-    <!-- Core Surfaces — Higher contrast for great readability -->
-    <SolidColorBrush x:Key="BgBrush" Color="#1E1E1E"/>          <!-- Standard VS Code Dark Bg -->
-    <SolidColorBrush x:Key="SidebarBrush" Color="#252526"/>     <!-- VS Code Sidebar -->
-    <SolidColorBrush x:Key="SidebarAccent" Color="#2D2D30"/>    <!-- Active tab bg / panel -->
-    <SolidColorBrush x:Key="CtrlBgBrush" Color="#2D2D30"/>     <!-- Tabs, Cards, Panels -->
-    <SolidColorBrush x:Key="InputBgBrush" Color="#3C3C3C"/>    <!-- Light dark inputs -->
+    <!-- Core Surfaces — Deep Midnight Slate theme -->
+    <SolidColorBrush x:Key="BgBrush" Color="#0B0F19"/>          <!-- Deep dark background -->
+    <SolidColorBrush x:Key="SidebarBrush" Color="#111827"/>     <!-- Darker sidebar -->
+    <SolidColorBrush x:Key="SidebarAccent" Color="#1F2937"/>    <!-- Active tab / panel accent -->
+    <SolidColorBrush x:Key="CtrlBgBrush" Color="#1F2937"/>     <!-- Cards, panels background -->
+    <SolidColorBrush x:Key="InputBgBrush" Color="#0D111C"/>    <!-- Slate 950 inset input fields -->
 
-    <!-- Text — High-contrast bright colors -->
-    <SolidColorBrush x:Key="FgBrush" Color="#FFFFFF"/>         <!-- Clean pure white -->
-    <SolidColorBrush x:Key="FgDimBrush" Color="#CCCCCC"/>      <!-- Bright light grey (Highly readable!) -->
+    <!-- Text — High-contrast premium readability -->
+    <SolidColorBrush x:Key="FgBrush" Color="#F9FAFB"/>         <!-- Clean slate white -->
+    <SolidColorBrush x:Key="FgDimBrush" Color="#9CA3AF"/>      <!-- Readable slate grey -->
 
-    <!-- Accent — Premium Vibrant Blue -->
-    <SolidColorBrush x:Key="AccentBrush" Color="#007ACC"/>     <!-- VS Code Accent Blue -->
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1C97EA"/><!-- Hover Accent -->
+    <!-- Accent — Indigo/Violet premium feel -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#6366F1"/>     <!-- Electric Indigo Accent -->
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#818CF8"/><!-- Bright Indigo Hover -->
 
     <!-- Borders & Interactive -->
-    <SolidColorBrush x:Key="CtrlBorderBrush" Color="#3E3E42"/> <!-- Highly visible borders -->
-    <SolidColorBrush x:Key="HoverBgBrush" Color="#3F3F46"/>   <!-- Hover backgrounds -->
-    <SolidColorBrush x:Key="SelectedBgBrush" Color="#094771"/> <!-- VS Code Selected item bg -->
+    <SolidColorBrush x:Key="CtrlBorderBrush" Color="#374151"/> <!-- Visible border -->
+    <SolidColorBrush x:Key="HoverBgBrush" Color="#2D3748"/>   <!-- Hover background -->
+    <SolidColorBrush x:Key="SelectedBgBrush" Color="#312E81"/> <!-- Indigo selected bg -->
 
-    <!-- Status Colors — vibrant but not harsh -->
-    <SolidColorBrush x:Key="GreenBrush" Color="#4EC9B0"/>
-    <SolidColorBrush x:Key="RedBrush" Color="#F44747"/>
-    <SolidColorBrush x:Key="YellowBrush" Color="#CCA700"/>
-    <SolidColorBrush x:Key="GrayBrush" Color="#858585"/>
+    <!-- Status Colors — vibrant but professional -->
+    <SolidColorBrush x:Key="GreenBrush" Color="#10B981"/>
+    <SolidColorBrush x:Key="RedBrush" Color="#EF4444"/>
+    <SolidColorBrush x:Key="YellowBrush" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="GrayBrush" Color="#6B7280"/>
 
     <!-- SystemColors overrides to bind WPF controls like TreeView automatically -->
-    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#094771"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#2D2D30"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#312E81"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#F9FAFB"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#1F2937"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#9CA3AF"/>
 
     <!-- ═══════════════════════════════════════════════════════════════
          GLOBAL STYLES
@@ -74,10 +74,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
-                            <Setter TargetName="Bd" Property="Background" Value="#2D2D30"/>
+                            <Setter TargetName="Bd" Property="Background" Value="#161C2C"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="#555555"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#4B5563"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -93,6 +93,31 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="10,7"/>
         <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+                            <Setter TargetName="Bd" Property="Background" Value="#161C2C"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#4B5563"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ─── Button — Primary ─── -->
@@ -119,7 +144,7 @@
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#0E639C"/>
+                            <Setter TargetName="Bd" Property="Background" Value="#4F46E5"/>
                             <Setter TargetName="Bd" Property="RenderTransform">
                                 <Setter.Value>
                                     <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
@@ -157,6 +182,43 @@
                             <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ─── GroupBox ─── -->
+    <Style TargetType="GroupBox">
+        <Setter Property="BorderBrush" Value="{StaticResource CtrlBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        <Setter Property="Margin" Value="0,0,0,15"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GroupBox">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="{StaticResource SidebarBrush}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="1,1,1,0" 
+                                CornerRadius="6,6,0,0" 
+                                Padding="12,8">
+                            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" 
+                                              TextBlock.FontWeight="SemiBold" 
+                                              TextBlock.FontSize="12" 
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <Border Grid.Row="1" Background="{StaticResource SidebarAccent}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="1,0,1,1" 
+                                CornerRadius="0,0,6,6" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -231,13 +293,13 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="rectangle"
-                            Background="#555555"
+                            Background="#475569"
                             CornerRadius="3"
                             Height="{TemplateBinding Height}"
                             Width="{TemplateBinding Width}"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="rectangle" Property="Background" Value="#888888"/>
+                            <Setter TargetName="rectangle" Property="Background" Value="#64748B"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="rectangle" Property="Background" Value="{StaticResource AccentBrush}"/>
@@ -276,7 +338,7 @@
 
     <!-- ─── Context Menu ─── -->
     <Style TargetType="ContextMenu">
-        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="Background" Value="#111827"/>
         <Setter Property="BorderBrush" Value="{StaticResource CtrlBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
@@ -311,7 +373,7 @@
 
     <!-- ─── ToolTip ─── -->
     <Style TargetType="ToolTip">
-        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="Background" Value="#111827"/>
         <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource CtrlBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -331,13 +393,142 @@
         <Setter Property="Margin" Value="0,2"/>
     </Style>
 
-    <!-- ─── ComboBox ─── -->
+    <!-- ─── ComboBox ToggleButton Template ─── -->
+    <ControlTemplate x:Key="ComboBoxToggleButton" TargetType="ToggleButton">
+        <Border x:Name="Bd"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="4"
+                SnapsToDevicePixels="true">
+            <Grid HorizontalAlignment="Right" Width="24">
+                <Path x:Name="Arrow"
+                      Fill="{StaticResource FgDimBrush}"
+                      Data="M 0 0 L 3.5 3.5 L 7 0 Z"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="true">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#4B5563"/>
+                <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource FgBrush}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="true">
+                <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource AccentBrush}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- ─── ComboBox Style ─── -->
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
         <Setter Property="Background" Value="{StaticResource InputBgBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource CtrlBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.CanContentScroll" Value="true"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <!-- Toggle Button (acts as background and border) -->
+                        <ToggleButton x:Name="ToggleButton"
+                                      Template="{StaticResource ComboBoxToggleButton}"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      Focusable="false"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+
+                        <!-- Selected Text Presenter -->
+                        <ContentPresenter x:Name="ContentSite"
+                                          IsHitTestVisible="false"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"/>
+
+                        <!-- TextBox for Editable State -->
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Style="{x:Null}"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Center"
+                                 Margin="{TemplateBinding Padding}"
+                                 Focusable="true"
+                                 Background="Transparent"
+                                 Visibility="Hidden"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}"/>
+
+                        <!-- Dropdown Popup -->
+                        <Popup x:Name="Popup"
+                               Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="true"
+                               Focusable="false"
+                               PopupAnimation="Slide">
+                            <Grid x:Name="DropDown"
+                                  SnapsToDevicePixels="true"
+                                  MinWidth="{TemplateBinding ActualWidth}"
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <Border x:Name="DropDownBorder"
+                                        Background="{StaticResource SidebarBrush}"
+                                        BorderBrush="{StaticResource CtrlBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Margin="0,2,0,0">
+                                    <ScrollViewer Margin="1" SnapsToDevicePixels="true">
+                                        <StackPanel IsItemsHost="true" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="HasItems" Value="false">
+                            <Setter TargetName="DropDownBorder" Property="Height" Value="95"/>
+                        </Trigger>
+                        <Trigger Property="IsEditable" Value="true">
+                            <Setter Property="IsTabStop" Value="false"/>
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Hidden"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="2"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="true">
+                        <ContentPresenter/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="true">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBgBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="true">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBgBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ─── Label ─── -->

@@ -8,13 +8,13 @@
                 <ControlTemplate TargetType="{x:Type local:SshTerminalControl}">
                     <Border Background="{StaticResource BgBrush}" BorderBrush="{StaticResource CtrlBorderBrush}" BorderThickness="1" CornerRadius="2">
                         <ScrollViewer x:Name="PART_ScrollViewer"
-                                      Background="#000000"
+                                      Background="#0B0F19"
                                       Padding="10"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto"
                                       Focusable="False">
                             <TextBlock x:Name="PART_OutputText"
-                                       Background="#000000"
+                                       Background="#0B0F19"
                                        Foreground="#D4D4D4"
                                        FontFamily="Consolas, 'Courier New'"
                                        FontSize="13"
