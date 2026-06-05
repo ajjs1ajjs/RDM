@@ -8,10 +8,11 @@ using RemoteManager.Services;
 
 namespace RemoteManager.Controls;
 
-public partial class RdpHost : TerminalControl
+public partial class RdpHost : TerminalControl, IDisposable
 {
     private dynamic? _client;
     private WindowsFormsHost? _wfh;
+    private bool _disposed;
 
     private string? _pendingHost;
     private int _pendingPort;
@@ -42,6 +43,14 @@ public partial class RdpHost : TerminalControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
         _stateTimer?.Stop();
         _stateTimer = null;
 
@@ -51,11 +60,15 @@ public partial class RdpHost : TerminalControl
             _wfh.Dispose();
             _wfh = null;
         }
+
         if (_client != null)
         {
+            try { _client.Disconnect(); } catch { }
             _client = null;
         }
+
         Content = null;
+        GC.SuppressFinalize(this);
     }
 
     private (int width, int height) GetPhysicalPixelSize()
@@ -302,7 +315,7 @@ public partial class RdpHost : TerminalControl
         try
         {
             if (_client != null)
-                _client.SendKeys(17, 18, 46);
+                _client.SendKeys(new object[] { 17, 18, 46 });
         }
         catch (Exception ex) { Log.Debug("SendCtrlAltDel error: " + ex.Message); }
     }

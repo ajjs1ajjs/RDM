@@ -105,12 +105,13 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     [RelayCommand]
     private async Task RefreshFiles()
     {
-        if (_sftpClient == null || !IsConnected) return;
+        var client = _sftpClient;
+        if (client == null || !IsConnected) return;
 
         try
         {
             StatusText = "Loading directory...";
-            var files = await Task.Run(() => _sftpClient.ListDirectory(CurrentPath));
+            var files = await Task.Run(() => client.ListDirectory(CurrentPath));
             
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -186,7 +187,8 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     [RelayCommand]
     private async Task DownloadFile(SftpFileViewModel file)
     {
-        if (file == null || file.IsDirectory || _sftpClient == null) return;
+        var client = _sftpClient;
+        if (file == null || file.IsDirectory || client == null) return;
 
         var dialog = new SaveFileDialog
         {
@@ -199,7 +201,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
             await ExecuteTransferAsync($"Downloading {file.Name}", () =>
             {
                 using var stream = File.OpenWrite(dialog.FileName);
-                _sftpClient.DownloadFile(file.FullName, stream, downloaded =>
+                client.DownloadFile(file.FullName, stream, downloaded =>
                 {
                     Application.Current.Dispatcher.Invoke(() =>
                     {
@@ -213,7 +215,8 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     [RelayCommand]
     public async Task UploadFile(string? localPath = null)
     {
-        if (_sftpClient == null || !IsConnected) return;
+        var client = _sftpClient;
+        if (client == null || !IsConnected) return;
 
         if (string.IsNullOrEmpty(localPath))
         {
@@ -232,7 +235,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
         await ExecuteTransferAsync($"Uploading {fileName}", () =>
         {
             using var stream = File.OpenRead(localPath);
-            _sftpClient.UploadFile(stream, remotePath, uploaded =>
+            client.UploadFile(stream, remotePath, uploaded =>
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -275,15 +278,16 @@ public partial class SftpSessionViewModel : SessionTabViewModel
         var result = MessageBox.Show($"Are you sure you want to delete {file.Name}?", "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes) return;
 
+        var deleteClient = _sftpClient;
         try
         {
             StatusText = $"Deleting {file.Name}...";
             await Task.Run(() =>
             {
                 if (file.IsDirectory)
-                    _sftpClient?.DeleteDirectory(file.FullName);
+                    deleteClient?.DeleteDirectory(file.FullName);
                 else
-                    _sftpClient?.DeleteFile(file.FullName);
+                    deleteClient?.DeleteFile(file.FullName);
             });
             StatusText = $"Deleted {file.Name}";
             await RefreshFiles();

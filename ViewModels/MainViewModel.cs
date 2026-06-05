@@ -41,11 +41,11 @@ public partial class MainViewModel : ObservableObject
             {
                 if (!string.IsNullOrEmpty(_pendingImportPassword))
                 {
-                    _importExport.ImportEncryptedAsync(_pendingImportPath, _pendingImportPassword).GetAwaiter().GetResult();
+                    Task.Run(() => _importExport.ImportEncryptedAsync(_pendingImportPath, _pendingImportPassword)).GetAwaiter().GetResult();
                 }
                 else
                 {
-                    _importExport.ImportFromFileAsync(_pendingImportPath).GetAwaiter().GetResult();
+                    Task.Run(() => _importExport.ImportFromFileAsync(_pendingImportPath)).GetAwaiter().GetResult();
                 }
             }
             catch (Exception ex)
@@ -100,7 +100,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SessionTabViewModel.IsConnected) || 
+        if (e.PropertyName == nameof(SessionTabViewModel.IsConnected) ||
             e.PropertyName == nameof(SessionTabViewModel.IsConnecting))
         {
             OnPropertyChanged(nameof(ActiveSessionsCount));
@@ -122,7 +122,7 @@ public partial class MainViewModel : ObservableObject
                 connItem.PingStatus = status;
                 connItem.PingLatency = latency;
             }
-            
+
             var recentItem = RecentConnections.FirstOrDefault(r => r.Connection?.Id == connectionId);
             if (recentItem != null)
             {
@@ -159,7 +159,35 @@ public partial class MainViewModel : ObservableObject
     public bool IsDashboardVisible => OpenTabs.Count == 0;
     public int ActiveSessionsCount => OpenTabs.Count(t => t.IsConnected);
     public int PendingSessionsCount => OpenTabs.Count(t => t.IsConnecting);
-    public int Latency => ActiveSessionsCount == 0 ? 0 : (12 + (DateTime.Now.Millisecond % 7));
+    public int Latency
+    {
+        get
+        {
+            if (ActiveSessionsCount == 0 && !Groups.Any())
+                return 0;
+
+            long maxLatency = 0;
+            foreach (var group in Groups)
+            {
+                CollectMaxLatency(group, ref maxLatency);
+            }
+            return (int)Math.Min(maxLatency, int.MaxValue);
+        }
+    }
+
+    private static void CollectMaxLatency(TreeEntryViewModel entry, ref long maxLatency)
+    {
+        if (entry is ConnectionItemViewModel c && c.PingStatus == PingStatus.Online)
+        {
+            if (c.PingLatency > maxLatency)
+                maxLatency = c.PingLatency;
+        }
+        if (entry is GroupViewModel g)
+        {
+            foreach (var child in g.Children)
+                CollectMaxLatency(child, ref maxLatency);
+        }
+    }
 
     public double ActiveSessionsAngle => Math.Clamp(-90.0 + (ActiveSessionsCount * 22.5), -90.0, 90.0);
     public double PendingSessionsAngle => Math.Clamp(-90.0 + (PendingSessionsCount * 45.0), -90.0, 90.0);
@@ -185,7 +213,8 @@ public partial class MainViewModel : ObservableObject
                 Host = conn.Host,
                 Port = conn.Port,
                 Type = conn.Type,
-                Description = conn.Description
+                Description = conn.Description,
+                Tags = conn.Tags ?? new System.Collections.Generic.List<string>()
             });
         }
     }
@@ -272,7 +301,8 @@ public partial class MainViewModel : ObservableObject
                 Host = conn.Host,
                 Port = conn.Port,
                 Type = conn.Type,
-                Description = conn.Description
+                Description = conn.Description,
+                Tags = conn.Tags ?? new System.Collections.Generic.List<string>()
             };
 
             _pingService.RegisterConnection(conn.Id, conn.Host, conn.Port);
@@ -330,7 +360,8 @@ public partial class MainViewModel : ObservableObject
         {
             var matches = (connItem.Name ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
                        || (connItem.Host ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
-                       || (connItem.Description ?? "").Contains(search, StringComparison.OrdinalIgnoreCase);
+                       || (connItem.Description ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)
+                       || (connItem.Tags != null && connItem.Tags.Any(t => t.Contains(search, StringComparison.OrdinalIgnoreCase)));
             connItem.IsVisible = matches;
             return matches;
         }
@@ -393,6 +424,10 @@ public partial class MainViewModel : ObservableObject
             if (item.Connection.Type == ConnectionType.RDP)
             {
                 tab = new RdpSessionViewModel(_db, _credentialService, _settings, item.Connection);
+            }
+            else if (item.Connection.Type == ConnectionType.Web)
+            {
+                tab = new WebSessionViewModel(item.Connection);
             }
             else
             {
@@ -522,13 +557,36 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void AddConnection(string? typeStr)
     {
-        var type = typeStr == "SSH" ? ConnectionType.SSH : ConnectionType.RDP;
+        var type = typeStr == "SSH" ? ConnectionType.SSH : (typeStr == "Web" ? ConnectionType.Web : ConnectionType.RDP);
         var vm = new ConnectionEditViewModel(_db, _credentialService, _settings) { SelectedType = type };
 
         var dialog = new ConnectionEditDialog(vm);
         if (dialog.ShowDialog() == true)
         {
             RefreshTree();
+        }
+    }
+
+    [RelayCommand]
+    private async Task WakeUp(ConnectionItemViewModel? item)
+    {
+        if (item?.Connection == null || string.IsNullOrWhiteSpace(item.Connection.MacAddress))
+        {
+            System.Windows.MessageBox.Show("MAC address is not set for this connection.", "Wake on LAN",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            await WakeOnLanService.WakeUpAsync(item.Connection.MacAddress);
+            System.Windows.MessageBox.Show($"Magic packet sent to {item.Connection.MacAddress}.", "Wake on LAN",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Failed to send WoL packet: {ex.Message}", "Error",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -720,12 +778,12 @@ public partial class MainViewModel : ObservableObject
             try
             {
                 var preview = await _importExport.PreviewImportAsync(dialog.FileName);
-                var groupsPreview = preview.Groups.Count <= 8 
-                    ? string.Join("\n", preview.Groups) 
+                var groupsPreview = preview.Groups.Count <= 8
+                    ? string.Join("\n", preview.Groups)
                     : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
 
-                var connsPreview = preview.Connections.Count <= 12 
-                    ? string.Join("\n", preview.Connections) 
+                var connsPreview = preview.Connections.Count <= 12
+                    ? string.Join("\n", preview.Connections)
                     : string.Join("\n", preview.Connections.Take(12)) + $"\n... (and {preview.Connections.Count - 12} more)";
 
                 var result = System.Windows.MessageBox.Show(
@@ -867,7 +925,7 @@ public partial class MainViewModel : ObservableObject
                 {
                     settings.Current.BackupFolderPath = folderDlg.FolderName;
                     settings.Save();
-                    
+
                     settings.BackupData();
 
                     System.Windows.MessageBox.Show(

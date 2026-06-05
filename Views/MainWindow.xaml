@@ -9,9 +9,6 @@
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Foreground="{StaticResource FgBrush}">
-    <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/RemoteManager;component/Resources/Icons/space_bg.png" Stretch="UniformToFill" Opacity="0.45"/>
-    </Window.Background>
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:RdpSessionViewModel}">
             <views:RdpSessionView DataContext="{Binding}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
@@ -33,18 +30,38 @@
         <KeyBinding Modifiers="Control" Key="R" Command="{Binding NewRdpCommand}"/>
     </Window.InputBindings>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" MinWidth="200" MaxWidth="380"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Sidebar -->
-        <Border Grid.Column="0" Width="280"
-                Visibility="{Binding IsSidebarVisible, Converter={StaticResource BoolToVis}}"
-                Background="#B0111827"
-                BorderBrush="#20FFFFFF" BorderThickness="0,0,1,0">
+            <!-- Full-width background -->
+            <Grid Grid.ColumnSpan="3" IsHitTestVisible="False">
+                <Image Source="pack://application:,,,/RemoteManager;component/Resources/Icons/space_bg.png" Stretch="UniformToFill" Opacity="0.12"/>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#FF080C14" Offset="0"/>
+                            <GradientStop Color="#FF0E1430" Offset="0.4"/>
+                            <GradientStop Color="#FF080C14" Offset="0.7"/>
+                            <GradientStop Color="#FF0A0F20" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Ellipse Fill="#818CF8" Opacity="0.08" Width="900" Height="900" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-300,-200,0"/>
+                <Ellipse Fill="#22D3EE" Opacity="0.06" Width="700" Height="700" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-200,0,0,-200"/>
+                <Ellipse Fill="#A855F7" Opacity="0.04" Width="500" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,100,0,0"/>
+            </Grid>
+
+            <!-- Sidebar -->
+            <Border Grid.Column="0" Grid.ZIndex="10"
+                    Visibility="{Binding IsSidebarVisible, Converter={StaticResource BoolToVis}}"
+                    BorderBrush="#15FFFFFF" BorderThickness="0,0,1,0">
+                <Border.Background>
+                    <SolidColorBrush Color="#0C1122" Opacity="0.88"/>
+                </Border.Background>
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -88,68 +105,94 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+
+                        <WrapPanel Grid.Column="0">
                             <!-- Group Button -->
-                            <Button Command="{Binding AddGroupCommand}" Height="30" Margin="0,0,6,0" Cursor="Hand">
+                            <Button Command="{Binding AddGroupCommand}" Height="28" Margin="0,0,4,4" Cursor="Hand">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border CornerRadius="15" Padding="10,4">
+                                        <Border CornerRadius="14" Padding="8,3" x:Name="Bd">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#2563EB" Offset="0"/>
-                                                    <GradientStop Color="#3B82F6" Offset="1"/>
+                                                    <GradientStop Color="#3B82F6" Offset="0"/>
+                                                    <GradientStop Color="#60A5FA" Offset="1"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="#3B82F6" Opacity="0.3" BlurRadius="8" ShadowDepth="0"/>
+                                            </Border.Effect>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="&#xE8F4;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="Group" FontSize="11" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                                                <TextBlock Text="&#xE8F4;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="White" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                                <TextBlock Text="Group" FontSize="10" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
 
                             <!-- RDP Button -->
-                            <Button Command="{Binding AddConnectionCommand}" CommandParameter="RDP" Height="30" Margin="0,0,6,0" Cursor="Hand">
+                            <Button Command="{Binding AddConnectionCommand}" CommandParameter="RDP" Height="28" Margin="0,0,4,4" Cursor="Hand">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border CornerRadius="15" Padding="10,4">
+                                        <Border CornerRadius="14" Padding="8,3" x:Name="Bd">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#06B6D4" Offset="0"/>
-                                                    <GradientStop Color="#0EA5E9" Offset="1"/>
+                                                    <GradientStop Color="#22D3EE" Offset="0"/>
+                                                    <GradientStop Color="#38BDF8" Offset="1"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="#22D3EE" Opacity="0.25" BlurRadius="8" ShadowDepth="0"/>
+                                            </Border.Effect>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="RDP" FontSize="11" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                                                <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="White" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                                <TextBlock Text="RDP" FontSize="10" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
 
                             <!-- SSH Button -->
-                            <Button Command="{Binding AddConnectionCommand}" CommandParameter="SSH" Height="30" Cursor="Hand">
+                            <Button Command="{Binding AddConnectionCommand}" CommandParameter="SSH" Height="28" Margin="0,0,4,4" Cursor="Hand">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border CornerRadius="15" Padding="10,4">
+                                        <Border CornerRadius="14" Padding="8,3" x:Name="Bd">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#4F46E5" Offset="0"/>
-                                                    <GradientStop Color="#7C3AED" Offset="1"/>
+                                                    <GradientStop Color="#A855F7" Offset="0"/>
+                                                    <GradientStop Color="#C084FC" Offset="1"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="#A855F7" Opacity="0.25" BlurRadius="8" ShadowDepth="0"/>
+                                            </Border.Effect>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="&#xE9A9;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="SSH" FontSize="11" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                                                <TextBlock Text="&#xE9A9;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="White" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                                <TextBlock Text="SSH" FontSize="10" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                        </StackPanel>
+
+
+                        </WrapPanel>
 
                         <!-- Settings Button -->
                         <Button Grid.Column="1" Command="{Binding ShowSettingsCommand}" Width="30" Height="30" Margin="4,0,0,0"
@@ -158,7 +201,7 @@
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border Background="Transparent" CornerRadius="15" x:Name="Bd">
-                                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13" 
+                                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13"
                                                    Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
@@ -178,7 +221,7 @@
                           Background="Transparent" BorderThickness="0">
                     <TreeView.Resources>
                         <HierarchicalDataTemplate DataType="{x:Type vm:GroupViewModel}" ItemsSource="{Binding Children}">
-                            <Border Padding="4,3" Background="Transparent"
+                            <Border Padding="4,3" Background="Transparent" HorizontalAlignment="Stretch"
                                     Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
                                 <Border.ContextMenu>
                                     <ContextMenu>
@@ -211,14 +254,18 @@
                                         </MenuItem>
                                     </ContextMenu>
                                 </Border.ContextMenu>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center"/>
-                                </StackPanel>
+                                <Grid HorizontalAlignment="Stretch">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="0,0,6,0" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
                             </Border>
                         </HierarchicalDataTemplate>
                         <HierarchicalDataTemplate DataType="{x:Type vm:ConnectionItemViewModel}">
-                            <Border Padding="6,4,4,4" Margin="0,1" Background="Transparent"
+                            <Border Padding="6,4,4,4" Margin="0,1" Background="Transparent" HorizontalAlignment="Stretch"
                                     Tag="{Binding RelativeSource={RelativeSource AncestorType=Window}}">
                                 <Border.InputBindings>
                                     <MouseBinding Gesture="LeftDoubleClick"
@@ -238,11 +285,19 @@
                                                   Command="{Binding PlacementTarget.Tag.DataContext.OpenSftpCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
-                                                <TextBlock Text="&#xED25;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
                                         <Separator/>
-                                        <MenuItem Header="Edit"
+                                        <MenuItem Header="Wake on LAN"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.WakeUpCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="&#xE7E3;" FontFamily="Segoe MDL2 Assets"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Edit..."
                                                   Command="{Binding PlacementTarget.Tag.DataContext.EditConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}">
                                             <MenuItem.Icon>
@@ -266,15 +321,24 @@
                                         </MenuItem>
                                     </ContextMenu>
                                 </Border.ContextMenu>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
-                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
+                                <Grid Margin="0,0,6,0" HorizontalAlignment="Stretch">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
                                              x:Name="StatusDot" Fill="#555555" ToolTip="Status: Unknown"/>
-                                    <TextBlock Text="{Binding TypeIcon}" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-                                        <TextBlock Text="{Binding Host}" FontSize="10" Foreground="{StaticResource FgDimBrush}"/>
-                                    </StackPanel>
-                                </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding TypeIcon}" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding Host}" FontSize="10" Foreground="{StaticResource FgDimBrush}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </Grid>
                             </Border>
                             <HierarchicalDataTemplate.Triggers>
                                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
@@ -333,9 +397,12 @@
             </Grid.RowDefinitions>
 
             <!-- Tabs -->
-            <Border Grid.Row="0" Background="#90111827"
+            <Border Grid.Row="0" Grid.ZIndex="5"
                     BorderBrush="#15FFFFFF"
                     BorderThickness="0,0,0,1">
+                <Border.Background>
+                    <SolidColorBrush Color="#0C1122" Opacity="0.85"/>
+                </Border.Background>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -453,11 +520,14 @@
                                         Width="180" Height="70" Margin="0,0,15,0" Cursor="Hand">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Border CornerRadius="8" Padding="12,10" x:Name="Bd"
-                                                    BorderBrush="#15FFFFFF" BorderThickness="1">
+                                                                            <Border CornerRadius="10" Padding="12,10" x:Name="Bd"
+                                                    BorderBrush="#20FFFFFF" BorderThickness="1">
                                                 <Border.Background>
-                                                    <SolidColorBrush Color="#FF1E293B" Opacity="0.5"/>
+                                                    <SolidColorBrush Color="#111B30" Opacity="0.6"/>
                                                 </Border.Background>
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="#818CF8" Opacity="0.08" BlurRadius="20" ShadowDepth="0"/>
+                                                </Border.Effect>
                                                 <Grid>
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto"/>
@@ -531,21 +601,24 @@
                 <!-- Status Dashboard Central Card -->
                 <Grid Grid.Row="1">
                     <!-- Dashboard Card Container -->
-                    <Border Width="360" Height="260" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            CornerRadius="12" BorderThickness="1" BorderBrush="#20FFFFFF" Padding="20">
+                    <Border Width="400" Height="290" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            CornerRadius="16" BorderThickness="1" BorderBrush="#30FFFFFF" Padding="28">
                         <Border.Background>
-                            <SolidColorBrush Color="#FF1E293B" Opacity="0.6"/>
+                            <SolidColorBrush Color="#0C1122" Opacity="0.7"/>
                         </Border.Background>
+                        <Border.Effect>
+                            <DropShadowEffect Color="#818CF8" Opacity="0.15" BlurRadius="50" ShadowDepth="0"/>
+                        </Border.Effect>
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            
+
                             <!-- Card Header -->
                             <TextBlock Grid.Row="0" Text="Status Dashboard" FontSize="16" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,15"/>
-                            
+
                             <!-- Gauge Widgets Layout -->
                             <Grid Grid.Row="1" HorizontalAlignment="Center">
                                 <Grid.ColumnDefinitions>
@@ -553,7 +626,7 @@
                                     <ColumnDefinition Width="90"/>
                                     <ColumnDefinition Width="90"/>
                                 </Grid.ColumnDefinitions>
-                                
+
                                 <!-- Gauge 1: Active -->
                                 <Grid Grid.Column="0" HorizontalAlignment="Center">
                                     <Grid.RowDefinitions>
@@ -623,25 +696,35 @@
                                     </StackPanel>
                                 </Grid>
                             </Grid>
-                            
+
                             <!-- Add connection button -->
                             <Button Grid.Row="2" Command="{Binding AddConnectionCommand}" CommandParameter="RDP"
-                                    Height="36" Cursor="Hand" Margin="0,15,0,0">
+                                    Height="40" Cursor="Hand" Margin="0,20,0,0">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border CornerRadius="18" BorderThickness="1" BorderBrush="#20FFFFFF" x:Name="BtnBd">
-                                            <Border.Background>
-                                                <SolidColorBrush Color="#FF4F46E5" Opacity="0.8"/>
-                                            </Border.Background>
+                                        <Border CornerRadius="20" BorderThickness="1" BorderBrush="#30FFFFFF" x:Name="BtnBd">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                    <GradientStop Color="#818CF8" Offset="0.5"/>
+                                    <GradientStop Color="#6366F1" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border.Effect>
+                                <DropShadowEffect Color="#818CF8" Opacity="0.4" BlurRadius="20" ShadowDepth="0"/>
+                            </Border.Effect>
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock Text="Add New Connection" FontSize="11" FontWeight="Bold" Foreground="White"/>
-                                                <TextBlock Text=" +" FontSize="12" FontWeight="Bold" Foreground="White" Margin="4,0,0,0"/>
+                                                <TextBlock Text="Add New Connection" FontSize="12" FontWeight="SemiBold" Foreground="White"/>
+                                                <TextBlock Text=" +" FontSize="14" FontWeight="Bold" Foreground="White" Margin="6,0,0,0"/>
                                             </StackPanel>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="BtnBd" Property="Background" Value="#A04F46E5"/>
-                                                <Setter TargetName="BtnBd" Property="BorderBrush" Value="#40FFFFFF"/>
+                                                <Setter TargetName="BtnBd" Property="Opacity" Value="0.9"/>
+                                                <Setter TargetName="BtnBd" Property="BorderBrush" Value="#50FFFFFF"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="BtnBd" Property="Opacity" Value="0.8"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -649,18 +732,21 @@
                             </Button>
                         </Grid>
                     </Border>
-                    
+
                     <!-- Star/Sparkle deco at bottom right -->
-                    <Path Data="M 20 0 L 23 15 L 38 18 L 23 21 L 20 36 L 17 21 L 2 18 L 17 15 Z" 
-                          Fill="#506366F1" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                    <Path Data="M 20 0 L 23 15 L 38 18 L 23 21 L 20 36 L 17 21 L 2 18 L 17 15 Z"
+                          Fill="#506366F1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                           Width="30" Height="30" Margin="0,0,20,20"/>
                 </Grid>
             </Grid>
 
             <!-- Status Bar -->
-            <Border Grid.Row="2" Background="#90111827"
+            <Border Grid.Row="2" Grid.ZIndex="5"
                     BorderBrush="#15FFFFFF"
-                    BorderThickness="0,1,0,0" Padding="12,4">
+                    BorderThickness="0,1,0,0" Padding="14,4">
+                <Border.Background>
+                    <SolidColorBrush Color="#0C1122" Opacity="0.8"/>
+                </Border.Background>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{Binding OpenTabs.Count, StringFormat='Tabs: {0}'}" FontSize="11"
                                Foreground="{StaticResource FgDimBrush}"/>

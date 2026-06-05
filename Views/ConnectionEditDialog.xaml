@@ -17,8 +17,9 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
                 <RadioButton Content="RDP" GroupName="ConnType" Margin="0,0,15,0" FontSize="14" FontWeight="Bold"
                              IsChecked="{Binding SelectedType, Converter={StaticResource RadioBoolToConnectionTypeRdp}}"/>
-                <RadioButton Content="SSH" GroupName="ConnType" FontSize="14" FontWeight="Bold"
+                <RadioButton Content="SSH" GroupName="ConnType" FontSize="14" FontWeight="Bold" Margin="0,0,15,0"
                              IsChecked="{Binding SelectedType, Converter={StaticResource RadioBoolToConnectionTypeSsh}}"/>
+
             </StackPanel>
 
             <!-- Common fields -->
@@ -29,6 +30,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -54,15 +56,23 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <PasswordBox Grid.Column="0" x:Name="PasswordBox" Margin="0,3"/>
-                        <CheckBox Grid.Column="1" Content="Save" IsChecked="{Binding SavePassword}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Command="{Binding GeneratePasswordCommand}" Content="Generate" Margin="8,0,0,0" Padding="5,2" ToolTip="Generate random password"/>
+                        <CheckBox Grid.Column="2" Content="Save" IsChecked="{Binding SavePassword}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </Grid>
 
                     <TextBlock Grid.Row="5" Grid.Column="0" Text="Group:" VerticalAlignment="Center" Margin="0,5"/>
                     <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding Groups}"
                               SelectedValue="{Binding SelectedGroupId}"
                               SelectedValuePath="Id" DisplayMemberPath="Name" Margin="0,3"/>
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="MAC Address:" VerticalAlignment="Center" Margin="0,5"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding MacAddress}" ToolTip="Used for Wake-on-LAN (e.g., 00-11-22-33-44-55)" Margin="0,3"/>
+
+                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Tags:" VerticalAlignment="Center" Margin="0,5"/>
+                    <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding TagsText}" ToolTip="Comma separated tags (e.g. Prod, Linux, Web)" Margin="0,3"/>
                 </Grid>
             </GroupBox>
 
@@ -181,7 +191,7 @@
                                Visibility="{Binding SshAuthType, Converter={StaticResource TypeToSshKeyVisibility}}"/>
                     <PasswordBox Grid.Row="7" Grid.Column="1" x:Name="SshKeyPassphraseBox" Margin="0,3" MaxWidth="300" HorizontalAlignment="Left"
                                  Visibility="{Binding SshAuthType, Converter={StaticResource TypeToSshKeyVisibility}}"/>
-                    
+
                     <!-- Port Forwarding Settings -->
                     <Expander Grid.Row="8" Grid.ColumnSpan="2" Header="🚇 Local Port Forwarding" Margin="0,10,0,0">
                         <Grid Margin="10,5">
@@ -195,18 +205,18 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            
-                            <CheckBox Grid.Row="0" Grid.ColumnSpan="2" Content="Enable Local Port Forwarding" 
+
+                            <CheckBox Grid.Row="0" Grid.ColumnSpan="2" Content="Enable Local Port Forwarding"
                                       IsChecked="{Binding SshPortForwardingEnabled}" Margin="0,5" FontWeight="Bold"/>
-                            
+
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Local Port:" VerticalAlignment="Center" Margin="0,5"/>
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SshPortForwardingLocalPort}" Width="80" HorizontalAlignment="Left" Margin="0,3"
                                      IsEnabled="{Binding SshPortForwardingEnabled}"/>
-                                     
+
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Remote Host:" VerticalAlignment="Center" Margin="0,5"/>
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SshPortForwardingRemoteHost}" Margin="0,3"
                                      IsEnabled="{Binding SshPortForwardingEnabled}"/>
-                                     
+
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Remote Port:" VerticalAlignment="Center" Margin="0,5"/>
                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SshPortForwardingRemotePort}" Width="80" HorizontalAlignment="Left" Margin="0,3"
                                      IsEnabled="{Binding SshPortForwardingEnabled}"/>
@@ -230,6 +240,7 @@
                         Background="{StaticResource AccentBrush}" Foreground="White"
                         BorderThickness="0" FontWeight="Bold"/>
             </StackPanel>
+
 
         </StackPanel>
     </ScrollViewer>

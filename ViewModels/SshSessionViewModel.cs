@@ -35,7 +35,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
 
     public int Port => Connection?.Port ?? 22;
 
-    public string TypeIcon => "\uE9A9";
+    public override string TypeIcon => "\uE9A9";
 
     public SshSessionViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection connection)
     {
@@ -92,7 +92,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
             return;
         }
 
-        UnsubscribeSshEvents(ssh);
+        UnsubscribeSshEvents();
 
         _sshTerminalRef = ssh;
         _connectionClosedHandler = async (s, r) => await OnTerminalConnectionClosedAsync(s, r);
@@ -115,9 +115,9 @@ public partial class SshSessionViewModel : SessionTabViewModel
         }
     }
 
-    private void UnsubscribeSshEvents(SshWebViewTerminalControl? ssh = null)
+    private void UnsubscribeSshEvents()
     {
-        var target = ssh ?? _sshTerminalRef;
+        var target = _sshTerminalRef;
         if (target == null) return;
 
         if (_connectionClosedHandler != null)

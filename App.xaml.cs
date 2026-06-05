@@ -29,13 +29,28 @@ public partial class App : Application
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IImportExportService, ImportExportService>();
         services.AddSingleton<IPingService, PingService>();
-        
+
         services.AddTransient<MainViewModel>();
     }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += (s, args) =>
+        {
+            if (args.Category == Microsoft.Win32.UserPreferenceCategory.General)
+            {
+                if (_serviceProvider != null)
+                {
+                    var settings = _serviceProvider.GetService<ISettingsService>();
+                    if (settings != null && string.Equals(settings.Current.Theme, "System", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Dispatcher.Invoke(() => ApplyTheme("System"));
+                    }
+                }
+            }
+        };
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
@@ -128,6 +143,11 @@ public partial class App : Application
         if (app == null)
             return;
 
+        if (string.Equals(theme, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            theme = IsSystemThemeLight() ? "Light" : "Dark";
+        }
+
         var themeUri = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase)
             ? "pack://application:,,,/RemoteManager;component/Resources/Styles/ThemeLight.xaml"
             : "pack://application:,,,/RemoteManager;component/Resources/Styles/Theme.xaml";
@@ -147,12 +167,29 @@ public partial class App : Application
         app.Resources.MergedDictionaries[index] = newDictionary;
     }
 
+    private static bool IsSystemThemeLight()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            if (key != null)
+            {
+                var val = key.GetValue("AppsUseLightTheme");
+                return val != null && (int)val == 1;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     public void UpdateTrayIcon(Window window, bool enabled)
     {
         if (enabled)
         {
             if (_trayIcon == null)
             {
+                DestroyCurrentIcon();
+
                 _trayIcon = new NotifyIcon
                 {
                     Text = "Remote Manager",
@@ -200,18 +237,23 @@ public partial class App : Application
                 _trayIcon.Dispose();
                 _trayIcon = null;
             }
-            if (_hIcon != IntPtr.Zero)
+            DestroyCurrentIcon();
+        }
+    }
+
+    private void DestroyCurrentIcon()
+    {
+        if (_hIcon != IntPtr.Zero)
+        {
+            try
             {
-                try
-                {
-                    DestroyIcon(_hIcon);
-                }
-                catch (Exception ex)
-                {
-                    Services.Log.Warn("Failed to destroy tray icon handle: " + ex.Message);
-                }
-                _hIcon = IntPtr.Zero;
+                DestroyIcon(_hIcon);
             }
+            catch (Exception ex)
+            {
+                Services.Log.Warn("Failed to destroy tray icon handle: " + ex.Message);
+            }
+            _hIcon = IntPtr.Zero;
         }
     }
 

@@ -24,10 +24,9 @@ public static class CredentialResolver
                         password = matchedCred.Value.Password;
                     }
 
-                    bool isJustDomain = string.Equals(username, domain, System.StringComparison.OrdinalIgnoreCase) ||
-                                        username.EndsWith("\\") ||
+                    bool isJustDomain = username.EndsWith("\\") ||
                                         username.EndsWith("@") ||
-                                        (!username.Contains('\\') && !username.Contains('@'));
+                                        string.Equals(username, domain, System.StringComparison.OrdinalIgnoreCase);
 
                     if (isJustDomain && !string.IsNullOrEmpty(matchedCred.Value.Username))
                     {

@@ -17,8 +17,10 @@
             <c:TypeToColorConverter x:Key="TypeToColor"/>
             <c:RadioBoolToConnectionTypeRdpConverter x:Key="RadioBoolToConnectionTypeRdp"/>
             <c:RadioBoolToConnectionTypeSshConverter x:Key="RadioBoolToConnectionTypeSsh"/>
+            <c:RadioBoolToConnectionTypeWebConverter x:Key="RadioBoolToConnectionTypeWeb"/>
             <c:TypeToRdpVisibilityConverter x:Key="TypeToRdpVisibility"/>
             <c:TypeToSshVisibilityConverter x:Key="TypeToSshVisibility"/>
+            <c:TypeToWebVisibilityConverter x:Key="TypeToWebVisibility"/>
             <c:StatusDotConverter x:Key="StatusDotConverter"/>
             <c:StatusTextConverter x:Key="StatusTextConverter"/>
             <c:TabMarginConverter x:Key="TabMarginConverter"/>

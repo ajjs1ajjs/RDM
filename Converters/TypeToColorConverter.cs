@@ -8,7 +8,8 @@ namespace RemoteManager.Converters;
 public class TypeToColorConverter : IValueConverter
 {
     private static readonly SolidColorBrush RdpBrush = new(Color.FromRgb(0, 120, 215));
-    private static readonly SolidColorBrush SshBrush = new(Color.FromRgb(50, 200, 100));
+    private static readonly SolidColorBrush SshBrush = new(Color.FromRgb(139, 92, 246));
+    private static readonly SolidColorBrush WebBrush = new(Color.FromRgb(245, 158, 11));
     private static readonly SolidColorBrush DefaultBrush = new(Colors.Gray);
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -19,6 +20,7 @@ public class TypeToColorConverter : IValueConverter
             {
                 ConnectionType.RDP => RdpBrush,
                 ConnectionType.SSH => SshBrush,
+                ConnectionType.Web => WebBrush,
                 _ => DefaultBrush
             };
         }

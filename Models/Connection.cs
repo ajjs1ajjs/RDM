@@ -5,7 +5,8 @@ namespace RemoteManager.Models;
 public enum ConnectionType
 {
     RDP,
-    SSH
+    SSH,
+    Web
 }
 
 public class Connection
@@ -20,6 +21,8 @@ public class Connection
     public ConnectionType Type { get; set; }
     public Guid GroupId { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string MacAddress { get; set; } = string.Empty;
+    public System.Collections.Generic.List<string> Tags { get; set; } = new();
     public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
@@ -27,6 +30,7 @@ public class Connection
 
     public RDPSettings? RdpSettings { get; set; }
     public SSHSettings? SshSettings { get; set; }
+    public WebSettings? WebSettings { get; set; }
 
     [BsonIgnore]
     public string? ImportedPassword { get; set; }
@@ -73,4 +77,10 @@ public class SSHSettings
     public int TerminalColumns { get; set; } = 120;
     public int TerminalRows { get; set; } = 40;
     public PortForwarding PortForwarding { get; set; } = new();
+}
+
+public class WebSettings
+{
+    public string Url { get; set; } = "https://";
+    public bool IgnoreCertificateErrors { get; set; } = false;
 }

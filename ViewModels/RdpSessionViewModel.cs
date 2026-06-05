@@ -34,7 +34,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
 
     public int Port => Connection?.Port ?? 3389;
 
-    public string TypeIcon => "\uE7F4";
+    public override string TypeIcon => "\uE7F4";
 
     public RdpSessionViewModel(IDatabaseService db, ICredentialService credentialService, ISettingsService settings, Connection connection)
     {

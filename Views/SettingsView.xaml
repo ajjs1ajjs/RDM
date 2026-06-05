@@ -2,8 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:h="clr-namespace:RemoteManager.Helpers">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="30">
-        <StackPanel MaxWidth="600">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+        <StackPanel MaxWidth="700">
             <TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
 
             <!-- Database Location -->
@@ -164,14 +164,14 @@
                     
                     <Grid Margin="0,0,0,5">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="180"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*" MinWidth="100"/>
+                            <ColumnDefinition Width="*" MinWidth="80"/>
+                            <ColumnDefinition Width="*" MinWidth="100"/>
+                            <ColumnDefinition Width="30"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Domain / Домен" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Grid.Column="1" Text="Username / Логін" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Grid.Column="2" Text="Password / Пароль" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Grid.Column="0" Text="Domain / Домен" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="1" Text="Username / Логін" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="2" Text="Password / Пароль" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
                     </Grid>
 
                     <ItemsControl ItemsSource="{Binding DomainCredentials}" Margin="0,0,0,10">
@@ -179,15 +179,15 @@
                             <DataTemplate>
                                 <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="140"/>
-                                        <ColumnDefinition Width="140"/>
-                                        <ColumnDefinition Width="180"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*" MinWidth="100"/>
+                                        <ColumnDefinition Width="*" MinWidth="80"/>
+                                        <ColumnDefinition Width="*" MinWidth="100"/>
+                                        <ColumnDefinition Width="30"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <TextBox Grid.Column="1" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <PasswordBox Grid.Column="2" h:PasswordBoxHelper.BindPassword="True" h:PasswordBoxHelper.BoundPassword="{Binding Password, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <Button Grid.Column="3" Content="✕" FontWeight="Bold" Foreground="Red" Padding="8,4"
+                                    <TextBox Grid.Column="0" Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" Padding="6,4"/>
+                                    <TextBox Grid.Column="1" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" Padding="6,4"/>
+                                    <PasswordBox Grid.Column="2" h:PasswordBoxHelper.BindPassword="True" h:PasswordBoxHelper.BoundPassword="{Binding Password, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" Padding="6,4"/>
+                                    <Button Grid.Column="3" Content="✕" FontWeight="Bold" Foreground="Red" Padding="0"
                                             Background="Transparent" BorderThickness="0" Cursor="Hand"
                                             Command="{Binding DataContext.DeleteDomainCredentialCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"/>
@@ -212,12 +212,12 @@
                     
                     <Grid Margin="0,0,0,5">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="2*" MinWidth="80"/>
+                            <ColumnDefinition Width="5*" MinWidth="120"/>
+                            <ColumnDefinition Width="30"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Name / Назва" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Grid.Column="1" Text="Command / Команда" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Grid.Column="0" Text="Name / Назва" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="1" Text="Command / Команда" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
                     </Grid>
 
                     <ItemsControl ItemsSource="{Binding Snippets}" Margin="0,0,0,10">
@@ -225,13 +225,13 @@
                             <DataTemplate>
                                 <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="150"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="40"/>
+                                        <ColumnDefinition Width="2*" MinWidth="80"/>
+                                        <ColumnDefinition Width="5*" MinWidth="120"/>
+                                        <ColumnDefinition Width="30"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" Padding="6,4"/>
-                                    <Button Grid.Column="2" Content="✕" FontWeight="Bold" Foreground="Red" Padding="8,4"
+                                    <TextBox Grid.Column="0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" Padding="6,4"/>
+                                    <TextBox Grid.Column="1" Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" Padding="6,4"/>
+                                    <Button Grid.Column="2" Content="✕" FontWeight="Bold" Foreground="Red" Padding="0"
                                             Background="Transparent" BorderThickness="0" Cursor="Hand"
                                             Command="{Binding DataContext.DeleteSnippetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"/>

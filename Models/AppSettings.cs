@@ -13,7 +13,7 @@ public class DomainCredential
 public class AppSettings
 {
     public string DatabasePath { get; set; } = string.Empty;
-    public string Theme { get; set; } = "Light";
+    public string Theme { get; set; } = "System";
     public bool MinimizeToTray { get; set; } = true;
     public bool ShowSystemTrayNotifications { get; set; } = true;
     public bool AutoReconnect { get; set; }

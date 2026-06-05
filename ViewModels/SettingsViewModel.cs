@@ -80,7 +80,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _useMasterPassword;
 
-    public string[] Themes { get; } = ["Dark", "Light"];
+    public string[] Themes { get; } = ["Dark", "Light", "System"];
 
     [RelayCommand]
     private void ChangeDatabasePath()

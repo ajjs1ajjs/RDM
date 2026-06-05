@@ -49,6 +49,8 @@ public partial class ConnectionEditViewModel : ObservableObject
         Port = existing.Port;
         UserName = existing.Username ?? "";
         Description = existing.Description ?? "";
+        MacAddress = existing.MacAddress ?? "";
+        TagsText = existing.Tags != null ? string.Join(", ", existing.Tags) : "";
         SelectedType = existing.Type;
         SelectedGroupId = existing.GroupId;
 
@@ -83,6 +85,12 @@ public partial class ConnectionEditViewModel : ObservableObject
             SshPortForwardingRemotePort = existing.SshSettings.PortForwarding?.RemotePort ?? 80;
         }
 
+        if (existing.WebSettings != null)
+        {
+            WebUrl = existing.WebSettings.Url ?? "https://";
+            WebIgnoreCertificateErrors = existing.WebSettings.IgnoreCertificateErrors;
+        }
+
         var password = credentialService.Load(existing.Id);
         if (password != null)
         {
@@ -115,6 +123,10 @@ public partial class ConnectionEditViewModel : ObservableObject
                 Port = 22;
             }
         }
+        else if (value == ConnectionType.Web)
+        {
+            Port = 443;
+        }
         else
         {
             if (int.TryParse(_settings.Current?.DefaultRdpPort, out int rdpPort))
@@ -139,6 +151,12 @@ public partial class ConnectionEditViewModel : ObservableObject
 
     [ObservableProperty]
     private string _description = "";
+
+    [ObservableProperty]
+    private string _macAddress = "";
+
+    [ObservableProperty]
+    private string _tagsText = "";
 
     [ObservableProperty]
     private bool _savePassword;
@@ -192,6 +210,12 @@ public partial class ConnectionEditViewModel : ObservableObject
     private int _sshJumpHostPort = 22;
 
     [ObservableProperty]
+    private string _webUrl = "https://";
+
+    [ObservableProperty]
+    private bool _webIgnoreCertificateErrors = false;
+
+    [ObservableProperty]
     private string _sshJumpHostUsername = "";
 
     [ObservableProperty]
@@ -230,29 +254,38 @@ public partial class ConnectionEditViewModel : ObservableObject
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(Host))
+        if (SelectedType != ConnectionType.Web && string.IsNullOrWhiteSpace(Host))
         {
             ValidationError = "Host address is required.";
             return false;
         }
 
-        var trimmedHost = Host.Trim();
-        bool isValidHost = HostnameRegex.IsMatch(trimmedHost) || IpRegex.IsMatch(trimmedHost) || IPv6Regex.IsMatch(trimmedHost);
-        if (!isValidHost)
+        if (SelectedType == ConnectionType.Web && string.IsNullOrWhiteSpace(WebUrl))
         {
-            ValidationError = "Invalid host address. Use a valid hostname (e.g., server.example.com), IPv4 (e.g., 192.168.1.1), or IPv6.";
+            ValidationError = "URL is required for Web connections.";
             return false;
         }
 
-        if (IpRegex.IsMatch(trimmedHost))
+        if (SelectedType != ConnectionType.Web)
         {
-            var parts = trimmedHost.Split('.');
-            foreach (var part in parts)
+            var trimmedHost = Host.Trim();
+            bool isValidHost = HostnameRegex.IsMatch(trimmedHost) || IpRegex.IsMatch(trimmedHost) || IPv6Regex.IsMatch(trimmedHost);
+            if (!isValidHost)
             {
-                if (int.TryParse(part, out var num) && (num < 0 || num > 255))
+                ValidationError = "Invalid host address. Use a valid hostname (e.g., server.example.com), IPv4 (e.g., 192.168.1.1), or IPv6.";
+                return false;
+            }
+
+            if (IpRegex.IsMatch(trimmedHost))
+            {
+                var parts = trimmedHost.Split('.');
+                foreach (var part in parts)
                 {
-                    ValidationError = "Invalid IP address. Each octet must be between 0 and 255.";
-                    return false;
+                    if (int.TryParse(part, out var num) && (num < 0 || num > 255))
+                    {
+                        ValidationError = "Invalid IP address. Each octet must be between 0 and 255.";
+                        return false;
+                    }
                 }
             }
         }
@@ -263,8 +296,13 @@ public partial class ConnectionEditViewModel : ObservableObject
             return false;
         }
 
-        if (SelectedType == ConnectionType.SSH && SshAuthType == SshAuthType.Key && !string.IsNullOrEmpty(SshKeyPath))
+        if (SelectedType == ConnectionType.SSH && SshAuthType == SshAuthType.Key)
         {
+            if (string.IsNullOrEmpty(SshKeyPath))
+            {
+                ValidationError = "SSH private key path is required when authentication type is Key.";
+                return false;
+            }
             if (!File.Exists(SshKeyPath))
             {
                 ValidationError = $"SSH key file not found: {SshKeyPath}";
@@ -309,6 +347,10 @@ public partial class ConnectionEditViewModel : ObservableObject
         conn.Type = SelectedType;
         conn.GroupId = SelectedGroupId ?? Guid.Empty;
         conn.Description = Description?.Trim() ?? "";
+        conn.MacAddress = MacAddress?.Trim() ?? "";
+        conn.Tags = string.IsNullOrWhiteSpace(TagsText)
+            ? new System.Collections.Generic.List<string>()
+            : TagsText.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
 
         if (SelectedType == ConnectionType.RDP)
         {
@@ -349,6 +391,18 @@ public partial class ConnectionEditViewModel : ObservableObject
                 }
             };
             conn.RdpSettings = null;
+            conn.WebSettings = null;
+        }
+
+        if (SelectedType == ConnectionType.Web)
+        {
+            conn.WebSettings = new WebSettings
+            {
+                Url = WebUrl?.Trim() ?? "",
+                IgnoreCertificateErrors = WebIgnoreCertificateErrors
+            };
+            conn.RdpSettings = null;
+            conn.SshSettings = null;
         }
 
         _db.SaveConnection(conn);
@@ -368,5 +422,15 @@ public partial class ConnectionEditViewModel : ObservableObject
             _credentialService.SaveAdditional(conn.Id, "passphrase", SshKeyPassphrase);
             _credentialService.SaveAdditional(conn.Id, "jumphost_password", SshJumpHostPassword);
         }
+    }
+
+    [RelayCommand]
+    private void GeneratePassword()
+    {
+        const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=";
+        var password = new string(Enumerable.Repeat(chars, 16)
+            .Select(s => s[Random.Shared.Next(s.Length)]).ToArray());
+        Password = password;
+        SavePassword = true;
     }
 }

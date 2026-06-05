@@ -159,7 +159,7 @@ public class SshWebViewTerminalControl : TerminalControl
 
     public override void SendText(string input)
     {
-        if (_shell == null || !_client?.IsConnected == true) return;
+        if (_shell == null || _client?.IsConnected != true) return;
         try
         {
             _shell.Write(input);

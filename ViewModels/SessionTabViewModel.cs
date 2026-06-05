@@ -27,5 +27,7 @@ public partial class SessionTabViewModel : ObservableObject, IDisposable
 
     public virtual string? GetPassword() => null;
 
+    public virtual string TypeIcon => "\uE713";
+
     public virtual void Dispose() { }
 }

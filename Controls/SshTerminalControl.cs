@@ -20,6 +20,7 @@ public partial class SshTerminalControl : TerminalControl
     private static readonly Regex PromptRegex = new(@"^(?<prompt>[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-\.]+[:~][^$#]*[$#]\s*)(?<rest>.*)$", RegexOptions.Compiled);
 
     private readonly object _writeLock = new();
+    private readonly object _screenLock = new();
     private CancellationTokenSource? _readCts;
     private SshClient? _client;
     private ShellStream? _shell;
@@ -148,9 +149,14 @@ public partial class SshTerminalControl : TerminalControl
     {
         _output?.Dispatcher.BeginInvoke(() =>
         {
-            _screen.Clear();
-            _lineStartIndex = 0;
-            _cursorIndex = 0;
+            lock (_screenLock)
+            {
+                _screen.Clear();
+                _charColors.Clear();
+                _lineStartIndex = 0;
+                _cursorIndex = 0;
+                _currentForegroundColor = 0;
+            }
             _output.Inlines.Clear();
         });
     }
@@ -222,6 +228,14 @@ public partial class SshTerminalControl : TerminalControl
     }
 
     private void AppendTerminalText(string text)
+    {
+        lock (_screenLock)
+        {
+            InternalAppendTerminalText(text);
+        }
+    }
+
+    private void InternalAppendTerminalText(string text)
     {
         if (!string.IsNullOrEmpty(_lastInput) && text.StartsWith(_lastInput, StringComparison.Ordinal))
         {
@@ -308,8 +322,8 @@ public partial class SshTerminalControl : TerminalControl
                     break;
                 case '\n':
                     _screen.Append(Environment.NewLine);
-                    _charColors.Add(0); // for \r
-                    _charColors.Add(0); // for \n
+                    _charColors.Add(0);
+                    _charColors.Add(0);
                     _lineStartIndex = _screen.Length;
                     _cursorIndex = _screen.Length;
                     break;
@@ -575,39 +589,48 @@ public partial class SshTerminalControl : TerminalControl
         if (_output == null)
             return;
 
-        var fullText = _screen.ToString();
-        var lines = fullText.Split(["\r\n", "\n"], StringSplitOptions.None);
+        string fullText;
+        int startCharIdx;
+        byte[]? colors;
 
-        if (lines.Length > MaxScreenLines)
+        lock (_screenLock)
         {
-            var skip = lines.Length - MaxScreenLines;
-            var charIdx = 0;
-            var lineCount = 0;
-            while (charIdx < fullText.Length && lineCount < skip)
+            fullText = _screen.ToString();
+            var lines = fullText.Split(["\r\n", "\n"], StringSplitOptions.None);
+
+            if (lines.Length > MaxScreenLines)
             {
-                if (fullText[charIdx] == '\n')
-                    lineCount++;
-                charIdx++;
+                var skip = lines.Length - MaxScreenLines;
+                var charIdx = 0;
+                var lineCount = 0;
+                while (charIdx < fullText.Length && lineCount < skip)
+                {
+                    if (fullText[charIdx] == '\n')
+                        lineCount++;
+                    charIdx++;
+                }
+
+                _screen.Remove(0, charIdx);
+                _charColors.RemoveRange(0, charIdx);
+                _lineStartIndex = Math.Max(0, _lineStartIndex - charIdx);
+                _cursorIndex = Math.Max(0, _cursorIndex - charIdx);
+
+                fullText = _screen.ToString();
+                lines = fullText.Split(["\r\n", "\n"], StringSplitOptions.None);
             }
 
-            _screen.Remove(0, charIdx);
-            _charColors.RemoveRange(0, charIdx);
-            _lineStartIndex = Math.Max(0, _lineStartIndex - charIdx);
-            _cursorIndex = Math.Max(0, _cursorIndex - charIdx);
+            var linesToRenderCount = Math.Min(lines.Length, MaxRenderedLines);
+            var skipLines = lines.Length - linesToRenderCount;
+            startCharIdx = 0;
+            var skipLineCount = 0;
+            while (startCharIdx < fullText.Length && skipLineCount < skipLines)
+            {
+                if (fullText[startCharIdx] == '\n')
+                    skipLineCount++;
+                startCharIdx++;
+            }
 
-            fullText = _screen.ToString();
-            lines = fullText.Split(["\r\n", "\n"], StringSplitOptions.None);
-        }
-
-        var linesToRenderCount = Math.Min(lines.Length, MaxRenderedLines);
-        var skipLines = lines.Length - linesToRenderCount;
-        var startCharIdx = 0;
-        var skipLineCount = 0;
-        while (startCharIdx < fullText.Length && skipLineCount < skipLines)
-        {
-            if (fullText[startCharIdx] == '\n')
-                skipLineCount++;
-            startCharIdx++;
+            colors = _charColors.ToArray();
         }
 
         _output.Inlines.Clear();
@@ -618,7 +641,7 @@ public partial class SshTerminalControl : TerminalControl
         for (int i = startCharIdx; i < fullText.Length; i++)
         {
             var ch = fullText[i];
-            byte color = i < _charColors.Count ? _charColors[i] : (byte)0;
+            byte color = i < colors.Length ? colors[i] : (byte)0;
 
             if (ch == '\r')
             {
@@ -726,35 +749,17 @@ public partial class SshTerminalControl : TerminalControl
 
     private void UpdateTerminalSize()
     {
-        var shell = _shell;
-        if (shell == null)
+        if (_shell == null)
             return;
 
         var (cols, rows) = CalculateTerminalSize();
-        if (cols != _currentColumns || rows != _currentRows)
-        {
-            _currentColumns = cols;
-            _currentRows = rows;
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    var channelField = typeof(ShellStream).GetField("_channel", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    var channel = channelField?.GetValue(shell);
-                    if (channel != null)
-                    {
-                        var method = channel.GetType().GetMethod("SendWindowChangeRequest", 
-                            new[] { typeof(uint), typeof(uint), typeof(uint), typeof(uint) });
-                        method?.Invoke(channel, new object[] { cols, rows, (uint)0, (uint)0 });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Debug("UpdateTerminalSize error: " + ex.Message);
-                }
-            });
-        }
+        if (cols == _currentColumns && rows == _currentRows)
+            return;
+
+        _currentColumns = cols;
+        _currentRows = rows;
+
+        _shell.Write("\x1B[8;" + rows + ";" + cols + "t");
     }
 
     private (uint Columns, uint Rows) CalculateTerminalSize(SSHSettings? settings = null)

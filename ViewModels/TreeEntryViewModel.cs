@@ -38,6 +38,7 @@ public partial class ConnectionItemViewModel : TreeEntryViewModel
     public int Port { get; set; }
     public ConnectionType Type { get; set; }
     public string Description { get; set; } = string.Empty;
+    public System.Collections.Generic.List<string> Tags { get; set; } = new();
 
     [ObservableProperty]
     private bool _isConnected;
@@ -48,6 +49,12 @@ public partial class ConnectionItemViewModel : TreeEntryViewModel
     [ObservableProperty]
     private long _pingLatency = -1;
 
-    public string TypeIcon => Type == ConnectionType.RDP ? "\uE7F4" : "\uE9A9";
+    public string TypeIcon => Type switch
+    {
+        ConnectionType.RDP => "\uE7F4",
+        ConnectionType.SSH => "\uE9A9",
+        ConnectionType.Web => "\uE12B",
+        _ => "\uE713"
+    };
     public string DisplayText => $"{Name} ({Host}:{Port})";
 }
