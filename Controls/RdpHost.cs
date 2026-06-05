@@ -53,11 +53,6 @@ public partial class RdpHost : TerminalControl
         }
         if (_client != null)
         {
-            try
-            {
-                System.Runtime.InteropServices.Marshal.ReleaseComObject(_client);
-            }
-            catch (Exception ex) { Log.Warn("RDP COM release error: " + ex.Message); }
             _client = null;
         }
         Content = null;
@@ -198,10 +193,11 @@ public partial class RdpHost : TerminalControl
                     try { adv.EnableCredSSP = s?.UseCredSsp ?? true; } catch (Exception ex) { Log.Debug("EnableCredSSP error: " + ex.Message); }
                     try { adv.AuthenticationLevel = s?.NetworkLevelAuth == true ? 2 : 0; } catch (Exception ex) { Log.Debug("AuthenticationLevel error: " + ex.Message); }
                     try { adv.RedirectClipboard = s?.RedirectClipboard ?? true; } catch (Exception ex) { Log.Debug("RedirectClipboard error: " + ex.Message); }
-                    try { adv.RedirectDrives = s?.RedirectDrives ?? false; } catch (Exception ex) { Log.Debug("RedirectDrives error: " + ex.Message); }
+                    try { adv.RedirectDrives = s?.RedirectDrives ?? true; } catch (Exception ex) { Log.Debug("RedirectDrives error: " + ex.Message); }
                     try { adv.RedirectPrinters = s?.RedirectPrinters ?? false; } catch (Exception ex) { Log.Debug("RedirectPrinters error: " + ex.Message); }
                     try { adv.AudioRedirectionMode = s?.AudioMode ?? 0; } catch (Exception ex) { Log.Debug("AudioMode error: " + ex.Message); }
                     try { adv.SmartSizing = true; } catch (Exception ex) { Log.Debug("SmartSizing error: " + ex.Message); }
+                    try { adv.UseMultimon = s?.UseMultimon ?? false; } catch (Exception ex) { Log.Debug("UseMultimon error: " + ex.Message); }
                 }
             }
             catch (Exception ex) { Log.Warn("AdvancedSettings9 access error: " + ex.Message); }
@@ -280,7 +276,6 @@ public partial class RdpHost : TerminalControl
 
             if (_client != null)
             {
-                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(_client); } catch (Exception ex) { Log.Debug("COM release in Disconnect: " + ex.Message); }
                 _client = null;
             }
 

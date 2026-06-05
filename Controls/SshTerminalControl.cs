@@ -92,6 +92,7 @@ public partial class SshTerminalControl : TerminalControl
             _currentColumns = size.Columns;
             _currentRows = size.Rows;
             _shell = _client.CreateShellStream("xterm", _currentColumns, _currentRows, 900, 600, 4096);
+            _shell.Closed += OnShellClosed;
 
             _readCts = new CancellationTokenSource();
             _ = Task.Run(() => ReadOutputLoopAsync(_readCts.Token));
@@ -114,6 +115,11 @@ public partial class SshTerminalControl : TerminalControl
         _readCts?.Dispose();
         _readCts = null;
 
+        if (_shell != null)
+        {
+            try { _shell.Closed -= OnShellClosed; } catch { }
+        }
+
         var shell = _shell;
         var client = _client;
         _shell = null;
@@ -130,6 +136,14 @@ public partial class SshTerminalControl : TerminalControl
         ConnectionClosed?.Invoke(this, "Manual");
     }
 
+    private void OnShellClosed(object? sender, EventArgs e)
+    {
+        if (!_disconnectRequested)
+        {
+            _readCts?.Cancel();
+        }
+    }
+
     public override void Clear()
     {
         _output?.Dispatcher.BeginInvoke(() =>
@@ -139,6 +153,11 @@ public partial class SshTerminalControl : TerminalControl
             _cursorIndex = 0;
             _output.Inlines.Clear();
         });
+    }
+
+    public override void SendText(string text)
+    {
+        WriteToShell(text);
     }
 
     private async Task ReadOutputLoopAsync(CancellationToken token)

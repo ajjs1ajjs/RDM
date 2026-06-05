@@ -26,6 +26,19 @@
                         Padding="8,4" Background="Transparent" Foreground="{StaticResource FgBrush}" BorderThickness="0"
                         ToolTip="Clear terminal (Ctrl+L)"/>
 
+                <Menu Background="Transparent" Margin="8,0,2,0" VerticalAlignment="Center">
+                    <MenuItem Header="📝 Snippets" ItemsSource="{Binding Snippets}" FontSize="11" Padding="8,4"
+                              Background="Transparent" Foreground="{StaticResource FgBrush}">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Name}" />
+                                <Setter Property="Command" Value="{Binding DataContext.ExecuteSnippetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                <Setter Property="CommandParameter" Value="{Binding}" />
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                </Menu>
+
                 <Separator Width="1" Background="{StaticResource CtrlBorderBrush}" Margin="8,4"/>
                 <TextBlock Text="Ctrl+Shift+C/V: Copy/Paste" VerticalAlignment="Center" Margin="4,0"
                            FontSize="10" Foreground="{StaticResource FgDimBrush}" Opacity="0.5"/>
@@ -38,6 +51,6 @@
             </StackPanel>
         </Border>
 
-        <controls:SshTerminalControl Grid.Row="1" x:Name="TerminalControl"/>
+        <controls:SshWebViewTerminalControl Grid.Row="1" x:Name="TerminalControl"/>
     </Grid>
 </UserControl>

@@ -43,4 +43,19 @@ public partial class ConnectionEditDialog : Window
         DialogResult = false;
         Close();
     }
+
+    private void OnGenerateSshKey(object sender, RoutedEventArgs e)
+    {
+        var keyGenVm = new SshKeyGeneratorViewModel();
+        var dialog = new SshKeyGeneratorDialog
+        {
+            DataContext = keyGenVm,
+            Owner = this
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            var generatedPath = System.IO.Path.Combine(keyGenVm.SaveDirectory, keyGenVm.KeyName);
+            _vm.SshKeyPath = generatedPath;
+        }
+    }
 }

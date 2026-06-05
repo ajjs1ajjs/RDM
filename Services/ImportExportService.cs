@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
+using System.Threading.Tasks;
 
 namespace RemoteManager.Services;
 
@@ -28,30 +29,30 @@ public class ImportExportService : IImportExportService
         _credentialService = credentialService;
     }
 
-    public void ExportToFile(string filePath)
+    public async Task ExportToFileAsync(string filePath)
     {
-        var data = _db.ExportData();
+        var data = await Task.Run(() => _db.ExportData());
         var json = JsonSerializer.Serialize(data, JsonOptions);
-        File.WriteAllText(filePath, json);
+        await File.WriteAllTextAsync(filePath, json);
     }
 
-    public ExportData? LoadFromFile(string filePath)
+    public async Task<ExportData?> LoadFromFileAsync(string filePath)
     {
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length > MaxImportFileSize)
             throw new InvalidOperationException($"Import file is too large. Maximum allowed size is {MaxImportFileSize / 1024 / 1024} MB.");
 
-        var content = File.ReadAllText(filePath);
+        var content = await File.ReadAllTextAsync(filePath);
         if (filePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
             filePath.EndsWith(".rdm", StringComparison.OrdinalIgnoreCase) ||
             content.TrimStart().StartsWith("<"))
         {
-            return ParseDevolutionsXml(filePath);
+            return await Task.Run(() => ParseDevolutionsXml(filePath));
         }
 
         try
         {
-            return JsonSerializer.Deserialize<ExportData>(content, JsonOptions);
+            return await Task.Run(() => JsonSerializer.Deserialize<ExportData>(content, JsonOptions));
         }
         catch (JsonException ex)
         {
@@ -248,9 +249,9 @@ public class ImportExportService : IImportExportService
         return data;
     }
 
-    public ImportPreview PreviewImport(string filePath)
+    public async Task<ImportPreview> PreviewImportAsync(string filePath)
     {
-        var data = LoadFromFile(filePath);
+        var data = await LoadFromFileAsync(filePath);
         if (data == null)
             throw new InvalidOperationException("Invalid export file");
 
@@ -263,48 +264,52 @@ public class ImportExportService : IImportExportService
         };
     }
 
-    public void ImportFromFile(string filePath)
+    public async Task ImportFromFileAsync(string filePath)
     {
-        var data = LoadFromFile(filePath);
+        var data = await LoadFromFileAsync(filePath);
         if (data == null)
             throw new InvalidOperationException("Invalid export file");
 
-        _db.ImportData(data);
+        await Task.Run(() => _db.ImportData(data));
     }
 
-    public void ExportEncrypted(string filePath, string password)
+    public async Task ExportEncryptedAsync(string filePath, string password)
     {
-        var data = _db.ExportData();
-        foreach (var conn in data.Connections)
+        var data = await Task.Run(() => _db.ExportData());
+        await Task.Run(() => 
         {
-            conn.ImportedPassword = _credentialService.Load(conn.Id);
-            if (conn.Type == ConnectionType.SSH && conn.SshSettings != null)
+            foreach (var conn in data.Connections)
             {
-                conn.SshSettings.PrivateKeyPassphrase = _credentialService.LoadAdditional(conn.Id, "passphrase");
-                conn.SshSettings.JumpHostPassword = _credentialService.LoadAdditional(conn.Id, "jumphost_password");
+                conn.ImportedPassword = _credentialService.Load(conn.Id);
+                if (conn.Type == ConnectionType.SSH && conn.SshSettings != null)
+                {
+                    conn.SshSettings.PrivateKeyPassphrase = _credentialService.LoadAdditional(conn.Id, "passphrase");
+                    conn.SshSettings.JumpHostPassword = _credentialService.LoadAdditional(conn.Id, "jumphost_password");
+                }
             }
-        }
+        });
+        
         var json = JsonSerializer.Serialize(data, JsonOptions);
-        var encryptedBytes = Helpers.EncryptionHelper.Encrypt(json, password);
-        File.WriteAllBytes(filePath, encryptedBytes);
+        var encryptedBytes = await Task.Run(() => Helpers.EncryptionHelper.Encrypt(json, password));
+        await File.WriteAllBytesAsync(filePath, encryptedBytes);
     }
 
-    public void ImportEncrypted(string filePath, string password)
+    public async Task ImportEncryptedAsync(string filePath, string password)
     {
-        var encryptedBytes = File.ReadAllBytes(filePath);
-        var json = Helpers.EncryptionHelper.Decrypt(encryptedBytes, password);
-        var data = JsonSerializer.Deserialize<ExportData>(json, JsonOptions);
+        var encryptedBytes = await File.ReadAllBytesAsync(filePath);
+        var json = await Task.Run(() => Helpers.EncryptionHelper.Decrypt(encryptedBytes, password));
+        var data = await Task.Run(() => JsonSerializer.Deserialize<ExportData>(json, JsonOptions));
         if (data == null)
             throw new InvalidOperationException("Failed to deserialize decrypted backup data.");
 
-        _db.ImportData(data);
+        await Task.Run(() => _db.ImportData(data));
     }
 
-    public ImportPreview PreviewImportEncrypted(string filePath, string password)
+    public async Task<ImportPreview> PreviewImportEncryptedAsync(string filePath, string password)
     {
-        var encryptedBytes = File.ReadAllBytes(filePath);
-        var json = Helpers.EncryptionHelper.Decrypt(encryptedBytes, password);
-        var data = JsonSerializer.Deserialize<ExportData>(json, JsonOptions);
+        var encryptedBytes = await File.ReadAllBytesAsync(filePath);
+        var json = await Task.Run(() => Helpers.EncryptionHelper.Decrypt(encryptedBytes, password));
+        var data = await Task.Run(() => JsonSerializer.Deserialize<ExportData>(json, JsonOptions));
         if (data == null)
             throw new InvalidOperationException("Failed to deserialize decrypted backup data.");
 

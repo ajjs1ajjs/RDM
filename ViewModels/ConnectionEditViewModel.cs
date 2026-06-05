@@ -63,6 +63,7 @@ public partial class ConnectionEditViewModel : ObservableObject
             RdpAudioMode = existing.RdpSettings.AudioMode;
             RdpGatewayHost = existing.RdpSettings.GatewayHost ?? "";
             RdpGatewayPort = existing.RdpSettings.GatewayPort;
+            RdpUseMultimon = existing.RdpSettings.UseMultimon;
         }
 
         if (existing.SshSettings != null)
@@ -75,6 +76,11 @@ public partial class ConnectionEditViewModel : ObservableObject
             SshJumpHostUsername = existing.SshSettings.JumpHostUsername ?? "";
             SshJumpHostPassword = credentialService.LoadAdditional(existing.Id, "jumphost_password") ?? "";
             SshKeyPassphrase = credentialService.LoadAdditional(existing.Id, "passphrase") ?? "";
+
+            SshPortForwardingEnabled = existing.SshSettings.PortForwarding?.Enabled ?? false;
+            SshPortForwardingLocalPort = existing.SshSettings.PortForwarding?.LocalPort ?? 8080;
+            SshPortForwardingRemoteHost = existing.SshSettings.PortForwarding?.RemoteHost ?? "127.0.0.1";
+            SshPortForwardingRemotePort = existing.SshSettings.PortForwarding?.RemotePort ?? 80;
         }
 
         var password = credentialService.Load(existing.Id);
@@ -168,6 +174,9 @@ public partial class ConnectionEditViewModel : ObservableObject
     private int _rdpGatewayPort = 443;
 
     [ObservableProperty]
+    private bool _rdpUseMultimon;
+
+    [ObservableProperty]
     private SshAuthType _sshAuthType = SshAuthType.Password;
 
     [ObservableProperty]
@@ -190,6 +199,18 @@ public partial class ConnectionEditViewModel : ObservableObject
 
     [ObservableProperty]
     private string _sshKeyPassphrase = "";
+
+    [ObservableProperty]
+    private bool _sshPortForwardingEnabled;
+
+    [ObservableProperty]
+    private uint _sshPortForwardingLocalPort = 8080;
+
+    [ObservableProperty]
+    private string _sshPortForwardingRemoteHost = "127.0.0.1";
+
+    [ObservableProperty]
+    private uint _sshPortForwardingRemotePort = 80;
 
     public string WindowTitle => _existing == null ? "New Connection" : $"Edit {_existing.Name}";
 
@@ -301,7 +322,8 @@ public partial class ConnectionEditViewModel : ObservableObject
                 UseCredSsp = RdpCredSsp,
                 AudioMode = RdpAudioMode,
                 GatewayHost = string.IsNullOrEmpty(RdpGatewayHost) ? null : RdpGatewayHost,
-                GatewayPort = RdpGatewayPort
+                GatewayPort = RdpGatewayPort,
+                UseMultimon = RdpUseMultimon
             };
             conn.SshSettings = null;
         }
@@ -317,7 +339,14 @@ public partial class ConnectionEditViewModel : ObservableObject
                 JumpHostPort = SshJumpHostPort,
                 JumpHostUsername = string.IsNullOrEmpty(SshJumpHostUsername) ? null : SshJumpHostUsername,
                 PrivateKeyPassphrase = null,
-                JumpHostPassword = null
+                JumpHostPassword = null,
+                PortForwarding = new PortForwarding
+                {
+                    Enabled = SshPortForwardingEnabled,
+                    LocalPort = SshPortForwardingLocalPort,
+                    RemoteHost = SshPortForwardingRemoteHost,
+                    RemotePort = SshPortForwardingRemotePort
+                }
             };
             conn.RdpSettings = null;
         }

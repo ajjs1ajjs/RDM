@@ -13,7 +13,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
     private readonly ICredentialService _credentialService;
     private readonly ISettingsService _settings;
     private bool _disposed;
-    private SshTerminalControl? _sshTerminalRef;
+    private SshWebViewTerminalControl? _sshTerminalRef;
     private int _reconnectAttempts;
     private const int MaxReconnectAttempts = 3;
     private EventHandler<string>? _connectionClosedHandler;
@@ -47,7 +47,15 @@ public partial class SshSessionViewModel : SessionTabViewModel
         ConnectionId = connection.Id;
         Header = string.IsNullOrWhiteSpace(connection.Host) ? connection.Name : connection.Host;
         SessionInfo = $"SSH {connection.Username}@{connection.Host}:{connection.Port}";
+
+        foreach (var snippet in _db.GetAllSnippets())
+        {
+            Snippets.Add(snippet);
+        }
     }
+
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<Snippet> _snippets = new();
 
     public override async Task ConnectAsync() => await ConnectSsh();
 
@@ -72,10 +80,11 @@ public partial class SshSessionViewModel : SessionTabViewModel
             JumpHost = Connection.SshSettings?.JumpHost,
             JumpHostPort = Connection.SshSettings?.JumpHostPort ?? 22,
             JumpHostUsername = Connection.SshSettings?.JumpHostUsername,
-            JumpHostPassword = _credentialService.LoadAdditional(Connection.Id, "jumphost_password")
+            JumpHostPassword = _credentialService.LoadAdditional(Connection.Id, "jumphost_password"),
+            PortForwarding = Connection.SshSettings?.PortForwarding ?? new PortForwarding()
         };
 
-        if (Terminal is not SshTerminalControl ssh)
+        if (Terminal is not SshWebViewTerminalControl ssh)
         {
             StatusText = "SSH terminal is not ready";
             IsConnected = false;
@@ -106,7 +115,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         }
     }
 
-    private void UnsubscribeSshEvents(SshTerminalControl? ssh = null)
+    private void UnsubscribeSshEvents(SshWebViewTerminalControl? ssh = null)
     {
         var target = ssh ?? _sshTerminalRef;
         if (target == null) return;
@@ -137,6 +146,15 @@ public partial class SshSessionViewModel : SessionTabViewModel
 
     [RelayCommand]
     private void Clear() => Terminal?.Clear();
+
+    [RelayCommand]
+    private void ExecuteSnippet(Snippet snippet)
+    {
+        if (snippet != null && !string.IsNullOrEmpty(snippet.Command))
+        {
+            Terminal?.SendText(snippet.Command + "\n");
+        }
+    }
 
     private async Task OnTerminalConnectionClosedAsync(object? sender, string reason)
     {

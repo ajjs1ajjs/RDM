@@ -5,6 +5,8 @@ using RemoteManager.Models;
 using RemoteManager.Services;
 using Xunit;
 
+using System.Threading.Tasks;
+
 namespace RemoteManager.Tests;
 
 public class ImportExportTests
@@ -15,7 +17,7 @@ public class ImportExportTests
     }
 
     [Fact]
-    public void TestExportAndImportJson()
+    public async Task TestExportAndImportJson()
     {
         // Arrange
         var dbPath = GetTempDatabasePath();
@@ -46,7 +48,7 @@ public class ImportExportTests
             var importExport = new ImportExportService(dbService, credService);
 
             // Act
-            importExport.ExportToFile(exportPath);
+            await importExport.ExportToFileAsync(exportPath);
 
             // Create new DB to import into
             var dbPathImport = GetTempDatabasePath();
@@ -58,7 +60,7 @@ public class ImportExportTests
             try
             {
                 var importExport2 = new ImportExportService(dbServiceImport, credServiceImport);
-                importExport2.ImportFromFile(exportPath);
+                await importExport2.ImportFromFileAsync(exportPath);
 
                 // Assert
                 var groups = dbServiceImport.GetAllGroups();
@@ -96,7 +98,7 @@ public class ImportExportTests
     }
 
     [Fact]
-    public void TestParseDevolutionsXml()
+    public async Task TestParseDevolutionsXml()
     {
         // Arrange
         var dbPath = GetTempDatabasePath();
@@ -138,14 +140,14 @@ public class ImportExportTests
             var importExport = new ImportExportService(dbService, credService);
 
             // Act
-            var preview = importExport.PreviewImport(xmlPath);
+            var preview = await importExport.PreviewImportAsync(xmlPath);
 
             // Assert preview
             Assert.Equal(3, preview.GroupCount); // Infrastructure, Infrastructure\Windows, Infrastructure\Linux
             Assert.Equal(2, preview.ConnectionCount);
 
             // Act import
-            importExport.ImportFromFile(xmlPath);
+            await importExport.ImportFromFileAsync(xmlPath);
 
             var groups = dbService.GetAllGroups();
             var connections = dbService.GetAllConnections();
@@ -184,7 +186,7 @@ public class ImportExportTests
     }
 
     [Fact]
-    public void TestSecureExportAndImportWithPasswords()
+    public async Task TestSecureExportAndImportWithPasswords()
     {
         // Arrange
         var dbPath = GetTempDatabasePath();
@@ -220,7 +222,7 @@ public class ImportExportTests
             var importExport = new ImportExportService(dbService, credService);
 
             // Act
-            importExport.ExportEncrypted(backupPath, backupPassword);
+            await importExport.ExportEncryptedAsync(backupPath, backupPassword);
 
             // Assert that file is encrypted (does not contain plain text name or host)
             var fileContent = File.ReadAllBytes(backupPath);
@@ -240,12 +242,12 @@ public class ImportExportTests
                 var importExportImport = new ImportExportService(dbServiceImport, credServiceImport);
                 
                 // Act preview
-                var preview = importExportImport.PreviewImportEncrypted(backupPath, backupPassword);
+                var preview = await importExportImport.PreviewImportEncryptedAsync(backupPath, backupPassword);
                 Assert.Equal(1, preview.GroupCount);
                 Assert.Equal(1, preview.ConnectionCount);
 
                 // Act import
-                importExportImport.ImportEncrypted(backupPath, backupPassword);
+                await importExportImport.ImportEncryptedAsync(backupPath, backupPassword);
 
                 // Assert data is imported
                 var groups = dbServiceImport.GetAllGroups();

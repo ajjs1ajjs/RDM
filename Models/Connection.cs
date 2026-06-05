@@ -47,6 +47,15 @@ public class RDPSettings
     public bool NetworkLevelAuth { get; set; } = true;
     public string? GatewayHost { get; set; }
     public int GatewayPort { get; set; } = 443;
+    public bool UseMultimon { get; set; }
+}
+
+public class PortForwarding
+{
+    public bool Enabled { get; set; }
+    public uint LocalPort { get; set; } = 8080;
+    public string RemoteHost { get; set; } = "127.0.0.1";
+    public uint RemotePort { get; set; } = 80;
 }
 
 public class SSHSettings
@@ -63,4 +72,5 @@ public class SSHSettings
     public string? JumpHostPassword { get; set; }
     public int TerminalColumns { get; set; } = 120;
     public int TerminalRows { get; set; } = 40;
+    public PortForwarding PortForwarding { get; set; } = new();
 }

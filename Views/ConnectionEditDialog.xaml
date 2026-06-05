@@ -97,22 +97,25 @@
 
                     <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="Redirect printers"
                               IsChecked="{Binding RdpRedirectPrinters}" Margin="0,5"/>
-                    <CheckBox Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="CredSSP support"
+                    <CheckBox Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Use all monitors (Multimon)"
+                              IsChecked="{Binding RdpUseMultimon}" Margin="0,5"/>
+
+                    <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Content="CredSSP support"
                               IsChecked="{Binding RdpCredSsp}" Margin="0,5"/>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Audio mode:" VerticalAlignment="Center"/>
-                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3"
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Audio mode:" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
                               SelectedIndex="{Binding RdpAudioMode}" Margin="0,3">
                         <ComboBoxItem Content="Play locally"/>
                         <ComboBoxItem Content="Play on server"/>
                         <ComboBoxItem Content="No audio"/>
                     </ComboBox>
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Gateway host:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding RdpGatewayHost}" Margin="0,3"/>
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Gateway host:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding RdpGatewayHost}" Margin="0,3"/>
 
-                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Gateway port:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding RdpGatewayPort}" Width="80" HorizontalAlignment="Left" Margin="0,3"/>
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Gateway port:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding RdpGatewayPort}" Width="80" HorizontalAlignment="Left" Margin="0,3"/>
                 </Grid>
             </GroupBox>
 
@@ -146,10 +149,15 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{Binding SshKeyPath}" IsReadOnly="True" Margin="0,3"/>
                         <Button Grid.Column="1" Content="Browse" Padding="8,3" Margin="5,0,0,0"
                                 Command="{Binding BrowseSshKeyCommand}"
+                                Background="{StaticResource AccentBrush}" Foreground="White"
+                                BorderThickness="0" Cursor="Hand"/>
+                        <Button Grid.Column="2" Content="🔑 Generate" Padding="8,3" Margin="5,0,0,0"
+                                Click="OnGenerateSshKey"
                                 Background="{StaticResource AccentBrush}" Foreground="White"
                                 BorderThickness="0" Cursor="Hand"/>
                     </Grid>
@@ -173,6 +181,37 @@
                                Visibility="{Binding SshAuthType, Converter={StaticResource TypeToSshKeyVisibility}}"/>
                     <PasswordBox Grid.Row="7" Grid.Column="1" x:Name="SshKeyPassphraseBox" Margin="0,3" MaxWidth="300" HorizontalAlignment="Left"
                                  Visibility="{Binding SshAuthType, Converter={StaticResource TypeToSshKeyVisibility}}"/>
+                    
+                    <!-- Port Forwarding Settings -->
+                    <Expander Grid.Row="8" Grid.ColumnSpan="2" Header="🚇 Local Port Forwarding" Margin="0,10,0,0">
+                        <Grid Margin="10,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <CheckBox Grid.Row="0" Grid.ColumnSpan="2" Content="Enable Local Port Forwarding" 
+                                      IsChecked="{Binding SshPortForwardingEnabled}" Margin="0,5" FontWeight="Bold"/>
+                            
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Local Port:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SshPortForwardingLocalPort}" Width="80" HorizontalAlignment="Left" Margin="0,3"
+                                     IsEnabled="{Binding SshPortForwardingEnabled}"/>
+                                     
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Remote Host:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SshPortForwardingRemoteHost}" Margin="0,3"
+                                     IsEnabled="{Binding SshPortForwardingEnabled}"/>
+                                     
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Remote Port:" VerticalAlignment="Center" Margin="0,5"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SshPortForwardingRemotePort}" Width="80" HorizontalAlignment="Left" Margin="0,3"
+                                     IsEnabled="{Binding SshPortForwardingEnabled}"/>
+                        </Grid>
+                    </Expander>
                 </Grid>
             </GroupBox>
 

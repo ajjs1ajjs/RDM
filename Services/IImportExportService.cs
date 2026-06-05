@@ -4,11 +4,11 @@ namespace RemoteManager.Services;
 
 public interface IImportExportService
 {
-    void ExportToFile(string filePath);
-    void ImportFromFile(string filePath);
-    void ExportEncrypted(string filePath, string password);
-    void ImportEncrypted(string filePath, string password);
-    ImportPreview PreviewImport(string filePath);
-    ImportPreview PreviewImportEncrypted(string filePath, string password);
-    ExportData? LoadFromFile(string filePath);
+    Task ExportToFileAsync(string filePath);
+    Task ImportFromFileAsync(string filePath);
+    Task ExportEncryptedAsync(string filePath, string password);
+    Task ImportEncryptedAsync(string filePath, string password);
+    Task<ImportPreview> PreviewImportAsync(string filePath);
+    Task<ImportPreview> PreviewImportEncryptedAsync(string filePath, string password);
+    Task<ExportData?> LoadFromFileAsync(string filePath);
 }

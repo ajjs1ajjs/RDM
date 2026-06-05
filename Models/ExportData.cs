@@ -6,4 +6,5 @@ public class ExportData
     public DateTime ExportDate { get; set; } = DateTime.UtcNow;
     public List<ConnectionGroup> Groups { get; set; } = new();
     public List<Connection> Connections { get; set; } = new();
+    public List<Snippet> Snippets { get; set; } = new();
 }

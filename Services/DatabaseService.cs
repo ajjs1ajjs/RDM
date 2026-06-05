@@ -103,6 +103,18 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    private ILiteCollection<Snippet> Snippets
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                EnsureInitialized();
+                return _db!.GetCollection<Snippet>("snippets");
+            }
+        }
+    }
+
     public List<ConnectionGroup> GetAllGroups() =>
         WithDb(() => Groups.FindAll().OrderBy(g => g.SortOrder).ToList());
 
@@ -179,6 +191,29 @@ public class DatabaseService : IDatabaseService
         TriggerAutoBackup();
     }
 
+    public List<Snippet> GetAllSnippets() =>
+        WithDb(() => Snippets.FindAll().OrderBy(s => s.Name).ToList());
+
+    public void SaveSnippet(Snippet snippet)
+    {
+        WithDb(() =>
+        {
+            if (snippet.Id == Guid.Empty)
+                snippet.Id = Guid.NewGuid();
+            Snippets.Upsert(snippet);
+        });
+        TriggerAutoBackup();
+    }
+
+    public void DeleteSnippet(Guid id)
+    {
+        WithDb(() =>
+        {
+            Snippets.Delete(id);
+        });
+        TriggerAutoBackup();
+    }
+
     public void ImportData(ExportData data)
     {
         WithDb(() =>
@@ -227,6 +262,15 @@ public class DatabaseService : IDatabaseService
                 conn.ModifiedAt = DateTime.UtcNow;
                 Connections.Insert(conn);
             }
+
+            if (data.Snippets != null)
+            {
+                foreach (var snippet in data.Snippets)
+                {
+                    snippet.Id = Guid.NewGuid();
+                    Snippets.Insert(snippet);
+                }
+            }
         });
         TriggerAutoBackup();
     }
@@ -236,7 +280,8 @@ public class DatabaseService : IDatabaseService
         return WithDb(() => new ExportData
         {
             Groups = GetAllGroups(),
-            Connections = GetAllConnections()
+            Connections = GetAllConnections(),
+            Snippets = GetAllSnippets()
         });
     }
 
@@ -303,6 +348,7 @@ public class DatabaseService : IDatabaseService
         Groups.EnsureIndex(g => g.SortOrder);
         Connections.EnsureIndex(c => c.GroupId);
         Connections.EnsureIndex(c => c.SortOrder);
+        Snippets.EnsureIndex(s => s.Name);
     }
 
     private void EnsureInitialized()

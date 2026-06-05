@@ -17,6 +17,11 @@ public interface IDatabaseService : IDisposable
     Connection? GetConnection(Guid id);
     void SaveConnection(Connection connection);
     void DeleteConnection(Guid id);
+
+    List<Snippet> GetAllSnippets();
+    void SaveSnippet(Snippet snippet);
+    void DeleteSnippet(Guid id);
+
     void ImportData(ExportData data);
     ExportData ExportData();
 }

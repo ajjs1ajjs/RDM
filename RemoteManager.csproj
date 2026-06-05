@@ -11,6 +11,7 @@
     <AssemblyName>RemoteManager</AssemblyName>
     <RootNamespace>RemoteManager</RootNamespace>
     <ApplicationIcon>Resources\Icons\app_icon.ico</ApplicationIcon>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,8 +24,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="LiteDB" Version="5.0.19" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageReference Include="SSH.NET" Version="2024.0.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
+    <PackageReference Include="SSH.NET" Version="2024.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SshNet.Keygen" Version="2024.2.0.1" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     
   </ItemGroup>
@@ -33,6 +36,12 @@
     <Resource Include="Resources\Icons\app_icon.png" />
     <Resource Include="Resources\Icons\app_icon.ico" />
     <Resource Include="Resources\Icons\space_bg.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Terminal\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

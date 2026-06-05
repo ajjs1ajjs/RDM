@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Terminal</title>
+    <link rel="stylesheet" href="xterm.css" />
+    <script src="xterm.js"></script>
+    <script src="xterm-addon-fit.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1e1e1e;
+            overflow: hidden;
+        }
+        #terminal-container {
+            width: 100%;
+            height: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        /* Customize xterm colors slightly to match UI */
+        .xterm-viewport {
+            background-color: #1e1e1e !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal-container"></div>
+    <script>
+        var term;
+        var fitAddon;
+
+        function initTerminal() {
+            term = new Terminal({
+                cursorBlink: true,
+                theme: {
+                    background: '#1e1e1e',
+                    foreground: '#cccccc',
+                    cursor: '#ffffff'
+                },
+                fontFamily: 'Consolas, "Courier New", monospace',
+                fontSize: 14
+            });
+
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+
+            term.open(document.getElementById('terminal-container'));
+            fitAddon.fit();
+
+            term.onData(data => {
+                // Send data to C# host
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'data', content: data });
+                }
+            });
+
+            term.onResize(size => {
+                // Send resize to C# host
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'resize', cols: size.cols, rows: size.rows });
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                fitAddon.fit();
+            });
+        }
+
+        // Methods exposed to C# host
+        window.writeToTerminal = function(data) {
+            if (term) {
+                term.write(data);
+            }
+        };
+
+        window.focusTerminal = function() {
+            if (term) {
+                term.focus();
+            }
+        };
+
+        // Initialize when DOM is ready
+        document.addEventListener("DOMContentLoaded", initTerminal);
+    </script>
+</body>
+</html>

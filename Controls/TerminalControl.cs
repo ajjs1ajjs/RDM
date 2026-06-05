@@ -6,4 +6,5 @@ public abstract partial class TerminalControl : ContentControl
 {
     public virtual void Disconnect() { }
     public virtual void Clear() { }
+    public virtual void SendText(string text) { }
 }

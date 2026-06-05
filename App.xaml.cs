@@ -28,6 +28,7 @@ public partial class App : Application
         services.AddSingleton<ICredentialService>(sp => new CredentialService(credentialsDir, sp.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IImportExportService, ImportExportService>();
+        services.AddSingleton<IPingService, PingService>();
         
         services.AddTransient<MainViewModel>();
     }
@@ -40,6 +41,18 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
+        System.Windows.Forms.Application.ThreadException += (sender, args) =>
+        {
+            Services.Log.Error("WinForms Thread Exception", args.Exception);
+            if (args.Exception is System.Runtime.InteropServices.InvalidComObjectException ||
+                args.Exception.Message.Contains("class factory") ||
+                args.Exception is System.Runtime.InteropServices.COMException)
+            {
+                // Ignore COM-related interop exceptions during RDP tab closure
+                return;
+            }
+        };
+
         try
         {
             var services = new ServiceCollection();
@@ -48,6 +61,16 @@ public partial class App : Application
 
             var settings = _serviceProvider.GetRequiredService<ISettingsService>();
             _db = _serviceProvider.GetRequiredService<IDatabaseService>();
+
+            if (settings.Current.UseMasterPassword && !string.IsNullOrEmpty(settings.Current.MasterPasswordHash))
+            {
+                var pwdWindow = new MasterPasswordWindow(settings.Current.MasterPasswordHash);
+                if (pwdWindow.ShowDialog() != true)
+                {
+                    Shutdown(0);
+                    return;
+                }
+            }
 
             ApplyTheme(settings.Current.Theme);
 

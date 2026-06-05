@@ -19,6 +19,9 @@
         <DataTemplate DataType="{x:Type vm:SshSessionViewModel}">
             <views:SshSessionView DataContext="{Binding}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SftpSessionViewModel}">
+            <views:SftpSessionView DataContext="{Binding}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsTabViewModel}">
             <views:SettingsView DataContext="{Binding Settings}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         </DataTemplate>
@@ -231,6 +234,13 @@
                                                 <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                             </MenuItem.Icon>
                                         </MenuItem>
+                                        <MenuItem Header="Open SFTP Browser"
+                                                  Command="{Binding PlacementTarget.Tag.DataContext.OpenSftpCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="&#xED25;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
                                         <Separator/>
                                         <MenuItem Header="Edit"
                                                   Command="{Binding PlacementTarget.Tag.DataContext.EditConnectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -257,8 +267,8 @@
                                     </ContextMenu>
                                 </Border.ContextMenu>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
-                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0"
-                                             Fill="{Binding IsConnected, Converter={StaticResource StatusDotConverter}}"/>
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0"
+                                             x:Name="StatusDot" Fill="#555555" ToolTip="Status: Unknown"/>
                                     <TextBlock Text="{Binding TypeIcon}" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
@@ -266,11 +276,42 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
+                            <HierarchicalDataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                    <Setter TargetName="StatusDot" Property="Fill" Value="#10B981"/>
+                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="Connected (Active Session)"/>
+                                </DataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                        <Condition Binding="{Binding PingStatus}" Value="Online"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="StatusDot" Property="Fill" Value="#34D399"/>
+                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat='Online ({0}ms)'}"/>
+                                </MultiDataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                        <Condition Binding="{Binding PingStatus}" Value="Offline"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="StatusDot" Property="Fill" Value="#EF4444"/>
+                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="Offline"/>
+                                </MultiDataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                        <Condition Binding="{Binding PingStatus}" Value="Checking"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="StatusDot" Property="Fill" Value="#F59E0B"/>
+                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="Checking status..."/>
+                                </MultiDataTrigger>
+                            </HierarchicalDataTemplate.Triggers>
                         </HierarchicalDataTemplate>
                     </TreeView.Resources>
                     <TreeView.ItemContainerStyle>
                         <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                            <Setter Property="IsExpanded" Value="{Binding IsExpanded}"/>
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                            <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
                         </Style>
                     </TreeView.ItemContainerStyle>
                 </TreeView>
@@ -422,7 +463,10 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="*"/>
                                                     </Grid.RowDefinitions>
-                                                    <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="12" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                                    <DockPanel Grid.Row="0">
+                                                        <Ellipse x:Name="RecentStatusDot" Width="8" Height="8" Fill="#555555" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="4,0,0,0" ToolTip="Status: Unknown"/>
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                                    </DockPanel>
                                                     <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Bottom">
                                                         <!-- Connection Type Indicator (cyan for RDP, indigo for SSH) -->
                                                         <Border CornerRadius="3" Padding="4,2" Margin="0,0,6,0" x:Name="TypeBadge">
@@ -447,6 +491,34 @@
                                                     <Setter TargetName="TypeBadge" Property="BorderBrush" Value="#606366F1"/>
                                                     <Setter TargetName="TypeBadge" Property="BorderThickness" Value="1"/>
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                    <Setter TargetName="RecentStatusDot" Property="Fill" Value="#10B981"/>
+                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="Connected (Active Session)"/>
+                                                </DataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                                        <Condition Binding="{Binding PingStatus}" Value="Online"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter TargetName="RecentStatusDot" Property="Fill" Value="#34D399"/>
+                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat='Online ({0}ms)'}"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                                        <Condition Binding="{Binding PingStatus}" Value="Offline"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter TargetName="RecentStatusDot" Property="Fill" Value="#EF4444"/>
+                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="Offline"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsConnected}" Value="False"/>
+                                                        <Condition Binding="{Binding PingStatus}" Value="Checking"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter TargetName="RecentStatusDot" Property="Fill" Value="#F59E0B"/>
+                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="Checking status..."/>
+                                                </MultiDataTrigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>

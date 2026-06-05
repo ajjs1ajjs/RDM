@@ -4,6 +4,14 @@ using RemoteManager.Models;
 
 namespace RemoteManager.ViewModels;
 
+public enum PingStatus
+{
+    Unknown,
+    Checking,
+    Online,
+    Offline
+}
+
 public abstract partial class TreeEntryViewModel : ObservableObject
 {
     [ObservableProperty]
@@ -33,6 +41,12 @@ public partial class ConnectionItemViewModel : TreeEntryViewModel
 
     [ObservableProperty]
     private bool _isConnected;
+
+    [ObservableProperty]
+    private PingStatus _pingStatus = PingStatus.Unknown;
+
+    [ObservableProperty]
+    private long _pingLatency = -1;
 
     public string TypeIcon => Type == ConnectionType.RDP ? "\uE7F4" : "\uE9A9";
     public string DisplayText => $"{Name} ({Host}:{Port})";

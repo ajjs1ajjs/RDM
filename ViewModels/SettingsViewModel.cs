@@ -27,6 +27,7 @@ public partial class SettingsViewModel : ObservableObject
         _defaultRdpPort = settings.Current.DefaultRdpPort;
         _defaultSshPort = settings.Current.DefaultSshPort;
         _backupFolderPath = settings.Current.BackupFolderPath;
+        _useMasterPassword = settings.Current.UseMasterPassword;
 
         if (settings.Current.DomainCredentials != null)
         {
@@ -42,7 +43,15 @@ public partial class SettingsViewModel : ObservableObject
                 });
             }
         }
+
+        foreach (var snippet in _db.GetAllSnippets())
+        {
+            _snippets.Add(new SnippetViewModel(snippet));
+        }
     }
+
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<SnippetViewModel> _snippets = new();
 
     [ObservableProperty]
     private System.Collections.ObjectModel.ObservableCollection<DomainCredentialViewModel> _domainCredentials = new();
@@ -67,6 +76,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private string _backupFolderPath = string.Empty;
+
+    [ObservableProperty]
+    private bool _useMasterPassword;
 
     public string[] Themes { get; } = ["Dark", "Light"];
 
@@ -128,6 +140,7 @@ public partial class SettingsViewModel : ObservableObject
         _settings.Current.DefaultRdpPort = DefaultRdpPort;
         _settings.Current.DefaultSshPort = DefaultSshPort;
         _settings.Current.BackupFolderPath = BackupFolderPath;
+        _settings.Current.UseMasterPassword = UseMasterPassword;
 
         _settings.Current.DomainCredentials.Clear();
         foreach (var vm in DomainCredentials)
@@ -153,6 +166,25 @@ public partial class SettingsViewModel : ObservableObject
 
         _settings.Save();
 
+        // Save Snippets
+        var existingSnippets = _db.GetAllSnippets();
+        var currentIds = Snippets.Select(s => s.Id).ToList();
+
+        // Delete removed snippets
+        foreach (var existing in existingSnippets)
+        {
+            if (!currentIds.Contains(existing.Id))
+            {
+                _db.DeleteSnippet(existing.Id);
+            }
+        }
+
+        // Save/Update current snippets
+        foreach (var snippetVm in Snippets)
+        {
+            _db.SaveSnippet(snippetVm.ToModel());
+        }
+
         App.ApplyTheme(SelectedTheme);
 
         if (System.Windows.Application.Current is App app && app.MainWindow != null)
@@ -162,6 +194,26 @@ public partial class SettingsViewModel : ObservableObject
 
         System.Windows.MessageBox.Show("Settings saved!", "Success",
             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+    }
+
+    [RelayCommand]
+    private void ChangeMasterPassword(System.Windows.Controls.PasswordBox pwdBox)
+    {
+        var pwd = pwdBox?.Password;
+        if (string.IsNullOrEmpty(pwd))
+        {
+            System.Windows.MessageBox.Show("Password cannot be empty.", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            return;
+        }
+
+        _settings.Current.MasterPasswordHash = RemoteManager.Helpers.CryptoHelper.HashPassword(pwd);
+        MasterPasswordContext.CurrentMasterPassword = pwd;
+        UseMasterPassword = true;
+        _settings.Current.UseMasterPassword = true;
+        _settings.Save();
+
+        System.Windows.MessageBox.Show("Master password changed successfully. All future passwords will be encrypted with it.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        pwdBox?.Clear();
     }
 
     [RelayCommand]
@@ -206,7 +258,22 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ImportConnections()
+    private void AddSnippet()
+    {
+        Snippets.Add(new SnippetViewModel(new Snippet { Name = "New Snippet", Command = "echo 'Hello'" }));
+    }
+
+    [RelayCommand]
+    private void DeleteSnippet(SnippetViewModel snippet)
+    {
+        if (snippet != null)
+        {
+            Snippets.Remove(snippet);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportConnections()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -218,7 +285,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             try
             {
-                var preview = _importExport.PreviewImport(dialog.FileName);
+                var preview = await _importExport.PreviewImportAsync(dialog.FileName);
                 var groupsPreview = preview.Groups.Count <= 8
                     ? string.Join("\n", preview.Groups)
                     : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
@@ -239,7 +306,7 @@ public partial class SettingsViewModel : ObservableObject
 
                 if (result == System.Windows.MessageBoxResult.Yes)
                 {
-                    _importExport.ImportFromFile(dialog.FileName);
+                    await _importExport.ImportFromFileAsync(dialog.FileName);
                     ImportCompleted?.Invoke();
                     System.Windows.MessageBox.Show("Import completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
@@ -252,7 +319,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ExportConnections()
+    private async Task ExportConnections()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -265,7 +332,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             try
             {
-                _importExport.ExportToFile(dialog.FileName);
+                await _importExport.ExportToFileAsync(dialog.FileName);
                 System.Windows.MessageBox.Show("Export completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             }
             catch (System.Exception ex)
@@ -276,7 +343,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ExportEncryptedBackup()
+    private async Task ExportEncryptedBackup()
     {
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -303,7 +370,7 @@ public partial class SettingsViewModel : ObservableObject
 
                 try
                 {
-                    _importExport.ExportEncrypted(saveDialog.FileName, password);
+                    await _importExport.ExportEncryptedAsync(saveDialog.FileName, password);
                     System.Windows.MessageBox.Show("Secure backup completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
                 catch (System.Exception ex)
@@ -315,7 +382,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ImportEncryptedBackup()
+    private async Task ImportEncryptedBackup()
     {
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -335,7 +402,7 @@ public partial class SettingsViewModel : ObservableObject
                 var password = passwordDialog.Value;
                 try
                 {
-                    var preview = _importExport.PreviewImportEncrypted(openDialog.FileName, password);
+                    var preview = await _importExport.PreviewImportEncryptedAsync(openDialog.FileName, password);
 
                     var groupsPreview = preview.Groups.Count <= 8
                         ? string.Join("\n", preview.Groups)
@@ -357,7 +424,7 @@ public partial class SettingsViewModel : ObservableObject
 
                     if (result == System.Windows.MessageBoxResult.Yes)
                     {
-                        _importExport.ImportEncrypted(openDialog.FileName, password);
+                        await _importExport.ImportEncryptedAsync(openDialog.FileName, password);
                         ImportCompleted?.Invoke();
                         System.Windows.MessageBox.Show("Secure import completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                     }

@@ -16,15 +16,17 @@ public partial class MainViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IImportExportService _importExport;
     private readonly ICredentialService _credentialService;
+    private readonly IPingService _pingService;
     private string? _pendingImportPath;
     private string? _pendingImportPassword;
 
-    public MainViewModel(IDatabaseService db, ISettingsService settings, IImportExportService importExport, ICredentialService credentialService)
+    public MainViewModel(IDatabaseService db, ISettingsService settings, IImportExportService importExport, ICredentialService credentialService, IPingService pingService)
     {
         _db = db;
         _settings = settings;
         _importExport = importExport;
         _credentialService = credentialService;
+        _pingService = pingService;
 
         if (settings.IsFirstRun)
         {
@@ -39,11 +41,11 @@ public partial class MainViewModel : ObservableObject
             {
                 if (!string.IsNullOrEmpty(_pendingImportPassword))
                 {
-                    _importExport.ImportEncrypted(_pendingImportPath, _pendingImportPassword);
+                    _importExport.ImportEncryptedAsync(_pendingImportPath, _pendingImportPassword).GetAwaiter().GetResult();
                 }
                 else
                 {
-                    _importExport.ImportFromFile(_pendingImportPath);
+                    _importExport.ImportFromFileAsync(_pendingImportPath).GetAwaiter().GetResult();
                 }
             }
             catch (Exception ex)
@@ -54,6 +56,7 @@ public partial class MainViewModel : ObservableObject
 
         SyncTabSelectionCommand = new RelayCommand(OnSyncTabSelection);
         LoadData();
+        _pingService.StartMonitoring(OnPingStatusUpdated);
 
         OpenTabs.CollectionChanged += (s, e) =>
         {
@@ -107,6 +110,50 @@ public partial class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(PendingSessionsAngle));
             OnPropertyChanged(nameof(LatencyAngle));
         }
+    }
+
+    private void OnPingStatusUpdated(Guid connectionId, PingStatus status, long latency)
+    {
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            var connItem = FindConnectionItem(connectionId);
+            if (connItem != null)
+            {
+                connItem.PingStatus = status;
+                connItem.PingLatency = latency;
+            }
+            
+            var recentItem = RecentConnections.FirstOrDefault(r => r.Connection?.Id == connectionId);
+            if (recentItem != null)
+            {
+                recentItem.PingStatus = status;
+                recentItem.PingLatency = latency;
+            }
+        });
+    }
+
+    private ConnectionItemViewModel? FindConnectionItem(Guid id)
+    {
+        foreach (var group in Groups)
+        {
+            var item = FindInGroup(group, id);
+            if (item != null) return item;
+        }
+        return null;
+    }
+
+    private ConnectionItemViewModel? FindInGroup(TreeEntryViewModel entry, Guid id)
+    {
+        if (entry is ConnectionItemViewModel c && c.Connection?.Id == id) return c;
+        if (entry is GroupViewModel g)
+        {
+            foreach (var child in g.Children)
+            {
+                var found = FindInGroup(child, id);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     public bool IsDashboardVisible => OpenTabs.Count == 0;
@@ -227,6 +274,8 @@ public partial class MainViewModel : ObservableObject
                 Type = conn.Type,
                 Description = conn.Description
             };
+
+            _pingService.RegisterConnection(conn.Id, conn.Host, conn.Port);
 
             if (conn.GroupId != Guid.Empty && groupMap.TryGetValue(conn.GroupId, out var groupVm))
             {
@@ -370,6 +419,37 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void OpenSftp(ConnectionItemViewModel? item)
+    {
+        if (item?.Connection == null || item.Connection.Type != ConnectionType.SSH) return;
+
+        lock (_openTabsLock)
+        {
+            var existing = OpenTabs.OfType<SftpSessionViewModel>().FirstOrDefault(t => t.ConnectionId == item.Connection.Id);
+            if (existing != null)
+            {
+                SelectedTab = existing;
+                return;
+            }
+
+            var tab = new SftpSessionViewModel(_db, _credentialService, item.Connection);
+
+            PropertyChangedEventHandler handler = (s, e) =>
+            {
+                // SFTP tab connection state doesn't necessarily dictate the main connection state,
+                // but we can bind it if we want. For now, no strict binding required.
+            };
+
+            tab.PropertyChanged += handler;
+            _tabHandlers[tab] = (item, handler);
+
+            OpenTabs.Add(tab);
+            SelectedTab = tab;
+            _ = tab.ConnectAsync(); // auto connect SFTP
+        }
+    }
+
     private readonly Dictionary<SessionTabViewModel, (ConnectionItemViewModel Item, PropertyChangedEventHandler Handler)> _tabHandlers = new();
 
     private readonly object _openTabsLock = new();
@@ -480,6 +560,7 @@ public partial class MainViewModel : ObservableObject
 
         if (result == System.Windows.MessageBoxResult.Yes)
         {
+            _pingService.UnregisterConnection(item.Connection.Id);
             _db.DeleteConnection(item.Connection.Id);
             RefreshTree();
         }
@@ -626,7 +707,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ShowImport()
+    private async Task ShowImport()
     {
         var dialog = new OpenFileDialog
         {
@@ -638,7 +719,7 @@ public partial class MainViewModel : ObservableObject
         {
             try
             {
-                var preview = _importExport.PreviewImport(dialog.FileName);
+                var preview = await _importExport.PreviewImportAsync(dialog.FileName);
                 var groupsPreview = preview.Groups.Count <= 8 
                     ? string.Join("\n", preview.Groups) 
                     : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
@@ -659,7 +740,7 @@ public partial class MainViewModel : ObservableObject
 
                 if (result == System.Windows.MessageBoxResult.Yes)
                 {
-                    _importExport.ImportFromFile(dialog.FileName);
+                    await _importExport.ImportFromFileAsync(dialog.FileName);
                     LoadData();
                     System.Windows.MessageBox.Show("Import completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
@@ -672,7 +753,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ShowExport()
+    private async Task ShowExport()
     {
         var dialog = new SaveFileDialog
         {
@@ -685,7 +766,7 @@ public partial class MainViewModel : ObservableObject
         {
             try
             {
-                _importExport.ExportToFile(dialog.FileName);
+                await _importExport.ExportToFileAsync(dialog.FileName);
                 System.Windows.MessageBox.Show("Export completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             }
             catch (Exception ex)

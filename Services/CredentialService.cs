@@ -25,6 +25,53 @@ public class CredentialService : ICredentialService
             "credentials");
     }
 
+    private byte[] ProtectData(byte[] plainText)
+    {
+        if (_settings?.Current.UseMasterPassword == true && !string.IsNullOrEmpty(MasterPasswordContext.CurrentMasterPassword))
+        {
+            // First byte '1' indicates AES encryption
+            var cipher = RemoteManager.Helpers.CryptoHelper.ProtectAes(plainText, MasterPasswordContext.CurrentMasterPassword);
+            var result = new byte[cipher.Length + 1];
+            result[0] = 1;
+            Array.Copy(cipher, 0, result, 1, cipher.Length);
+            return result;
+        }
+        else
+        {
+            // First byte '0' indicates DPAPI
+            var cipher = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
+            var result = new byte[cipher.Length + 1];
+            result[0] = 0;
+            Array.Copy(cipher, 0, result, 1, cipher.Length);
+            return result;
+        }
+    }
+
+    private byte[] UnprotectData(byte[] protectedData)
+    {
+        if (protectedData.Length == 0) return Array.Empty<byte>();
+
+        if (protectedData[0] == 1) // AES
+        {
+            if (string.IsNullOrEmpty(MasterPasswordContext.CurrentMasterPassword))
+                throw new CryptographicException("Master password is required but not provided.");
+
+            var cipher = new byte[protectedData.Length - 1];
+            Array.Copy(protectedData, 1, cipher, 0, cipher.Length);
+            return RemoteManager.Helpers.CryptoHelper.UnprotectAes(cipher, MasterPasswordContext.CurrentMasterPassword);
+        }
+        else if (protectedData[0] == 0) // DPAPI
+        {
+            var cipher = new byte[protectedData.Length - 1];
+            Array.Copy(protectedData, 1, cipher, 0, cipher.Length);
+            return ProtectedData.Unprotect(cipher, Entropy, DataProtectionScope.CurrentUser);
+        }
+        else // Legacy DPAPI (no prefix byte)
+        {
+            return ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
+        }
+    }
+
     public void Save(Guid connectionId, string password)
     {
         if (connectionId == Guid.Empty)
@@ -42,7 +89,7 @@ public class CredentialService : ICredentialService
             }
 
             var plainText = Encoding.UTF8.GetBytes(password);
-            var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
+            var protectedData = ProtectData(plainText);
             WriteAtomic(path, protectedData);
         }
         _settings?.BackupData();
@@ -62,7 +109,7 @@ public class CredentialService : ICredentialService
             try
             {
                 var protectedData = File.ReadAllBytes(path);
-                var plainText = ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
+                var plainText = UnprotectData(protectedData);
                 return Encoding.UTF8.GetString(plainText);
             }
             catch (CryptographicException)
@@ -115,7 +162,7 @@ public class CredentialService : ICredentialService
             }
 
             var plainText = Encoding.UTF8.GetBytes(value);
-            var protectedData = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
+            var protectedData = ProtectData(plainText);
             WriteAtomic(pathCorrect, protectedData);
         }
         _settings?.BackupData();
@@ -135,7 +182,7 @@ public class CredentialService : ICredentialService
             try
             {
                 var protectedData = File.ReadAllBytes(path);
-                var plainText = ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
+                var plainText = UnprotectData(protectedData);
                 return Encoding.UTF8.GetString(plainText);
             }
             catch (CryptographicException)
@@ -181,7 +228,7 @@ public class CredentialService : ICredentialService
             var path = Path.Combine(CredentialDir, $"{key}.bin");
 
             var payload = Encoding.UTF8.GetBytes($"{username}|{password}");
-            var protectedData = ProtectedData.Protect(payload, Entropy, DataProtectionScope.CurrentUser);
+            var protectedData = ProtectData(payload);
             WriteAtomic(path, protectedData);
         }
         _settings?.BackupData();
@@ -202,7 +249,7 @@ public class CredentialService : ICredentialService
             try
             {
                 var protectedData = File.ReadAllBytes(path);
-                var plainText = ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
+                var plainText = UnprotectData(protectedData);
                 var parts = Encoding.UTF8.GetString(plainText).Split(new[] { '|' }, 2);
                 return parts.Length == 2 ? (parts[0], parts[1]) : null;
             }
