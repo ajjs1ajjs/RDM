@@ -27,7 +27,7 @@ public partial class MasterPasswordWindow : Window
         }
         else
         {
-            MessageBox.Show("Invalid master password.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(L.MasterPwd_Invalid, L.Title_Error, MessageBoxButton.OK, MessageBoxImage.Error);
             PasswordBox.Clear();
             PasswordBox.Focus();
         }

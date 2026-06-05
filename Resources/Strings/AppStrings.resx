@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string"/>
+              <xsd:attribute name="xml:space" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">text/microsoft-resx</resheader>
+  <resheader name="version">2.0</resheader>
+  <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</resheader>
+  <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</resheader>
+
+  <!-- Dialog Titles -->
+  <data name="Title_Error" xml:space="preserve"><value>Error</value></data>
+  <data name="Title_Success" xml:space="preserve"><value>Success</value></data>
+  <data name="Title_Warning" xml:space="preserve"><value>Warning</value></data>
+  <data name="Title_Information" xml:space="preserve"><value>Information</value></data>
+  <data name="Title_Confirm" xml:space="preserve"><value>Confirm</value></data>
+  <data name="Title_ValidationError" xml:space="preserve"><value>Validation Error</value></data>
+  <data name="Title_Settings" xml:space="preserve"><value>Settings</value></data>
+
+  <!-- App-level -->
+  <data name="App_Title" xml:space="preserve"><value>Remote Manager</value></data>
+  <data name="App_TrayMinimized" xml:space="preserve"><value>Application minimized to tray</value></data>
+  <data name="App_StartupFailed" xml:space="preserve"><value>Startup failed: {0}
+
+See debug output for details.</value></data>
+
+  <!-- Session Status -->
+  <data name="Status_Disconnected" xml:space="preserve"><value>Disconnected</value></data>
+  <data name="Status_Connecting" xml:space="preserve"><value>Connecting...</value></data>
+  <data name="Status_Connected" xml:space="preserve"><value>Connected to {0}</value></data>
+  <data name="Status_ConnectionFailed" xml:space="preserve"><value>Connection failed</value></data>
+  <data name="Status_LoggedOut" xml:space="preserve"><value>Logged out</value></data>
+  <data name="Status_Reconnecting" xml:space="preserve"><value>Connection lost, reconnecting ({0}/{1})...</value></data>
+  <data name="Status_ReconnectFailed" xml:space="preserve"><value>Disconnected (reconnect failed after {0} attempts)</value></data>
+  <data name="Status_TerminalNotReady" xml:space="preserve"><value>SSH terminal is not ready</value></data>
+  <data name="Status_RdpHostNotReady" xml:space="preserve"><value>RDP host is not ready</value></data>
+
+  <!-- Connection Edit -->
+  <data name="ConnEdit_TitleNew" xml:space="preserve"><value>New Connection</value></data>
+  <data name="ConnEdit_TitleEdit" xml:space="preserve"><value>Edit {0}</value></data>
+  <data name="ConnEdit_DefaultName" xml:space="preserve"><value>New Connection</value></data>
+  <data name="ConnEdit_NameRequired" xml:space="preserve"><value>Connection name is required.</value></data>
+  <data name="ConnEdit_HostRequired" xml:space="preserve"><value>Host address is required.</value></data>
+  <data name="ConnEdit_UrlRequired" xml:space="preserve"><value>URL is required for Web connections.</value></data>
+  <data name="ConnEdit_InvalidHost" xml:space="preserve"><value>Invalid host address. Use a valid hostname (e.g., server.example.com), IPv4 (e.g., 192.168.1.1), or IPv6.</value></data>
+  <data name="ConnEdit_InvalidIp" xml:space="preserve"><value>Invalid IP address. Each octet must be between 0 and 255.</value></data>
+  <data name="ConnEdit_InvalidPort" xml:space="preserve"><value>Port must be between 1 and 65535.</value></data>
+  <data name="ConnEdit_KeyRequired" xml:space="preserve"><value>SSH private key path is required when authentication type is Key.</value></data>
+  <data name="ConnEdit_KeyNotFound" xml:space="preserve"><value>SSH key file not found: {0}</value></data>
+  <data name="ConnEdit_BrowseKeyTitle" xml:space="preserve"><value>Select SSH Private Key</value></data>
+
+  <!-- SSH Key Generator -->
+  <data name="KeyGen_BrowseTitle" xml:space="preserve"><value>Select directory to save SSH keys</value></data>
+  <data name="KeyGen_DirRequired" xml:space="preserve"><value>Save directory is required.</value></data>
+  <data name="KeyGen_NameRequired" xml:space="preserve"><value>Key name is required.</value></data>
+  <data name="KeyGen_FileExists" xml:space="preserve"><value>File '{0}' already exists.</value></data>
+  <data name="KeyGen_Failed" xml:space="preserve"><value>Failed to generate key: {0}</value></data>
+
+  <!-- Tabs -->
+  <data name="Tab_Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Tab_CloseConfirm" xml:space="preserve"><value>Disconnect '{0}' and close tab?</value></data>
+  <data name="Tab_CloseTitle" xml:space="preserve"><value>Active Connection</value></data>
+
+  <!-- SFTP -->
+  <data name="Sftp_Title" xml:space="preserve"><value>SFTP - {0}</value></data>
+  <data name="Sftp_Connecting" xml:space="preserve"><value>Connecting SFTP...</value></data>
+  <data name="Sftp_Connected" xml:space="preserve"><value>Connected to {0}</value></data>
+  <data name="Sftp_Failed" xml:space="preserve"><value>SFTP Connection Failed: {0}</value></data>
+  <data name="Sftp_Loading" xml:space="preserve"><value>Loading directory...</value></data>
+  <data name="Sftp_Ready" xml:space="preserve"><value>Ready - {0} items</value></data>
+  <data name="Sftp_LoadFailed" xml:space="preserve"><value>Error loading directory: {0}</value></data>
+  <data name="Sftp_DownloadTitle" xml:space="preserve"><value>Download File</value></data>
+  <data name="Sftp_UploadTitle" xml:space="preserve"><value>Select File to Upload</value></data>
+  <data name="Sftp_TransferComplete" xml:space="preserve"><value>{0} completed.</value></data>
+  <data name="Sftp_TransferFailed" xml:space="preserve"><value>{0} failed: {1}</value></data>
+  <data name="Sftp_TransferErrorTitle" xml:space="preserve"><value>Transfer Error</value></data>
+  <data name="Sftp_DeleteConfirm" xml:space="preserve"><value>Are you sure you want to delete {0}?</value></data>
+  <data name="Sftp_DeleteTitle" xml:space="preserve"><value>Confirm Delete</value></data>
+  <data name="Sftp_Deleting" xml:space="preserve"><value>Deleting {0}...</value></data>
+  <data name="Sftp_Deleted" xml:space="preserve"><value>Deleted {0}</value></data>
+  <data name="Sftp_DeleteFailed" xml:space="preserve"><value>Delete failed: {0}</value></data>
+  <data name="Sftp_DeleteError" xml:space="preserve"><value>Could not delete item: {0}</value></data>
+
+  <!-- Groups -->
+  <data name="Group_DefaultName" xml:space="preserve"><value>New Group</value></data>
+  <data name="Group_Ungrouped" xml:space="preserve"><value>Ungrouped</value></data>
+  <data name="Group_AddDialog_Message" xml:space="preserve"><value>Enter name for the new group:</value></data>
+  <data name="Group_AddDialog_Title" xml:space="preserve"><value>New Group</value></data>
+  <data name="Group_RenameDialog" xml:space="preserve"><value>Rename Group</value></data>
+  <data name="Group_DeleteConfirm" xml:space="preserve"><value>Delete group '{0}' and all its connections?</value></data>
+  <data name="Group_DeleteTitle" xml:space="preserve"><value>Confirm Delete</value></data>
+
+  <!-- Connection Operations -->
+  <data name="Conn_DeleteConfirm" xml:space="preserve"><value>Delete connection '{0}'?</value></data>
+  <data name="Conn_DeleteTitle" xml:space="preserve"><value>Confirm Delete</value></data>
+  <data name="Conn_DuplicateSuffix" xml:space="preserve"><value> (copy)</value></data>
+
+  <!-- Wake on LAN -->
+  <data name="WoL_NotConfigured" xml:space="preserve"><value>MAC address is not set for this connection.</value></data>
+  <data name="WoL_Title" xml:space="preserve"><value>Wake on LAN</value></data>
+  <data name="WoL_Success" xml:space="preserve"><value>Magic packet sent to {0}.</value></data>
+  <data name="WoL_Failed" xml:space="preserve"><value>Failed to send WoL packet: {0}</value></data>
+
+  <!-- Import/Export -->
+  <data name="Import_FileDialogTitle" xml:space="preserve"><value>Import connections</value></data>
+  <data name="Import_PreviewTitle" xml:space="preserve"><value>Import Preview</value></data>
+  <data name="Import_Success" xml:space="preserve"><value>Import completed!</value></data>
+  <data name="Import_Failed" xml:space="preserve"><value>Import failed: {0}</value></data>
+  <data name="Import_SuccessWithDetails" xml:space="preserve"><value>Import completed successfully!</value></data>
+  <data name="Import_PreviewMessage" xml:space="preserve"><value>Found {0} groups and {1} connections.
+
+Groups Preview:
+{2}
+
+Connections Preview:
+{3}
+
+Do you want to import all of them?</value></data>
+  <data name="Import_PreviewEncryptedMessage" xml:space="preserve"><value>Decrypted successfully!
+Found {0} groups and {1} connections.
+
+Groups Preview:
+{2}
+
+Connections Preview:
+{3}
+
+Do you want to import all of them?</value></data>
+  <data name="Export_FileDialogTitle" xml:space="preserve"><value>Export connections</value></data>
+  <data name="Export_Success" xml:space="preserve"><value>Export completed!</value></data>
+  <data name="Export_Failed" xml:space="preserve"><value>Export failed: {0}</value></data>
+
+  <!-- Encrypted Backup -->
+  <data name="Backup_ExportTitle" xml:space="preserve"><value>Export Secure Backup (with Passwords)</value></data>
+  <data name="Backup_PasswordDialog" xml:space="preserve"><value>Enter a password to encrypt your connection profiles and passwords:</value></data>
+  <data name="Backup_PasswordDialogTitle" xml:space="preserve"><value>Set Backup Password</value></data>
+  <data name="Backup_PasswordEmpty" xml:space="preserve"><value>Password cannot be empty. Export canceled.</value></data>
+  <data name="Backup_ExportSuccess" xml:space="preserve"><value>Secure backup completed successfully!</value></data>
+  <data name="Backup_ExportFailed" xml:space="preserve"><value>Secure backup failed: {0}</value></data>
+  <data name="Backup_ImportTitle" xml:space="preserve"><value>Import Secure Backup</value></data>
+  <data name="Backup_ImportPasswordDialog" xml:space="preserve"><value>Enter the password to decrypt the backup file:</value></data>
+  <data name="Backup_ImportPasswordTitle" xml:space="preserve"><value>Enter Backup Password</value></data>
+  <data name="Backup_ImportSuccess" xml:space="preserve"><value>Secure import completed successfully!</value></data>
+  <data name="Backup_DecryptFailed" xml:space="preserve"><value>Failed to decrypt the file. Please verify the password.</value></data>
+
+  <!-- Master Password -->
+  <data name="MasterPwd_Invalid" xml:space="preserve"><value>Invalid master password.</value></data>
+  <data name="MasterPwd_Empty" xml:space="preserve"><value>Password cannot be empty.</value></data>
+  <data name="MasterPwd_Changed" xml:space="preserve"><value>Master password changed successfully. All future passwords will be encrypted with it.</value></data>
+
+  <!-- Settings -->
+  <data name="Settings_Saved" xml:space="preserve"><value>Settings saved!</value></data>
+  <data name="Settings_DbPathUpdated" xml:space="preserve"><value>Database path updated! Restart the application for changes to take full effect.</value></data>
+  <data name="Settings_DbMigrateMessage" xml:space="preserve"><value>Move existing database to the new location?</value></data>
+  <data name="Settings_DbMigrateTitle" xml:space="preserve"><value>Migrate Database</value></data>
+  <data name="Settings_DbSelectTitle" xml:space="preserve"><value>Select database location</value></data>
+  <data name="Settings_MigrationFailed" xml:space="preserve"><value>Migration failed: {0}</value></data>
+  <data name="Settings_BackupFolderTitle" xml:space="preserve"><value>Select backup folder</value></data>
+
+  <!-- First Run -->
+  <data name="FirstRun_Title" xml:space="preserve"><value>Initial Import &amp; Restore</value></data>
+  <data name="FirstRun_Message" xml:space="preserve"><value>Welcome to RemoteManager!
+
+Would you like to import existing data or restore from a backup?
+
+YES — Restore all data (database, settings, passwords) from automatic backup folder (OneDrive, etc.).
+NO — Import connections from a single file (.enc, .json, .xml).
+CANCEL — Start with a new empty profile.</value></data>
+  <data name="FirstRun_RestoreFolderTitle" xml:space="preserve"><value>Select the backup folder to restore from</value></data>
+  <data name="FirstRun_RestoreSuccess" xml:space="preserve"><value>Data successfully restored from backup!</value></data>
+  <data name="FirstRun_RestoreFailed" xml:space="preserve"><value>Failed to restore data: {0}</value></data>
+  <data name="FirstRun_ImportFilter" xml:space="preserve"><value>All Supported Files (*.json, *.xml, *.rdm, *.enc)|*.json;*.xml;*.rdm;*.enc|JSON files (*.json)|*.json|RDM XML files (*.xml, *.rdm)|*.xml;*.rdm|Encrypted Backup (*.enc)|*.enc|All files (*.*)|*.*</value></data>
+  <data name="FirstRun_ImportTitle" xml:space="preserve"><value>Select file to import</value></data>
+  <data name="FirstRun_DecryptDialog" xml:space="preserve"><value>Enter the password to decrypt the file:</value></data>
+  <data name="FirstRun_DecryptTitle" xml:space="preserve"><value>Backup Password</value></data>
+  <data name="FirstRun_BackupMessage" xml:space="preserve"><value>Would you like to set up a folder for automatic data backup?
+
+If configured, a copy of the database, settings, and passwords will be automatically updated in this folder (e.g., OneDrive) after each change.</value></data>
+  <data name="FirstRun_BackupTitle" xml:space="preserve"><value>Automatic Backup Setup</value></data>
+  <data name="FirstRun_BackupFolderTitle" xml:space="preserve"><value>Select a folder for automatic backups (e.g., in OneDrive)</value></data>
+  <data name="FirstRun_BackupConfigured" xml:space="preserve"><value>Automatic backup configured to folder:
+{0}</value></data>
+  <data name="FirstRun_BackupConfiguredTitle" xml:space="preserve"><value>Backup Configured</value></data>
+
+  <!-- Additional Status -->
+  <data name="Status_ConnectingTo" xml:space="preserve"><value>Connecting to {0}</value></data>
+  <data name="Status_ConnectedText" xml:space="preserve"><value>Connected</value></data>
+
+  <!-- Session Info formats -->
+  <data name="SessionInfo_Sftp" xml:space="preserve"><value>SFTP {0}@{1}:{2}</value></data>
+  <data name="SessionInfo_Ssh" xml:space="preserve"><value>SSH {0}@{1}:{2}</value></data>
+  <data name="SessionInfo_Rdp" xml:space="preserve"><value>RDP {0}@{1}:{2}</value></data>
+  <data name="SessionInfo_Web" xml:space="preserve"><value>Web Session: {0}</value></data>
+
+  <!-- Sftp tab prefix -->
+  <data name="Sftp_TabHeader" xml:space="preserve"><value>SFTP - {0}</value></data>
+</root>

@@ -1,4 +1,5 @@
 using System.Windows;
+using RemoteManager.Helpers;
 using RemoteManager.ViewModels;
 
 namespace RemoteManager.Views;
@@ -29,7 +30,7 @@ public partial class ConnectionEditDialog : Window
 
         if (!string.IsNullOrEmpty(_vm.ValidationError))
         {
-            System.Windows.MessageBox.Show(_vm.ValidationError, "Validation Error",
+            System.Windows.MessageBox.Show(_vm.ValidationError, L.Title_ValidationError,
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             return;
         }

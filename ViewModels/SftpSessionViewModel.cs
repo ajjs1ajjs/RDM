@@ -42,15 +42,15 @@ public partial class SftpSessionViewModel : SessionTabViewModel
         _credentialService = credentialService;
         Connection = connection;
         ConnectionId = connection.Id;
-        Header = "SFTP - " + (string.IsNullOrWhiteSpace(connection.Host) ? connection.Name : connection.Host);
-        SessionInfo = $"SFTP {connection.Username}@{connection.Host}:{connection.Port}";
+        Header = L.Get("Sftp_TabHeader", string.IsNullOrWhiteSpace(connection.Host) ? connection.Name : connection.Host);
+        SessionInfo = L.Get("SessionInfo_Sftp", connection.Username, connection.Host, connection.Port);
     }
 
     public override async Task ConnectAsync()
     {
         if (Connection == null || IsConnecting) return;
         IsConnecting = true;
-        StatusText = "Connecting SFTP...";
+        StatusText = L.Sftp_Connecting;
 
         var creds = CredentialResolver.ResolveCredentials(_credentialService, Connection, ConnectionId);
 
@@ -69,12 +69,12 @@ public partial class SftpSessionViewModel : SessionTabViewModel
             });
 
             IsConnected = true;
-            StatusText = $"Connected to {Host}";
+            StatusText = L.Get("Sftp_Connected", Host);
             await RefreshFiles();
         }
         catch (Exception ex)
         {
-            StatusText = $"SFTP Connection Failed: {ex.Message}";
+            StatusText = L.Get("Sftp_Failed", ex.Message);
             Log.Warn($"SFTP connect error: {ex.Message}");
         }
         finally
@@ -87,7 +87,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     {
         IsConnected = false;
         IsConnecting = false;
-        StatusText = "Disconnected";
+        StatusText = L.Status_Disconnected;
 
         var client = _sftpClient;
         _sftpClient = null;
@@ -110,7 +110,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
 
         try
         {
-            StatusText = "Loading directory...";
+            StatusText = L.Sftp_Loading;
             var files = await Task.Run(() => client.ListDirectory(CurrentPath));
             
             Application.Current.Dispatcher.Invoke(() =>
@@ -131,11 +131,11 @@ public partial class SftpSessionViewModel : SessionTabViewModel
                     });
                 }
             });
-            StatusText = $"Ready - {Files.Count} items";
+            StatusText = L.Get("Sftp_Ready", Files.Count);
         }
         catch (Exception ex)
         {
-            StatusText = $"Error loading directory: {ex.Message}";
+            StatusText = L.Get("Sftp_LoadFailed", ex.Message);
             Log.Warn($"SFTP list dir error: {ex.Message}");
         }
     }
@@ -193,7 +193,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
         var dialog = new SaveFileDialog
         {
             FileName = file.Name,
-            Title = "Download File"
+            Title = L.Sftp_DownloadTitle
         };
 
         if (dialog.ShowDialog() == true)
@@ -220,7 +220,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
 
         if (string.IsNullOrEmpty(localPath))
         {
-            var dialog = new OpenFileDialog { Title = "Select File to Upload" };
+            var dialog = new OpenFileDialog { Title = L.Sftp_UploadTitle };
             if (dialog.ShowDialog() == true) localPath = dialog.FileName;
         }
 
@@ -251,18 +251,18 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     {
         IsTransferring = true;
         TransferProgress = 0;
-        TransferStatus = actionName + "...";
-        StatusText = actionName + "...";
+        TransferStatus = $"{actionName}...";
+        StatusText = $"{actionName}...";
 
         try
         {
             await Task.Run(action);
-            StatusText = $"{actionName} completed.";
+            StatusText = L.Get("Sftp_TransferComplete", actionName);
         }
         catch (Exception ex)
         {
-            StatusText = $"{actionName} failed: {ex.Message}";
-            MessageBox.Show(StatusText, "Transfer Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText = L.Get("Sftp_TransferFailed", actionName, ex.Message);
+            MessageBox.Show(StatusText, L.Sftp_TransferErrorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -275,13 +275,13 @@ public partial class SftpSessionViewModel : SessionTabViewModel
     {
         if (file == null || file.Name == "..") return;
 
-        var result = MessageBox.Show($"Are you sure you want to delete {file.Name}?", "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var result = MessageBox.Show(L.Get("Sftp_DeleteConfirm", file.Name), L.Sftp_DeleteTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes) return;
 
         var deleteClient = _sftpClient;
         try
         {
-            StatusText = $"Deleting {file.Name}...";
+            StatusText = L.Get("Sftp_Deleting", file.Name);
             await Task.Run(() =>
             {
                 if (file.IsDirectory)
@@ -289,13 +289,13 @@ public partial class SftpSessionViewModel : SessionTabViewModel
                 else
                     deleteClient?.DeleteFile(file.FullName);
             });
-            StatusText = $"Deleted {file.Name}";
+            StatusText = L.Get("Sftp_Deleted", file.Name);
             await RefreshFiles();
         }
         catch (Exception ex)
         {
-            StatusText = $"Delete failed: {ex.Message}";
-            MessageBox.Show($"Could not delete item: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText = L.Get("Sftp_DeleteFailed", ex.Message);
+            MessageBox.Show(L.Get("Sftp_DeleteError", ex.Message), L.Title_Error, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

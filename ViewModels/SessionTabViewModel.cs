@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using RemoteManager.Controls;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
 
 namespace RemoteManager.ViewModels;
@@ -10,7 +11,7 @@ public partial class SessionTabViewModel : ObservableObject, IDisposable
     [ObservableProperty] private Guid _connectionId;
     [ObservableProperty] private bool _isConnected;
     [ObservableProperty] private bool _isConnecting;
-    [ObservableProperty] private string _statusText = "Disconnected";
+    [ObservableProperty] private string _statusText = L.Status_Disconnected;
     [ObservableProperty] private string _sessionInfo = "";
     [ObservableProperty] private bool _isSelected;
 

@@ -45,7 +45,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         Name = connection.Name;
         ConnectionId = connection.Id;
         Header = string.IsNullOrWhiteSpace(connection.Host) ? connection.Name : connection.Host;
-        SessionInfo = $"RDP {connection.Username}@{connection.Host}:{connection.Port}";
+        SessionInfo = L.Get("SessionInfo_Rdp", connection.Username, connection.Host, connection.Port);
     }
 
     public override void Connect() => ConnectRdp();
@@ -56,12 +56,12 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         if (Connection == null) return;
 
         IsConnecting = true;
-        StatusText = "Connecting...";
+        StatusText = L.Status_Connecting;
         _reconnectAttempts = 0;
 
         if (RdpHost is not RdpHost rdp)
         {
-            StatusText = "RDP host is not ready";
+            StatusText = L.Status_RdpHostNotReady;
             IsConnected = false;
             IsConnecting = false;
             return;
@@ -76,7 +76,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
 
         var creds = GetResolvedCredentials();
         rdp.Connect(Host, Port, creds.Username, creds.Password, Connection.RdpSettings);
-        StatusText = $"Connecting to {Host}";
+        StatusText = L.Get("Status_ConnectingTo", Host);
     }
 
     private void UnsubscribeRdpEvents(RdpHost? rdp = null)
@@ -97,7 +97,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         IsConnected = false;
         IsConnecting = false;
         _reconnectAttempts = MaxReconnectAttempts;
-        StatusText = "Disconnected";
+        StatusText = L.Status_Disconnected;
     }
 
     [RelayCommand]
@@ -118,7 +118,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
     {
         IsConnected = true;
         IsConnecting = false;
-        StatusText = $"Connected to {Host}";
+        StatusText = L.Get("Status_Connected", Host);
         if (Connection != null)
         {
             Connection.LastConnectedAt = DateTime.UtcNow;
@@ -131,18 +131,18 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         IsConnected = false;
         IsConnecting = false;
 
-        if (message == "APIInitiatedLogoff" || message == "LogoffByUser")
+        if (message is "APIInitiatedLogoff" or "LogoffByUser")
         {
             _reconnectAttempts = MaxReconnectAttempts;
-            StatusText = "Logged out";
+            StatusText = L.Status_LoggedOut;
             RequestClose();
             return;
         }
 
-        if (message == "Disconnected" || message == "APIInitiatedDisconnect")
+        if (message is "Disconnected" or "APIInitiatedDisconnect")
         {
             _reconnectAttempts = MaxReconnectAttempts;
-            StatusText = "Disconnected";
+            StatusText = L.Status_Disconnected;
             return;
         }
 
@@ -150,7 +150,7 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         if (autoReconnect && _reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;
-            StatusText = $"Connection lost, reconnecting ({_reconnectAttempts}/{MaxReconnectAttempts})...";
+            StatusText = L.Get("Status_Reconnecting", _reconnectAttempts, MaxReconnectAttempts);
             Log.Info($"Auto-reconnecting RDP session to {Host} (attempt {_reconnectAttempts})");
             _ = Task.Run(async () =>
             {
@@ -165,8 +165,8 @@ public partial class RdpSessionViewModel : SessionTabViewModel
         }
 
         StatusText = _reconnectAttempts >= MaxReconnectAttempts
-            ? $"Disconnected (reconnect failed after {MaxReconnectAttempts} attempts)"
-            : string.IsNullOrWhiteSpace(message) ? "Disconnected" : message;
+            ? L.Get("Status_ReconnectFailed", MaxReconnectAttempts)
+            : string.IsNullOrWhiteSpace(message) ? L.Status_Disconnected : message;
     }
 
     private void OnRdpError(object? sender, string message)

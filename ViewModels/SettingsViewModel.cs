@@ -1,8 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Windows;
-using RemoteManager.Services;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
+using RemoteManager.Services;
 
 namespace RemoteManager.ViewModels;
 
@@ -90,7 +91,7 @@ public partial class SettingsViewModel : ObservableObject
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Database files (*.db)|*.db|All files (*.*)|*.*",
-            Title = "Select database location",
+            Title = L.Settings_DbSelectTitle,
             FileName = "RemoteManager.db"
         };
 
@@ -102,8 +103,8 @@ public partial class SettingsViewModel : ObservableObject
                 && File.Exists(CurrentDbPath))
             {
                 var result = System.Windows.MessageBox.Show(
-                    "Move existing database to the new location?",
-                    "Migrate Database",
+                    L.Settings_DbMigrateMessage,
+                    L.Settings_DbMigrateTitle,
                     System.Windows.MessageBoxButton.YesNoCancel,
                     System.Windows.MessageBoxImage.Question
                 );
@@ -119,7 +120,7 @@ public partial class SettingsViewModel : ObservableObject
                     }
                     catch (Exception ex)
                     {
-                        System.Windows.MessageBox.Show($"Migration failed: {ex.Message}", "Error",
+                        System.Windows.MessageBox.Show(L.Get("Settings_MigrationFailed", ex.Message), L.Title_Error,
                             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                         return;
                     }
@@ -128,8 +129,8 @@ public partial class SettingsViewModel : ObservableObject
 
             CurrentDbPath = newPath;
             _settings.ChangeDatabasePath(newPath);
-            System.Windows.MessageBox.Show("Database path updated! Restart the application for changes to take full effect.",
-                "Settings", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(L.Settings_DbPathUpdated,
+                L.Title_Settings, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
     }
 
@@ -194,7 +195,7 @@ public partial class SettingsViewModel : ObservableObject
             app.UpdateTrayIcon(app.MainWindow, MinimizeToTray);
         }
 
-        System.Windows.MessageBox.Show("Settings saved!", "Success",
+        System.Windows.MessageBox.Show(L.Settings_Saved, L.Title_Success,
             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
@@ -204,7 +205,7 @@ public partial class SettingsViewModel : ObservableObject
         var pwd = pwdBox?.Password;
         if (string.IsNullOrEmpty(pwd))
         {
-            System.Windows.MessageBox.Show("Password cannot be empty.", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(L.MasterPwd_Empty, L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             return;
         }
 
@@ -214,7 +215,7 @@ public partial class SettingsViewModel : ObservableObject
         _settings.Current.UseMasterPassword = true;
         _settings.Save();
 
-        System.Windows.MessageBox.Show("Master password changed successfully. All future passwords will be encrypted with it.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        System.Windows.MessageBox.Show(L.MasterPwd_Changed, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         pwdBox?.Clear();
     }
 
@@ -223,7 +224,7 @@ public partial class SettingsViewModel : ObservableObject
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Select backup folder"
+            Title = L.Settings_BackupFolderTitle
         };
 
         if (dialog.ShowDialog() == true)
@@ -280,7 +281,7 @@ public partial class SettingsViewModel : ObservableObject
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "All Supported Files (*.json, *.xml, *.rdm)|*.json;*.xml;*.rdm|JSON files (*.json)|*.json|RDM XML files (*.xml, *.rdm)|*.xml;*.rdm|All files (*.*)|*.*",
-            Title = "Import connections"
+            Title = L.Import_FileDialogTitle
         };
 
         if (dialog.ShowDialog() == true)
@@ -290,12 +291,10 @@ public partial class SettingsViewModel : ObservableObject
                 var preview = await _importExport.PreviewImportAsync(dialog.FileName);
                 var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
-                var result = System.Windows.MessageBox.Show(
-                    $"Found {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +
-                    $"Groups Preview:\n{groupsPreview}\n\n" +
-                    $"Connections Preview:\n{connsPreview}\n\n" +
-                    $"Do you want to import all of them?",
-                    "Import Preview",
+                var msg = L.Get("Import_PreviewMessage",
+                    preview.GroupCount, preview.ConnectionCount, groupsPreview, connsPreview);
+                var result = System.Windows.MessageBox.Show(msg,
+                    L.Import_PreviewTitle,
                     System.Windows.MessageBoxButton.YesNo,
                     System.Windows.MessageBoxImage.Question
                 );
@@ -304,12 +303,12 @@ public partial class SettingsViewModel : ObservableObject
                 {
                     await _importExport.ImportFromFileAsync(dialog.FileName);
                     ImportCompleted?.Invoke();
-                    System.Windows.MessageBox.Show("Import completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show(L.Import_SuccessWithDetails, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
             }
             catch (System.Exception ex)
             {
-                System.Windows.MessageBox.Show($"Import failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(L.Get("Import_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
     }
@@ -320,7 +319,7 @@ public partial class SettingsViewModel : ObservableObject
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            Title = "Export connections",
+            Title = L.Export_FileDialogTitle,
             FileName = $"RemoteManager_export_{System.DateTime.Now:yyyyMMdd}.json"
         };
 
@@ -329,11 +328,11 @@ public partial class SettingsViewModel : ObservableObject
             try
             {
                 await _importExport.ExportToFileAsync(dialog.FileName);
-                System.Windows.MessageBox.Show("Export completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(L.Export_Success, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             }
             catch (System.Exception ex)
             {
-                System.Windows.MessageBox.Show($"Export failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(L.Get("Export_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
     }
@@ -344,15 +343,15 @@ public partial class SettingsViewModel : ObservableObject
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Encrypted Backup files (*.enc)|*.enc|All files (*.*)|*.*",
-            Title = "Export Secure Backup (with Passwords)",
+            Title = L.Backup_ExportTitle,
             FileName = $"RemoteManager_backup_{System.DateTime.Now:yyyyMMdd}.enc"
         };
 
         if (saveDialog.ShowDialog() == true)
         {
-            var passwordDialog = new Views.InputDialog("Enter a password to encrypt your connection profiles and passwords:")
+            var passwordDialog = new Views.InputDialog(L.Backup_PasswordDialog)
             {
-                Title = "Set Backup Password"
+                Title = L.Backup_PasswordDialogTitle
             };
 
             if (passwordDialog.ShowDialog() == true)
@@ -360,18 +359,18 @@ public partial class SettingsViewModel : ObservableObject
                 var password = passwordDialog.Value;
                 if (string.IsNullOrEmpty(password))
                 {
-                    System.Windows.MessageBox.Show("Password cannot be empty. Export canceled.", "Warning", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    System.Windows.MessageBox.Show(L.Backup_PasswordEmpty, L.Title_Warning, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                     return;
                 }
 
                 try
                 {
                     await _importExport.ExportEncryptedAsync(saveDialog.FileName, password);
-                    System.Windows.MessageBox.Show("Secure backup completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show(L.Backup_ExportSuccess, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
                 catch (System.Exception ex)
                 {
-                    System.Windows.MessageBox.Show($"Secure backup failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show(L.Get("Backup_ExportFailed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 }
             }
         }
@@ -383,14 +382,14 @@ public partial class SettingsViewModel : ObservableObject
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "Encrypted Backup files (*.enc)|*.enc|All files (*.*)|*.*",
-            Title = "Import Secure Backup"
+            Title = L.Backup_ImportTitle
         };
 
         if (openDialog.ShowDialog() == true)
         {
-            var passwordDialog = new Views.InputDialog("Enter the password to decrypt the backup file:")
+            var passwordDialog = new Views.InputDialog(L.Backup_ImportPasswordDialog)
             {
-                Title = "Enter Backup Password"
+                Title = L.Backup_ImportPasswordTitle
             };
 
             if (passwordDialog.ShowDialog() == true)
@@ -401,12 +400,10 @@ public partial class SettingsViewModel : ObservableObject
                     var preview = await _importExport.PreviewImportEncryptedAsync(openDialog.FileName, password);
                     var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
-                    var result = System.Windows.MessageBox.Show(
-                        $"Decrypted successfully!\nFound {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +
-                        $"Groups Preview:\n{groupsPreview}\n\n" +
-                        $"Connections Preview:\n{connsPreview}\n\n" +
-                        $"Do you want to import all of them?",
-                        "Import Preview",
+                    var msg = L.Get("Import_PreviewEncryptedMessage",
+                        preview.GroupCount, preview.ConnectionCount, groupsPreview, connsPreview);
+                    var result = System.Windows.MessageBox.Show(msg,
+                        L.Import_PreviewTitle,
                         System.Windows.MessageBoxButton.YesNo,
                         System.Windows.MessageBoxImage.Question
                     );
@@ -415,16 +412,16 @@ public partial class SettingsViewModel : ObservableObject
                     {
                         await _importExport.ImportEncryptedAsync(openDialog.FileName, password);
                         ImportCompleted?.Invoke();
-                        System.Windows.MessageBox.Show("Secure import completed successfully!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                        System.Windows.MessageBox.Show(L.Backup_ImportSuccess, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                     }
                 }
                 catch (System.Security.Cryptography.CryptographicException)
                 {
-                    System.Windows.MessageBox.Show("Failed to decrypt the file. Please verify the password.", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show(L.Backup_DecryptFailed, L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 }
                 catch (System.Exception ex)
                 {
-                    System.Windows.MessageBox.Show($"Import failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show(L.Get("Import_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 }
             }
         }

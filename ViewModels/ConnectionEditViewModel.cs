@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
 using RemoteManager.Services;
 
@@ -102,7 +103,7 @@ public partial class ConnectionEditViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _name = "New Connection";
+    private string _name = L.ConnEdit_DefaultName;
 
     [ObservableProperty]
     private string _host = "";
@@ -236,7 +237,7 @@ public partial class ConnectionEditViewModel : ObservableObject
     [ObservableProperty]
     private uint _sshPortForwardingRemotePort = 80;
 
-    public string WindowTitle => _existing == null ? "New Connection" : $"Edit {_existing.Name}";
+    public string WindowTitle => _existing == null ? L.ConnEdit_TitleNew : L.Get("ConnEdit_TitleEdit", _existing.Name);
 
     public string? ValidationError
     {
@@ -250,19 +251,19 @@ public partial class ConnectionEditViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(Name))
         {
-            ValidationError = "Connection name is required.";
+            ValidationError = L.ConnEdit_NameRequired;
             return false;
         }
 
         if (SelectedType != ConnectionType.Web && string.IsNullOrWhiteSpace(Host))
         {
-            ValidationError = "Host address is required.";
+            ValidationError = L.ConnEdit_HostRequired;
             return false;
         }
 
         if (SelectedType == ConnectionType.Web && string.IsNullOrWhiteSpace(WebUrl))
         {
-            ValidationError = "URL is required for Web connections.";
+            ValidationError = L.ConnEdit_UrlRequired;
             return false;
         }
 
@@ -272,7 +273,7 @@ public partial class ConnectionEditViewModel : ObservableObject
             bool isValidHost = HostnameRegex.IsMatch(trimmedHost) || IpRegex.IsMatch(trimmedHost) || IPv6Regex.IsMatch(trimmedHost);
             if (!isValidHost)
             {
-                ValidationError = "Invalid host address. Use a valid hostname (e.g., server.example.com), IPv4 (e.g., 192.168.1.1), or IPv6.";
+                ValidationError = L.ConnEdit_InvalidHost;
                 return false;
             }
 
@@ -283,7 +284,7 @@ public partial class ConnectionEditViewModel : ObservableObject
                 {
                     if (int.TryParse(part, out var num) && (num < 0 || num > 255))
                     {
-                        ValidationError = "Invalid IP address. Each octet must be between 0 and 255.";
+                        ValidationError = L.ConnEdit_InvalidIp;
                         return false;
                     }
                 }
@@ -292,7 +293,7 @@ public partial class ConnectionEditViewModel : ObservableObject
 
         if (Port < 1 || Port > 65535)
         {
-            ValidationError = "Port must be between 1 and 65535.";
+            ValidationError = L.ConnEdit_InvalidPort;
             return false;
         }
 
@@ -300,12 +301,12 @@ public partial class ConnectionEditViewModel : ObservableObject
         {
             if (string.IsNullOrEmpty(SshKeyPath))
             {
-                ValidationError = "SSH private key path is required when authentication type is Key.";
+                ValidationError = L.ConnEdit_KeyRequired;
                 return false;
             }
             if (!File.Exists(SshKeyPath))
             {
-                ValidationError = $"SSH key file not found: {SshKeyPath}";
+                ValidationError = L.Get("ConnEdit_KeyNotFound", SshKeyPath);
                 return false;
             }
         }
@@ -327,7 +328,7 @@ public partial class ConnectionEditViewModel : ObservableObject
         var dialog = new OpenFileDialog
         {
             Filter = "Key files (*.ppk;*.pem;*.key)|*.ppk;*.pem;*.key|All files (*.*)|*.*",
-            Title = "Select SSH Private Key"
+            Title = L.ConnEdit_BrowseKeyTitle
         };
         if (dialog.ShowDialog() == true)
             SshKeyPath = dialog.FileName;

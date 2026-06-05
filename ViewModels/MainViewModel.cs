@@ -4,6 +4,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
 using RemoteManager.Services;
 using RemoteManager.Views;
@@ -247,7 +248,7 @@ public partial class MainViewModel : ObservableObject
 
         var groupMap = new Dictionary<Guid, GroupViewModel>();
 
-        var ungroupedVm = new GroupViewModel { Id = Guid.Empty, Name = "Ungrouped", IsVisible = false };
+        var ungroupedVm = new GroupViewModel { Id = Guid.Empty, Name = L.Group_Ungrouped, IsVisible = false };
 
         foreach (var group in allGroups)
         {
@@ -478,8 +479,8 @@ public partial class MainViewModel : ObservableObject
         if (tab.IsConnected)
         {
             var confirm = System.Windows.MessageBox.Show(
-                $"Disconnect '{tab.Header}' and close tab?",
-                "Active Connection",
+                L.Get("Tab_CloseConfirm", tab.Header),
+                L.Tab_CloseTitle,
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning);
             if (confirm != System.Windows.MessageBoxResult.Yes) return;
@@ -513,9 +514,9 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void AddGroup()
     {
-        var dialog = new InputDialog("Enter name for the new group:", $"Group {Groups.Count + 1}")
+        var dialog = new InputDialog(L.Group_AddDialog_Message, $"Group {Groups.Count + 1}")
         {
-            Title = "New Group"
+            Title = L.Group_AddDialog_Title
         };
 
         if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.Value))
@@ -554,7 +555,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (item?.Connection == null || string.IsNullOrWhiteSpace(item.Connection.MacAddress))
         {
-            System.Windows.MessageBox.Show("MAC address is not set for this connection.", "Wake on LAN",
+            System.Windows.MessageBox.Show(L.WoL_NotConfigured, L.WoL_Title,
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             return;
         }
@@ -562,12 +563,12 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await WakeOnLanService.WakeUpAsync(item.Connection.MacAddress);
-            System.Windows.MessageBox.Show($"Magic packet sent to {item.Connection.MacAddress}.", "Wake on LAN",
+            System.Windows.MessageBox.Show(L.Get("WoL_Success", item.Connection.MacAddress), L.WoL_Title,
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"Failed to send WoL packet: {ex.Message}", "Error",
+            System.Windows.MessageBox.Show(L.Get("WoL_Failed", ex.Message), L.Title_Error,
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
@@ -593,8 +594,8 @@ public partial class MainViewModel : ObservableObject
         if (item?.Connection == null) return;
 
         var result = System.Windows.MessageBox.Show(
-            $"Delete connection '{item.Name}'?",
-            "Confirm Delete",
+            L.Get("Conn_DeleteConfirm", item.Name),
+            L.Conn_DeleteTitle,
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
 
@@ -620,7 +621,7 @@ public partial class MainViewModel : ObservableObject
         if (copy == null) return;
 
         copy.Id = Guid.NewGuid();
-        copy.Name += " (copy)";
+        copy.Name += L.Conn_DuplicateSuffix;
         copy.CreatedAt = DateTime.UtcNow;
         copy.ModifiedAt = DateTime.UtcNow;
 
@@ -643,7 +644,7 @@ public partial class MainViewModel : ObservableObject
         var dbGroup = _db.GetGroup(group.Id);
         if (dbGroup == null) return;
 
-        var dialog = new InputDialog("Rename Group", group.Name);
+        var dialog = new InputDialog(L.Group_RenameDialog, group.Name);
         if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.Value)
             && dialog.Value != group.Name)
         {
@@ -659,8 +660,8 @@ public partial class MainViewModel : ObservableObject
         if (group == null || group.Id == Guid.Empty) return;
 
         var result = System.Windows.MessageBox.Show(
-            $"Delete group '{group.Name}' and all its connections?",
-            "Confirm Delete",
+            L.Get("Group_DeleteConfirm", group.Name),
+            L.Group_DeleteTitle,
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
 
@@ -711,7 +712,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"Помилка імпорту: {ex.Message}", "Помилка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(L.Get("Import_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -770,7 +771,7 @@ public partial class MainViewModel : ObservableObject
         var dialog = new OpenFileDialog
         {
             Filter = "All Supported Files (*.json, *.xml, *.rdm)|*.json;*.xml;*.rdm|JSON files (*.json)|*.json|RDM XML files (*.xml, *.rdm)|*.xml;*.rdm|All files (*.*)|*.*",
-            Title = "Import connections"
+            Title = L.Import_FileDialogTitle
         };
 
         if (dialog.ShowDialog() == true)
@@ -780,12 +781,10 @@ public partial class MainViewModel : ObservableObject
                 var preview = await _importExport.PreviewImportAsync(dialog.FileName);
                 var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
-                var result = System.Windows.MessageBox.Show(
-                    $"Found {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +
-                    $"Groups Preview:\n{groupsPreview}\n\n" +
-                    $"Connections Preview:\n{connsPreview}\n\n" +
-                    $"Do you want to import all of them?",
-                    "Import Preview",
+                var msg = L.Get("Import_PreviewMessage",
+                    preview.GroupCount, preview.ConnectionCount, groupsPreview, connsPreview);
+                var result = System.Windows.MessageBox.Show(msg,
+                    L.Import_PreviewTitle,
                     System.Windows.MessageBoxButton.YesNo,
                     System.Windows.MessageBoxImage.Question
                 );
@@ -794,12 +793,12 @@ public partial class MainViewModel : ObservableObject
                 {
                     await _importExport.ImportFromFileAsync(dialog.FileName);
                     LoadData();
-                    System.Windows.MessageBox.Show("Import completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show(L.Import_Success, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show($"Import failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(L.Get("Import_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
     }
@@ -810,7 +809,7 @@ public partial class MainViewModel : ObservableObject
         var dialog = new SaveFileDialog
         {
             Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            Title = "Export connections",
+            Title = L.Export_FileDialogTitle,
             FileName = $"RemoteManager_export_{DateTime.Now:yyyyMMdd}.json"
         };
 
@@ -819,11 +818,11 @@ public partial class MainViewModel : ObservableObject
             try
             {
                 await _importExport.ExportToFileAsync(dialog.FileName);
-                System.Windows.MessageBox.Show("Export completed!", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(L.Export_Success, L.Title_Success, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show($"Export failed: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(L.Get("Export_Failed", ex.Message), L.Title_Error, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
     }
@@ -831,12 +830,8 @@ public partial class MainViewModel : ObservableObject
     private void PerformFirstRunSetup(ISettingsService settings)
     {
         var importType = System.Windows.MessageBox.Show(
-            "Ласкаво просимо до RemoteManager!\n\n" +
-            "Бажаєте імпортувати існуючі дані або відновитися з резервної копії?\n\n" +
-            "ТАК — Відновити всі дані (базу, налаштування, паролі) з папки автоматичного бекапу (OneDrive тощо).\n" +
-            "НІ — Імпортувати підключення з окремого файлу (.enc, .json, .xml).\n" +
-            "СКАСУВАТИ — Створити новий порожній профіль.",
-            "Початковий імпорт та відновлення",
+            L.FirstRun_Message,
+            L.FirstRun_Title,
             System.Windows.MessageBoxButton.YesNoCancel,
             System.Windows.MessageBoxImage.Question);
 
@@ -846,7 +841,7 @@ public partial class MainViewModel : ObservableObject
         {
             var folderDlg = new Microsoft.Win32.OpenFolderDialog
             {
-                Title = "Виберіть папку резервної копії для відновлення"
+                Title = L.FirstRun_RestoreFolderTitle
             };
             if (folderDlg.ShowDialog() == true)
             {
@@ -855,16 +850,16 @@ public partial class MainViewModel : ObservableObject
                     SettingsService.RestoreBackup(folderDlg.FolderName, settings);
                     restoredFromFolder = true;
                     System.Windows.MessageBox.Show(
-                        "Дані успішно відновлено з резервної копії!",
-                        "Успіх",
+                        L.FirstRun_RestoreSuccess,
+                        L.Title_Success,
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show(
-                        $"Не вдалося відновити дані: {ex.Message}",
-                        "Помилка",
+                        L.Get("FirstRun_RestoreFailed", ex.Message),
+                        L.Title_Error,
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Error);
                 }
@@ -874,8 +869,8 @@ public partial class MainViewModel : ObservableObject
         {
             var openDlg = new OpenFileDialog
             {
-                Filter = "Усі підтримувані файли (*.json, *.xml, *.rdm, *.enc)|*.json;*.xml;*.rdm;*.enc|Файли JSON (*.json)|*.json|Файли RDM XML (*.xml, *.rdm)|*.xml;*.rdm|Зашифрований бекап (*.enc)|*.enc|Усі файли (*.*)|*.*",
-                Title = "Виберіть файл для імпорту"
+                Filter = L.FirstRun_ImportFilter,
+                Title = L.FirstRun_ImportTitle
             };
 
             if (openDlg.ShowDialog() == true)
@@ -883,9 +878,9 @@ public partial class MainViewModel : ObservableObject
                 var fileName = openDlg.FileName;
                 if (fileName.EndsWith(".enc", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    var pwdDlg = new InputDialog("Введіть пароль для розшифрування файлу:")
+                    var pwdDlg = new InputDialog(L.FirstRun_DecryptDialog)
                     {
-                        Title = "Пароль бекапу"
+                        Title = L.FirstRun_DecryptTitle
                     };
                     if (pwdDlg.ShowDialog() == true)
                     {
@@ -903,9 +898,8 @@ public partial class MainViewModel : ObservableObject
         if (!restoredFromFolder)
         {
             var backupSetup = System.Windows.MessageBox.Show(
-                "Бажаєте налаштувати папку для автоматичного резервного копіювання (бекапу) даних?\n\n" +
-                "Якщо налаштовано, копія бази даних, налаштувань та паролів буде автоматично оновлюватися в цій папці (наприклад, у OneDrive) після кожної зміни.",
-                "Налаштування автоматичного бекапу",
+                L.FirstRun_BackupMessage,
+                L.FirstRun_BackupTitle,
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Question);
 
@@ -913,7 +907,7 @@ public partial class MainViewModel : ObservableObject
             {
                 var folderDlg = new Microsoft.Win32.OpenFolderDialog
                 {
-                    Title = "Виберіть папку для автоматичного бекапу (наприклад, в OneDrive)"
+                    Title = L.FirstRun_BackupFolderTitle
                 };
                 if (folderDlg.ShowDialog() == true)
                 {
@@ -923,8 +917,8 @@ public partial class MainViewModel : ObservableObject
                     settings.BackupData();
 
                     System.Windows.MessageBox.Show(
-                        $"Автоматичний бекап налаштовано в папку:\n{settings.Current.BackupFolderPath}",
-                        "Резервне копіювання налаштовано",
+                        L.Get("FirstRun_BackupConfigured", settings.Current.BackupFolderPath),
+                        L.FirstRun_BackupConfiguredTitle,
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Information);
                 }

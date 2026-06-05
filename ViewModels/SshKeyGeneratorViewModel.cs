@@ -1,6 +1,7 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RemoteManager.Helpers;
 using Renci.SshNet;
 using SshNet.Keygen;
 using SshNet.Keygen.Extensions;
@@ -29,7 +30,7 @@ public partial class SshKeyGeneratorViewModel : ObservableObject
     {
         var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Select directory to save SSH keys",
+            Description = L.KeyGen_BrowseTitle,
             UseDescriptionForTitle = true,
             SelectedPath = SaveDirectory
         };
@@ -46,13 +47,13 @@ public partial class SshKeyGeneratorViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(SaveDirectory))
         {
-            ErrorMessage = "Save directory is required.";
+            ErrorMessage = L.KeyGen_DirRequired;
             return;
         }
 
         if (string.IsNullOrWhiteSpace(KeyName))
         {
-            ErrorMessage = "Key name is required.";
+            ErrorMessage = L.KeyGen_NameRequired;
             return;
         }
 
@@ -68,7 +69,7 @@ public partial class SshKeyGeneratorViewModel : ObservableObject
 
             if (File.Exists(privateKeyPath))
             {
-                ErrorMessage = $"File '{privateKeyPath}' already exists.";
+                ErrorMessage = L.Get("KeyGen_FileExists", privateKeyPath);
                 return;
             }
 
@@ -99,7 +100,7 @@ public partial class SshKeyGeneratorViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = "Failed to generate key: " + ex.Message;
+            ErrorMessage = L.Get("KeyGen_Failed", ex.Message);
         }
     }
 }

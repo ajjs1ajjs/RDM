@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using RemoteManager.Helpers;
 
 namespace RemoteManager.Converters;
 
@@ -23,7 +24,7 @@ public class StatusTextConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is bool connected)
-            return connected ? "Connected" : "Disconnected";
+            return connected ? L.Status_ConnectedText : L.Status_Disconnected;
         return "";
     }
 

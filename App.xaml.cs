@@ -2,6 +2,7 @@ using System.Drawing;
 using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
 using RemoteManager.Services;
 using RemoteManager.ViewModels;
@@ -106,8 +107,8 @@ public partial class App : Application
                 if (settings.Current.MinimizeToTray && mainWindow.WindowState == WindowState.Minimized)
                 {
                     mainWindow.Hide();
-                    _trayIcon?.ShowBalloonTip(1000, "Remote Manager",
-                        "Application minimized to tray", ToolTipIcon.Info);
+                    _trayIcon?.ShowBalloonTip(1000, L.App_Title,
+                        L.App_TrayMinimized, ToolTipIcon.Info);
                 }
             };
         }
@@ -116,8 +117,8 @@ public partial class App : Application
             Services.Log.Error("Startup failed", ex);
             System.Diagnostics.Debug.WriteLine(ex.ToString());
             MessageBox.Show(
-                $"Startup failed: {ex.Message}\n\nSee debug output for details.",
-                "Remote Manager",
+                L.Get("App_StartupFailed", ex.Message),
+                L.App_Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
@@ -197,7 +198,7 @@ public partial class App : Application
 
                 _trayIcon = new NotifyIcon
                 {
-                    Text = "Remote Manager",
+                    Text = L.App_Title,
                     Visible = true
                 };
 

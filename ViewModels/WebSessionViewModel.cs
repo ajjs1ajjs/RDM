@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using RemoteManager.Helpers;
 using RemoteManager.Models;
 
 namespace RemoteManager.ViewModels;
@@ -19,20 +20,20 @@ public class WebSessionViewModel : SessionTabViewModel
         Header = string.IsNullOrWhiteSpace(connection.Name) ? connection.Host : connection.Name;
         Url = connection.WebSettings?.Url ?? "https://" + connection.Host;
         IgnoreCertificateErrors = connection.WebSettings?.IgnoreCertificateErrors ?? false;
-        SessionInfo = $"Web Session: {Url}";
+        SessionInfo = L.Get("SessionInfo_Web", Url);
     }
 
     public override Task ConnectAsync()
     {
         IsConnecting = false;
         IsConnected = true;
-        StatusText = $"Connected to {Url}";
+        StatusText = L.Get("Status_Connected", Url);
         return Task.CompletedTask;
     }
 
     public override void Disconnect()
     {
         IsConnected = false;
-        StatusText = "Disconnected";
+        StatusText = L.Status_Disconnected;
     }
 }

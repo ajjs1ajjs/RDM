@@ -46,7 +46,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         Name = connection.Name;
         ConnectionId = connection.Id;
         Header = string.IsNullOrWhiteSpace(connection.Host) ? connection.Name : connection.Host;
-        SessionInfo = $"SSH {connection.Username}@{connection.Host}:{connection.Port}";
+        SessionInfo = L.Get("SessionInfo_Ssh", connection.Username, connection.Host, connection.Port);
 
         foreach (var snippet in _db.GetAllSnippets())
         {
@@ -66,7 +66,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         if (IsConnecting) return;
 
         IsConnecting = true;
-        StatusText = "Connecting...";
+        StatusText = L.Status_Connecting;
         _reconnectAttempts = 0;
 
         var settings = new SSHSettings
@@ -86,7 +86,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
 
         if (Terminal is not SshWebViewTerminalControl ssh)
         {
-            StatusText = "SSH terminal is not ready";
+            StatusText = L.Status_TerminalNotReady;
             IsConnected = false;
             IsConnecting = false;
             return;
@@ -102,7 +102,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         {
             var creds = GetResolvedCredentials();
             IsConnected = await ssh.ConnectAsync(Host, Port, creds.Username, creds.Password, settings);
-            StatusText = IsConnected ? $"Connected to {Host}" : "Connection failed";
+            StatusText = IsConnected ? L.Get("Status_Connected", Host) : L.Status_ConnectionFailed;
             if (IsConnected)
             {
                 Connection.LastConnectedAt = DateTime.UtcNow;
@@ -132,7 +132,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         IsConnected = false;
         IsConnecting = false;
         _reconnectAttempts = MaxReconnectAttempts; // Prevent auto-reconnect on manual disconnect
-        StatusText = "Disconnected";
+        StatusText = L.Status_Disconnected;
     }
 
     [RelayCommand]
@@ -164,7 +164,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         if (reason == "Clean")
         {
             _reconnectAttempts = MaxReconnectAttempts;
-            StatusText = "Disconnected";
+            StatusText = L.Status_Disconnected;
             RequestClose();
             return;
         }
@@ -172,7 +172,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         if (reason == "Manual")
         {
             _reconnectAttempts = MaxReconnectAttempts;
-            StatusText = "Disconnected";
+            StatusText = L.Status_Disconnected;
             return;
         }
 
@@ -180,7 +180,7 @@ public partial class SshSessionViewModel : SessionTabViewModel
         if (autoReconnect && _reconnectAttempts < MaxReconnectAttempts)
         {
             _reconnectAttempts++;
-            StatusText = $"Connection lost, reconnecting ({_reconnectAttempts}/{MaxReconnectAttempts})...";
+            StatusText = L.Get("Status_Reconnecting", _reconnectAttempts, MaxReconnectAttempts);
             Log.Info($"Auto-reconnecting SSH session to {Host} (attempt {_reconnectAttempts})");
             await Task.Delay(2000 * _reconnectAttempts);
 
@@ -192,8 +192,8 @@ public partial class SshSessionViewModel : SessionTabViewModel
         }
 
         StatusText = _reconnectAttempts >= MaxReconnectAttempts
-            ? $"Disconnected (reconnect failed after {MaxReconnectAttempts} attempts)"
-            : "Disconnected";
+            ? L.Get("Status_ReconnectFailed", MaxReconnectAttempts)
+            : L.Status_Disconnected;
     }
 
     public override void Dispose()
