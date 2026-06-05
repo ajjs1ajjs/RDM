@@ -13,12 +13,14 @@ public class CredentialService : ICredentialService
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RemoteManager.Credentials.v2");
     private readonly object _syncRoot = new();
     private readonly ISettingsService? _settings;
+    private readonly IMasterPasswordProvider _masterPasswordProvider;
 
     public string CredentialDir { get; }
 
-    public CredentialService(string? credentialDir = null, ISettingsService? settings = null)
+    public CredentialService(string? credentialDir = null, ISettingsService? settings = null, IMasterPasswordProvider? masterPasswordProvider = null)
     {
         _settings = settings;
+        _masterPasswordProvider = masterPasswordProvider ?? new MasterPasswordProvider();
         CredentialDir = credentialDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RemoteManager",
@@ -27,10 +29,9 @@ public class CredentialService : ICredentialService
 
     private byte[] ProtectData(byte[] plainText)
     {
-        if (_settings?.Current.UseMasterPassword == true && !string.IsNullOrEmpty(MasterPasswordContext.CurrentMasterPassword))
+        if (_settings?.Current.UseMasterPassword == true && !string.IsNullOrEmpty(_masterPasswordProvider.CurrentMasterPassword))
         {
-            // First byte '1' indicates AES encryption
-            var cipher = RemoteManager.Helpers.CryptoHelper.ProtectAes(plainText, MasterPasswordContext.CurrentMasterPassword);
+            var cipher = RemoteManager.Helpers.CryptoHelper.ProtectAes(plainText, _masterPasswordProvider.CurrentMasterPassword);
             var result = new byte[cipher.Length + 1];
             result[0] = 1;
             Array.Copy(cipher, 0, result, 1, cipher.Length);
@@ -38,7 +39,6 @@ public class CredentialService : ICredentialService
         }
         else
         {
-            // First byte '0' indicates DPAPI
             var cipher = ProtectedData.Protect(plainText, Entropy, DataProtectionScope.CurrentUser);
             var result = new byte[cipher.Length + 1];
             result[0] = 0;
@@ -51,22 +51,22 @@ public class CredentialService : ICredentialService
     {
         if (protectedData.Length == 0) return Array.Empty<byte>();
 
-        if (protectedData[0] == 1) // AES
+        if (protectedData[0] == 1)
         {
-            if (string.IsNullOrEmpty(MasterPasswordContext.CurrentMasterPassword))
+            if (string.IsNullOrEmpty(_masterPasswordProvider.CurrentMasterPassword))
                 throw new CryptographicException("Master password is required but not provided.");
 
             var cipher = new byte[protectedData.Length - 1];
             Array.Copy(protectedData, 1, cipher, 0, cipher.Length);
-            return RemoteManager.Helpers.CryptoHelper.UnprotectAes(cipher, MasterPasswordContext.CurrentMasterPassword);
+            return RemoteManager.Helpers.CryptoHelper.UnprotectAes(cipher, _masterPasswordProvider.CurrentMasterPassword);
         }
-        else if (protectedData[0] == 0) // DPAPI
+        else if (protectedData[0] == 0)
         {
             var cipher = new byte[protectedData.Length - 1];
             Array.Copy(protectedData, 1, cipher, 0, cipher.Length);
             return ProtectedData.Unprotect(cipher, Entropy, DataProtectionScope.CurrentUser);
         }
-        else // Legacy DPAPI (no prefix byte)
+        else
         {
             return ProtectedData.Unprotect(protectedData, Entropy, DataProtectionScope.CurrentUser);
         }

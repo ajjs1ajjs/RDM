@@ -24,11 +24,12 @@ public partial class App : Application
         var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RemoteManager");
         var credentialsDir = Path.Combine(appDataDir, "credentials");
 
+        services.AddSingleton<IMasterPasswordProvider, MasterPasswordProvider>();
         services.AddSingleton<ISettingsService>(sp => new SettingsService(appDataDir));
-        services.AddSingleton<ICredentialService>(sp => new CredentialService(credentialsDir, sp.GetRequiredService<ISettingsService>()));
+        services.AddSingleton<ICredentialService>(sp => new CredentialService(credentialsDir, sp.GetRequiredService<ISettingsService>(), sp.GetRequiredService<IMasterPasswordProvider>()));
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IImportExportService, ImportExportService>();
-        services.AddSingleton<IPingService, PingService>();
+        services.AddSingleton<IPingService>(sp => new PingService(sp.GetRequiredService<ISettingsService>()));
 
         services.AddTransient<MainViewModel>();
     }
@@ -75,11 +76,15 @@ public partial class App : Application
             _serviceProvider = services.BuildServiceProvider();
 
             var settings = _serviceProvider.GetRequiredService<ISettingsService>();
+            var masterPwdProvider = _serviceProvider.GetRequiredService<IMasterPasswordProvider>();
             _db = _serviceProvider.GetRequiredService<IDatabaseService>();
 
             if (settings.Current.UseMasterPassword && !string.IsNullOrEmpty(settings.Current.MasterPasswordHash))
             {
-                var pwdWindow = new MasterPasswordWindow(settings.Current.MasterPasswordHash);
+                var pwdWindow = new MasterPasswordWindow(settings.Current.MasterPasswordHash, pwd =>
+                {
+                    masterPwdProvider.CurrentMasterPassword = pwd;
+                });
                 if (pwdWindow.ShowDialog() != true)
                 {
                     Shutdown(0);

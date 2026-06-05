@@ -23,7 +23,16 @@ public class PingService : IPingService, IDisposable
     private Action<Guid, PingStatus, long>? _statusCallback;
     private CancellationTokenSource? _cts;
     private Task? _monitorTask;
-    private readonly TimeSpan _checkInterval = TimeSpan.FromSeconds(30);
+    private readonly ISettingsService? _settings;
+    private int _batchIndex;
+
+    public PingService(ISettingsService? settings = null)
+    {
+        _settings = settings;
+    }
+
+    private TimeSpan CheckInterval => TimeSpan.FromSeconds(
+        Math.Max(5, _settings?.Current?.PingIntervalSeconds ?? 30));
 
     public void StartMonitoring(Action<Guid, PingStatus, long> statusCallback)
     {
@@ -61,20 +70,27 @@ public class PingService : IPingService, IDisposable
     {
         while (!token.IsCancellationRequested)
         {
-            foreach (var kvp in _targets)
+            var interval = CheckInterval;
+            var targets = _targets.Values.ToArray();
+
+            // Process targets in batches to avoid network spikes
+            int batchSize = Math.Max(5, targets.Length / 5);
+            var batch = targets.Skip(_batchIndex * batchSize).Take(batchSize).ToList();
+            _batchIndex = (_batchIndex + 1) % Math.Max(1, (targets.Length + batchSize - 1) / batchSize);
+
+            foreach (var target in batch)
             {
                 if (token.IsCancellationRequested) break;
 
-                var target = kvp.Value;
-                if (DateTime.UtcNow - target.LastChecked > _checkInterval || target.CurrentStatus == PingStatus.Unknown)
+                if (DateTime.UtcNow - target.LastChecked > interval || target.CurrentStatus == PingStatus.Unknown)
                 {
-                    _ = CheckTargetAsync(target, token); // Fire and forget so we don't block other checks
+                    _ = CheckTargetAsync(target, token);
                 }
             }
 
             try
             {
-                await Task.Delay(2000, token); // Brief pause before next cycle
+                await Task.Delay(Math.Min(2000, (int)interval.TotalMilliseconds / 2), token);
             }
             catch (TaskCanceledException)
             {

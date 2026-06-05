@@ -1,28 +1,27 @@
 using System.Windows;
 using RemoteManager.Helpers;
-using RemoteManager.Services;
 
 namespace RemoteManager.Views;
 
 public partial class MasterPasswordWindow : Window
 {
     private readonly string _expectedHash;
-    public bool IsUnlocked { get; private set; }
+    private readonly Action<string> _onSuccess;
 
-    public MasterPasswordWindow(string expectedHash)
+    public MasterPasswordWindow(string expectedHash, Action<string> onSuccess)
     {
         InitializeComponent();
         _expectedHash = expectedHash;
+        _onSuccess = onSuccess;
         PasswordBox.Focus();
     }
 
     private void Unlock_Click(object sender, RoutedEventArgs e)
     {
         var password = PasswordBox.Password;
-        if (CryptoHelper.HashPassword(password) == _expectedHash)
+        if (CryptoHelper.VerifyPassword(password, _expectedHash))
         {
-            MasterPasswordContext.CurrentMasterPassword = password;
-            IsUnlocked = true;
+            _onSuccess(password);
             DialogResult = true;
             Close();
         }

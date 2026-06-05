@@ -285,7 +285,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
             await Task.Run(() =>
             {
                 if (file.IsDirectory)
-                    deleteClient?.DeleteDirectory(file.FullName);
+                    RecursiveDeleteDirectory(deleteClient!, file.FullName);
                 else
                     deleteClient?.DeleteFile(file.FullName);
             });
@@ -297,6 +297,21 @@ public partial class SftpSessionViewModel : SessionTabViewModel
             StatusText = $"Delete failed: {ex.Message}";
             MessageBox.Show($"Could not delete item: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static void RecursiveDeleteDirectory(Renci.SshNet.SftpClient client, string path)
+    {
+        foreach (var entry in client.ListDirectory(path))
+        {
+            if (entry.Name == "." || entry.Name == "..")
+                continue;
+
+            if (entry.IsDirectory)
+                RecursiveDeleteDirectory(client, entry.FullName);
+            else
+                client.DeleteFile(entry.FullName);
+        }
+        client.DeleteDirectory(path);
     }
 
     public override void Dispose()

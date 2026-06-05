@@ -35,27 +35,9 @@ public partial class MainViewModel : ObservableObject
 
         _db.Initialize(settings.Current.DatabasePath);
 
-        if (!string.IsNullOrEmpty(_pendingImportPath))
-        {
-            try
-            {
-                if (!string.IsNullOrEmpty(_pendingImportPassword))
-                {
-                    Task.Run(() => _importExport.ImportEncryptedAsync(_pendingImportPath, _pendingImportPassword)).GetAwaiter().GetResult();
-                }
-                else
-                {
-                    Task.Run(() => _importExport.ImportFromFileAsync(_pendingImportPath)).GetAwaiter().GetResult();
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show($"Помилка імпорту: {ex.Message}", "Помилка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            }
-        }
-
         SyncTabSelectionCommand = new RelayCommand(OnSyncTabSelection);
         LoadData();
+        _ = ImportPendingAsync();
         _pingService.StartMonitoring(OnPingStatusUpdated);
 
         OpenTabs.CollectionChanged += (s, e) =>
@@ -715,6 +697,24 @@ public partial class MainViewModel : ObservableObject
         LoadData();
     }
 
+    private async Task ImportPendingAsync()
+    {
+        if (string.IsNullOrEmpty(_pendingImportPath))
+            return;
+
+        try
+        {
+            if (!string.IsNullOrEmpty(_pendingImportPassword))
+                await _importExport.ImportEncryptedAsync(_pendingImportPath, _pendingImportPassword);
+            else
+                await _importExport.ImportFromFileAsync(_pendingImportPath);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Помилка імпорту: {ex.Message}", "Помилка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
     public ICommand SyncTabSelectionCommand { get; private set; }
 
     private void OnSyncTabSelection()
@@ -778,13 +778,7 @@ public partial class MainViewModel : ObservableObject
             try
             {
                 var preview = await _importExport.PreviewImportAsync(dialog.FileName);
-                var groupsPreview = preview.Groups.Count <= 8
-                    ? string.Join("\n", preview.Groups)
-                    : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
-
-                var connsPreview = preview.Connections.Count <= 12
-                    ? string.Join("\n", preview.Connections)
-                    : string.Join("\n", preview.Connections.Take(12)) + $"\n... (and {preview.Connections.Count - 12} more)";
+                var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
                 var result = System.Windows.MessageBox.Show(
                     $"Found {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +

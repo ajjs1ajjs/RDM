@@ -14,16 +14,18 @@ public static class Log
     private static string LogFile => Path.Combine(LogDir, $"remote-manager-{DateTime.UtcNow:yyyy-MM-dd}.log");
     private static readonly object _lock = new();
 
-    static Log()
+    private static bool _initialized;
+
+    private static void EnsureInitialized()
     {
+        if (_initialized) return;
         try
         {
             Directory.CreateDirectory(LogDir);
-            Info("=== Application started ===");
+            _initialized = true;
         }
         catch
         {
-            // Logging is non-critical, never throw
         }
     }
 
@@ -43,6 +45,7 @@ public static class Log
     {
         try
         {
+            EnsureInitialized();
             var line = $"[{DateTime.UtcNow:HH:mm:ss.fff}] [{level}] [{caller}] {message}";
             System.Diagnostics.Debug.WriteLine(line);
 
@@ -53,7 +56,6 @@ public static class Log
         }
         catch
         {
-            // Never fail
         }
     }
 }

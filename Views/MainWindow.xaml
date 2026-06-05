@@ -19,6 +19,9 @@
         <DataTemplate DataType="{x:Type vm:SftpSessionViewModel}">
             <views:SftpSessionView DataContext="{Binding}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:WebSessionViewModel}">
+            <views:WebSessionView DataContext="{Binding}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsTabViewModel}">
             <views:SettingsView DataContext="{Binding Settings}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         </DataTemplate>

@@ -316,9 +316,16 @@ public partial class SshTerminalControl : TerminalControl
             switch (c)
             {
                 case '\r':
-                    if (i + 1 < cleaned.Length && cleaned[i + 1] == '\n')
-                        break;
                     _cursorIndex = _lineStartIndex;
+                    if (i + 1 < cleaned.Length && cleaned[i + 1] == '\n')
+                    {
+                        _screen.Append(Environment.NewLine);
+                        _charColors.Add(0);
+                        _charColors.Add(0);
+                        _lineStartIndex = _screen.Length;
+                        _cursorIndex = _screen.Length;
+                        i++;
+                    }
                     break;
                 case '\n':
                     _screen.Append(Environment.NewLine);

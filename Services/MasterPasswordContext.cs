@@ -1,6 +1,6 @@
 namespace RemoteManager.Services;
 
-public static class MasterPasswordContext
+public class MasterPasswordProvider : IMasterPasswordProvider
 {
-    public static string? CurrentMasterPassword { get; set; }
+    public string? CurrentMasterPassword { get; set; }
 }

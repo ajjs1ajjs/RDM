@@ -17,7 +17,7 @@ public partial class RdpHost : TerminalControl, IDisposable
     private string? _pendingHost;
     private int _pendingPort;
     private string? _pendingUser;
-    private string? _pendingPass;
+    private char[]? _pendingPass;
     private RDPSettings? _pendingSettings;
 
     private System.Windows.Threading.DispatcherTimer? _stateTimer;
@@ -103,8 +103,13 @@ public partial class RdpHost : TerminalControl, IDisposable
             if (_pendingHost != null)
             {
                 var host = _pendingHost;
+                var passChars = _pendingPass;
                 _pendingHost = null;
-                Connect(host, _pendingPort, _pendingUser ?? "", _pendingPass ?? "", _pendingSettings);
+                _pendingPass = null;
+                var pass = passChars != null ? new string(passChars) : "";
+                if (passChars != null)
+                    Array.Clear(passChars, 0, passChars.Length);
+                Connect(host, _pendingPort, _pendingUser ?? "", pass, _pendingSettings);
                 return;
             }
 
@@ -181,7 +186,7 @@ public partial class RdpHost : TerminalControl, IDisposable
             _pendingHost = host;
             _pendingPort = port;
             _pendingUser = user;
-            _pendingPass = pass;
+            _pendingPass = pass.ToCharArray();
             _pendingSettings = s;
             return;
         }
@@ -220,6 +225,8 @@ public partial class RdpHost : TerminalControl, IDisposable
 
             _client.Connect();
 
+            ClearComPassword();
+
             if (_stateTimer == null)
             {
                 _stateTimer = new System.Windows.Threading.DispatcherTimer();
@@ -234,6 +241,24 @@ public partial class RdpHost : TerminalControl, IDisposable
         {
             Log.Warn("RDP connect error: " + ex.Message);
             ErrorOccurred?.Invoke(this, $"RDP: {ex.Message}");
+        }
+    }
+
+    private void ClearComPassword()
+    {
+        try
+        {
+            if (_client != null)
+            {
+                var adv = _client.AdvancedSettings9;
+                if (adv != null)
+                {
+                    adv.ClearTextPassword = "";
+                }
+            }
+        }
+        catch
+        {
         }
     }
 

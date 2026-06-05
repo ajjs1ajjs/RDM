@@ -12,13 +12,15 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IDatabaseService _db;
     private readonly IImportExportService _importExport;
     private readonly ICredentialService _credentialService;
+    private readonly IMasterPasswordProvider _masterPasswordProvider;
 
-    public SettingsViewModel(ISettingsService settings, IDatabaseService db, IImportExportService importExport, ICredentialService credentialService)
+    public SettingsViewModel(ISettingsService settings, IDatabaseService db, IImportExportService importExport, ICredentialService credentialService, IMasterPasswordProvider? masterPasswordProvider = null)
     {
         _settings = settings;
         _db = db;
         _importExport = importExport;
         _credentialService = credentialService;
+        _masterPasswordProvider = masterPasswordProvider ?? new MasterPasswordProvider();
 
         _currentDbPath = settings.Current.DatabasePath;
         _selectedTheme = settings.Current.Theme;
@@ -207,7 +209,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         _settings.Current.MasterPasswordHash = RemoteManager.Helpers.CryptoHelper.HashPassword(pwd);
-        MasterPasswordContext.CurrentMasterPassword = pwd;
+        _masterPasswordProvider.CurrentMasterPassword = pwd;
         UseMasterPassword = true;
         _settings.Current.UseMasterPassword = true;
         _settings.Save();
@@ -286,13 +288,7 @@ public partial class SettingsViewModel : ObservableObject
             try
             {
                 var preview = await _importExport.PreviewImportAsync(dialog.FileName);
-                var groupsPreview = preview.Groups.Count <= 8
-                    ? string.Join("\n", preview.Groups)
-                    : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
-
-                var connsPreview = preview.Connections.Count <= 12
-                    ? string.Join("\n", preview.Connections)
-                    : string.Join("\n", preview.Connections.Take(12)) + $"\n... (and {preview.Connections.Count - 12} more)";
+                var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
                 var result = System.Windows.MessageBox.Show(
                     $"Found {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +
@@ -403,14 +399,7 @@ public partial class SettingsViewModel : ObservableObject
                 try
                 {
                     var preview = await _importExport.PreviewImportEncryptedAsync(openDialog.FileName, password);
-
-                    var groupsPreview = preview.Groups.Count <= 8
-                        ? string.Join("\n", preview.Groups)
-                        : string.Join("\n", preview.Groups.Take(8)) + $"\n... (and {preview.Groups.Count - 8} more)";
-
-                    var connsPreview = preview.Connections.Count <= 12
-                        ? string.Join("\n", preview.Connections)
-                        : string.Join("\n", preview.Connections.Take(12)) + $"\n... (and {preview.Connections.Count - 12} more)";
+                    var (groupsPreview, connsPreview) = Helpers.ImportPreviewHelper.BuildPreviewParts(preview);
 
                     var result = System.Windows.MessageBox.Show(
                         $"Decrypted successfully!\nFound {preview.GroupCount} groups and {preview.ConnectionCount} connections.\n\n" +

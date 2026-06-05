@@ -17,6 +17,7 @@ public class AppSettings
     public bool MinimizeToTray { get; set; } = true;
     public bool ShowSystemTrayNotifications { get; set; } = true;
     public bool AutoReconnect { get; set; }
+    public int PingIntervalSeconds { get; set; } = 30;
     public string DefaultRdpPort { get; set; } = "3389";
     public string DefaultSshPort { get; set; } = "22";
     public string Language { get; set; } = "uk-UA";

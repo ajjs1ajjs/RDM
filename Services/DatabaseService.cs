@@ -10,6 +10,9 @@ public class DatabaseService : IDatabaseService
     private readonly ISettingsService? _settings;
     private readonly ICredentialService _credentialService;
     private LiteDatabase? _db;
+    private ILiteCollection<ConnectionGroup>? _groups;
+    private ILiteCollection<Connection>? _connections;
+    private ILiteCollection<Snippet>? _snippets;
     private string _currentPath = string.Empty;
 
     public DatabaseService(ICredentialService credentialService, ISettingsService? settings = null)
@@ -26,6 +29,9 @@ public class DatabaseService : IDatabaseService
         lock (_syncRoot)
         {
             _db?.Dispose();
+            _groups = null;
+            _connections = null;
+            _snippets = null;
             _currentPath = dbPath;
 
             var dir = Path.GetDirectoryName(dbPath);
@@ -66,6 +72,9 @@ public class DatabaseService : IDatabaseService
 
             var oldPath = _currentPath;
             _db?.Dispose();
+            _groups = null;
+            _connections = null;
+            _snippets = null;
             _db = null;
 
             var newDir = Path.GetDirectoryName(newPath);
@@ -86,7 +95,8 @@ public class DatabaseService : IDatabaseService
             lock (_syncRoot)
             {
                 EnsureInitialized();
-                return _db!.GetCollection<ConnectionGroup>("groups");
+                _groups ??= _db!.GetCollection<ConnectionGroup>("groups");
+                return _groups;
             }
         }
     }
@@ -98,7 +108,8 @@ public class DatabaseService : IDatabaseService
             lock (_syncRoot)
             {
                 EnsureInitialized();
-                return _db!.GetCollection<Connection>("connections");
+                _connections ??= _db!.GetCollection<Connection>("connections");
+                return _connections;
             }
         }
     }
@@ -110,7 +121,8 @@ public class DatabaseService : IDatabaseService
             lock (_syncRoot)
             {
                 EnsureInitialized();
-                return _db!.GetCollection<Snippet>("snippets");
+                _snippets ??= _db!.GetCollection<Snippet>("snippets");
+                return _snippets;
             }
         }
     }

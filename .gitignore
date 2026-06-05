@@ -40,3 +40,7 @@ Desktop.ini
 
 # Stakpak session files
 .stakpak/session*
+
+# Build logs
+stderr.txt
+stdout.txt
