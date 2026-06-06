@@ -13,8 +13,8 @@ public static class WakeOnLanService
         if (string.IsNullOrWhiteSpace(macAddress))
             throw new ArgumentException("MAC address cannot be empty.");
 
-        // Clean up the MAC address
-        string cleanMac = Regex.Replace(macAddress, "[-|:]", "");
+        // Clean up the MAC address (strip all non-hexadecimal characters)
+        string cleanMac = Regex.Replace(macAddress, "[^a-fA-F0-9]", "");
         if (cleanMac.Length != 12)
             throw new ArgumentException("Invalid MAC address format.");
 

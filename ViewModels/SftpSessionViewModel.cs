@@ -200,7 +200,7 @@ public partial class SftpSessionViewModel : SessionTabViewModel
         {
             await ExecuteTransferAsync($"Downloading {file.Name}", () =>
             {
-                using var stream = File.OpenWrite(dialog.FileName);
+                using var stream = File.Create(dialog.FileName);
                 client.DownloadFile(file.FullName, stream, downloaded =>
                 {
                     Application.Current.Dispatcher.Invoke(() =>

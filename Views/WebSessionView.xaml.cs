@@ -21,13 +21,30 @@ public partial class WebSessionView : UserControl
         {
             _vm = vm;
 
-            var env = await CoreWebView2Environment.CreateAsync(null, null, new CoreWebView2EnvironmentOptions
+            try
             {
-                AdditionalBrowserArguments = vm.IgnoreCertificateErrors ? "--ignore-certificate-errors" : ""
-            });
+                var appDataDir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "RemoteManager",
+                    "WebView2_Browser");
 
-            await WebView.EnsureCoreWebView2Async(env);
-            WebView.CoreWebView2.Navigate(vm.Url);
+                var env = await CoreWebView2Environment.CreateAsync(null, appDataDir, new CoreWebView2EnvironmentOptions
+                {
+                    AdditionalBrowserArguments = vm.IgnoreCertificateErrors ? "--ignore-certificate-errors" : ""
+                });
+
+                await WebView.EnsureCoreWebView2Async(env);
+                WebView.CoreWebView2.Navigate(vm.Url);
+            }
+            catch (Exception ex)
+            {
+                Services.Log.Error("Failed to initialize WebView2 in WebSessionView", ex);
+                System.Windows.MessageBox.Show(
+                    "Failed to initialize web browser. Please make sure WebView2 Runtime is installed.\n\n" + ex.Message,
+                    "Browser Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
         }
     }
 }

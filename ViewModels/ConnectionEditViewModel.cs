@@ -408,10 +408,9 @@ public partial class ConnectionEditViewModel : ObservableObject
 
         _db.SaveConnection(conn);
 
-        if (SavePassword)
+        if (SavePassword && !string.IsNullOrEmpty(Password))
         {
-            if (!string.IsNullOrEmpty(Password))
-                _credentialService.Save(conn.Id, Password);
+            _credentialService.Save(conn.Id, Password);
         }
         else
         {

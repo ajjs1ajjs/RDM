@@ -163,6 +163,10 @@ public partial class SettingsViewModel : ObservableObject
             {
                 _credentialService.SaveDomainCredential(vm.Domain, vm.Username, vm.Password);
             }
+            else
+            {
+                _credentialService.DeleteDomainCredential(vm.Domain);
+            }
 
             vm.OriginalDomain = vm.Domain;
         }

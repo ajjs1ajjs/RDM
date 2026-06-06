@@ -17,6 +17,7 @@ public class SshWebViewTerminalControl : TerminalControl
     private CancellationTokenSource? _readCts;
     private bool _disconnectRequested;
     private bool _isWebViewReady;
+    private bool _webViewInitFailed;
     private uint _columns = 120;
     private uint _rows = 40;
 
@@ -33,7 +34,12 @@ public class SshWebViewTerminalControl : TerminalControl
     {
         try
         {
-            var env = await CoreWebView2Environment.CreateAsync(null, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "RemoteManager.WebView2"));
+            var appDataDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "RemoteManager",
+                "WebView2_Terminal");
+
+            var env = await CoreWebView2Environment.CreateAsync(null, appDataDir);
             await _webView.EnsureCoreWebView2Async(env);
             
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
@@ -41,17 +47,19 @@ public class SshWebViewTerminalControl : TerminalControl
             var htmlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Terminal", "index.html");
             if (System.IO.File.Exists(htmlPath))
             {
-                _webView.CoreWebView2.Navigate(htmlPath);
+                _webView.CoreWebView2.Navigate(new Uri(htmlPath).AbsoluteUri);
                 _isWebViewReady = true;
             }
             else
             {
                 Log.Error("xterm.js HTML file not found: " + htmlPath);
+                _webViewInitFailed = true;
             }
         }
         catch (Exception ex)
         {
             Log.Error("Failed to initialize WebView2", ex);
+            _webViewInitFailed = true;
         }
     }
 
@@ -86,6 +94,10 @@ public class SshWebViewTerminalControl : TerminalControl
     {
         while (!_isWebViewReady)
         {
+            if (_webViewInitFailed)
+            {
+                throw new InvalidOperationException("WebView2 initialization failed. Please make sure WebView2 Runtime is installed.");
+            }
             await Task.Delay(100);
         }
 

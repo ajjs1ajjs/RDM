@@ -54,17 +54,23 @@ public partial class RdpHost : TerminalControl, IDisposable
         _stateTimer?.Stop();
         _stateTimer = null;
 
+        if (_client != null)
+        {
+            try { _client.Disconnect(); } catch { }
+            
+            try
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(_client);
+            }
+            catch { }
+            _client = null;
+        }
+
         if (_wfh != null)
         {
             _wfh.Child = null;
             _wfh.Dispose();
             _wfh = null;
-        }
-
-        if (_client != null)
-        {
-            try { _client.Disconnect(); } catch { }
-            _client = null;
         }
 
         Content = null;

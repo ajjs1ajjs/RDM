@@ -109,6 +109,12 @@ public partial class SshSessionViewModel : SessionTabViewModel
                 _db.SaveConnection(Connection);
             }
         }
+        catch (Exception ex)
+        {
+            IsConnected = false;
+            StatusText = L.Status_ConnectionFailed + ": " + ex.Message;
+            Log.Error("SSH connection failed with exception", ex);
+        }
         finally
         {
             IsConnecting = false;
