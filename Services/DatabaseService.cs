@@ -301,33 +301,36 @@ public class DatabaseService : IDatabaseService
     {
         try
         {
-            if (string.IsNullOrEmpty(_currentPath) || !System.IO.File.Exists(_currentPath))
-                return;
-
-            var dir = System.IO.Path.GetDirectoryName(_currentPath);
-            if (string.IsNullOrEmpty(dir))
-                return;
-
-            var backupDir = System.IO.Path.Combine(dir, "backups");
-            if (!System.IO.Directory.Exists(backupDir))
-                System.IO.Directory.CreateDirectory(backupDir);
-
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            var dbName = System.IO.Path.GetFileNameWithoutExtension(_currentPath);
-            var backupPath = System.IO.Path.Combine(backupDir, $"{dbName}_backup_{timestamp}.db");
-
-            System.IO.File.Copy(_currentPath, backupPath, overwrite: true);
-
-            // Keep only the last 5 backups
-            var backups = System.IO.Directory.GetFiles(backupDir, $"{dbName}_backup_*.db")
-                .Select(f => new System.IO.FileInfo(f))
-                .OrderByDescending(f => f.CreationTime)
-                .Skip(5)
-                .ToList();
-
-            foreach (var oldBackup in backups)
+            lock (_syncRoot)
             {
-                try { oldBackup.Delete(); } catch (Exception ex) { Log.Debug("Old backup delete error: " + ex.Message); }
+                if (string.IsNullOrEmpty(_currentPath) || !System.IO.File.Exists(_currentPath))
+                    return;
+
+                var dir = System.IO.Path.GetDirectoryName(_currentPath);
+                if (string.IsNullOrEmpty(dir))
+                    return;
+
+                var backupDir = System.IO.Path.Combine(dir, "backups");
+                if (!System.IO.Directory.Exists(backupDir))
+                    System.IO.Directory.CreateDirectory(backupDir);
+
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var dbName = System.IO.Path.GetFileNameWithoutExtension(_currentPath);
+                var backupPath = System.IO.Path.Combine(backupDir, $"{dbName}_backup_{timestamp}.db");
+
+                System.IO.File.Copy(_currentPath, backupPath, overwrite: true);
+
+                // Keep only the last 5 backups
+                var backups = System.IO.Directory.GetFiles(backupDir, $"{dbName}_backup_*.db")
+                    .Select(f => new System.IO.FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .Skip(5)
+                    .ToList();
+
+                foreach (var oldBackup in backups)
+                {
+                    try { oldBackup.Delete(); } catch (Exception ex) { Log.Debug("Old backup delete error: " + ex.Message); }
+                }
             }
         }
         catch (Exception ex)

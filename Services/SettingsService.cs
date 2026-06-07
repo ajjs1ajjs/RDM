@@ -192,10 +192,26 @@ public class SettingsService : ISettingsService
             if (!Directory.Exists(targetCredentialsDir))
                 Directory.CreateDirectory(targetCredentialsDir);
 
-            // Clean existing local credentials first to avoid mix-up
+            // Backup existing local credentials before restoring
             if (Directory.Exists(targetCredentialsDir))
             {
-                foreach (var file in Directory.GetFiles(targetCredentialsDir))
+                var existingFiles = Directory.GetFiles(targetCredentialsDir);
+                if (existingFiles.Length > 0)
+                {
+                    var backupCredsDir = Path.Combine(settings.AppDataDir, "credentials_backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                    Directory.CreateDirectory(backupCredsDir);
+                    foreach (var file in existingFiles)
+                    {
+                        try
+                        {
+                            var dest = Path.Combine(backupCredsDir, Path.GetFileName(file));
+                            File.Copy(file, dest, overwrite: false);
+                        }
+                        catch { }
+                    }
+                }
+
+                foreach (var file in existingFiles)
                 {
                     try { File.Delete(file); } catch { }
                 }

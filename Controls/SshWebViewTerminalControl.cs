@@ -18,6 +18,7 @@ public class SshWebViewTerminalControl : TerminalControl
     private bool _disconnectRequested;
     private bool _isWebViewReady;
     private bool _webViewInitFailed;
+    private const int WebViewInitTimeoutMs = 30000;
     private uint _columns = 120;
     private uint _rows = 40;
 
@@ -92,11 +93,16 @@ public class SshWebViewTerminalControl : TerminalControl
 
     public async Task<bool> ConnectAsync(string host, int port, string user, string pass, SSHSettings? settings)
     {
+        var webViewTimeout = Task.Delay(WebViewInitTimeoutMs);
         while (!_isWebViewReady)
         {
             if (_webViewInitFailed)
             {
                 throw new InvalidOperationException("WebView2 initialization failed. Please make sure WebView2 Runtime is installed.");
+            }
+            if (webViewTimeout.IsCompleted)
+            {
+                throw new TimeoutException("WebView2 initialization timed out. Please make sure WebView2 Runtime is installed.");
             }
             await Task.Delay(100);
         }
@@ -186,7 +192,7 @@ public class SshWebViewTerminalControl : TerminalControl
     {
         if (!_disconnectRequested)
         {
-            Dispatcher.Invoke(() => ConnectionClosed?.Invoke(this, "Connection closed by remote host."));
+            Dispatcher.BeginInvoke(() => ConnectionClosed?.Invoke(this, "Connection closed by remote host."));
         }
         Disconnect();
     }
@@ -202,12 +208,12 @@ public class SshWebViewTerminalControl : TerminalControl
                 if (read > 0)
                 {
                     var text = Encoding.UTF8.GetString(buffer, 0, read);
-                    Dispatcher.Invoke(() =>
+                    _ = Dispatcher.BeginInvoke(() =>
                     {
                         if (_isWebViewReady && _webView.CoreWebView2 != null)
                         {
                             var jsString = JsonSerializer.Serialize(text);
-                            _webView.CoreWebView2.ExecuteScriptAsync($"window.writeToTerminal({jsString});");
+                            _ = _webView.CoreWebView2.ExecuteScriptAsync($"window.writeToTerminal({jsString});");
                         }
                     });
                 }

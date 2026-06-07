@@ -95,7 +95,11 @@ public partial class SshSessionViewModel : SessionTabViewModel
         UnsubscribeSshEvents();
 
         _sshTerminalRef = ssh;
-        _connectionClosedHandler = async (s, r) => await OnTerminalConnectionClosedAsync(s, r);
+        _connectionClosedHandler = async (s, r) =>
+        {
+            try { await OnTerminalConnectionClosedAsync(s, r); }
+            catch (Exception ex) { Log.Error("SSH connection closed handler error", ex); }
+        };
         ssh.ConnectionClosed += _connectionClosedHandler;
 
         try

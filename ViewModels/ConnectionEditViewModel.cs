@@ -428,8 +428,9 @@ public partial class ConnectionEditViewModel : ObservableObject
     private void GeneratePassword()
     {
         const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=";
-        var password = new string(Enumerable.Repeat(chars, 16)
-            .Select(s => s[Random.Shared.Next(s.Length)]).ToArray());
+        var bytes = new byte[16];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        var password = new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
         Password = password;
         SavePassword = true;
     }

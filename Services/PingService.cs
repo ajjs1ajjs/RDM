@@ -45,7 +45,8 @@ public class PingService : IPingService, IDisposable
     public void StopMonitoring()
     {
         _cts?.Cancel();
-        _monitorTask?.Wait(1000);
+        try { _monitorTask?.Wait(1000); }
+        catch (AggregateException) { /* task cancellation is expected */ }
         _cts?.Dispose();
         _cts = null;
         _statusCallback = null;
