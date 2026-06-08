@@ -4,12 +4,12 @@
              xmlns:h="clr-namespace:RemoteManager.Helpers">
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
         <StackPanel MaxWidth="700">
-            <TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
+            <TextBlock Text="{x:Static h:L.Tab_Settings}" FontSize="24" FontWeight="Bold" Margin="0,0,0,20"/>
 
             <!-- Database Location -->
-            <GroupBox Header="🗄️ Database" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_Database}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Database path:" Margin="0,0,0,5" FontWeight="SemiBold"/>
+                    <TextBlock Text="{x:Static h:L.Settings_DatabasePath}" Margin="0,0,0,5" FontWeight="SemiBold"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -17,28 +17,28 @@
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{Binding CurrentDbPath, Mode=OneWay}"
                                  IsReadOnly="True" Padding="8,6"/>
-                        <Button Grid.Column="1" Content="Browse..." Padding="12,6" Margin="8,0,0,0"
+                        <Button Grid.Column="1" Content="{x:Static h:L.Settings_Browse}" Padding="12,6" Margin="8,0,0,0"
                                 Command="{Binding ChangeDatabasePathCommand}"
                                 Background="{StaticResource AccentBrush}"
                                 Foreground="White" BorderThickness="0" Cursor="Hand"/>
                     </Grid>
-                    <TextBlock Text="You can store the database in OneDrive or any custom location" 
+                    <TextBlock Text="{x:Static h:L.Settings_DatabaseHint}" 
                                FontSize="11" Opacity="0.6" Margin="0,5,0,0"/>
                 </StackPanel>
             </GroupBox>
 
             <!-- Backup & Sync -->
-            <GroupBox Header="📥 Backup &amp; Sync (Резервне копіювання)" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_BackupSync}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Стандартний імпорт/експорт конфігурації (без паролів):" 
+                    <TextBlock Text="{x:Static h:L.Settings_BackupSyncDesc}" 
                                FontWeight="SemiBold" FontSize="11" Margin="0,0,0,5"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                        <Button Content="📥 Import JSON/XML..." Padding="14,6" Margin="0,0,10,0"
+                        <Button Content="{x:Static h:L.Settings_Import}" Padding="14,6" Margin="0,0,10,0"
                                 Command="{Binding ImportConnectionsCommand}"
                                 Background="Transparent" Foreground="{StaticResource AccentBrush}" 
                                 BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Cursor="Hand"
                                 FontSize="11" FontWeight="SemiBold"/>
-                        <Button Content="📤 Export JSON..." Padding="14,6"
+                        <Button Content="{x:Static h:L.Settings_Export}" Padding="14,6"
                                 Command="{Binding ExportConnectionsCommand}"
                                 Background="Transparent" Foreground="{StaticResource AccentBrush}" 
                                 BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Cursor="Hand"
@@ -47,16 +47,16 @@
 
                     <Border BorderBrush="{StaticResource CtrlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,0,0,15"/>
 
-                    <TextBlock Text="🔒 Захищений бекап з паролями (Шифрування AES-256):" 
+                    <TextBlock Text="{x:Static h:L.Settings_SecureBackup}" 
                                FontWeight="SemiBold" FontSize="11" Margin="0,0,0,5"/>
-                    <TextBlock Text="Дозволяє зберегти підключення разом із паролями в один файл для перенесення на інший ПК або після перевстановлення Windows. Файл захищається вашим паролем." 
+                    <TextBlock Text="{x:Static h:L.Settings_SecureBackupDesc}" 
                                FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="🔒 Import Secure Backup..." Padding="14,8" Margin="0,0,10,0"
+                        <Button Content="{x:Static h:L.Settings_ImportSecure}" Padding="14,8" Margin="0,0,10,0"
                                 Command="{Binding ImportEncryptedBackupCommand}"
                                 Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"
                                 FontSize="11" FontWeight="Bold"/>
-                        <Button Content="🔒 Export Secure Backup..." Padding="14,8"
+                        <Button Content="{x:Static h:L.Settings_ExportSecure}" Padding="14,8"
                                 Command="{Binding ExportEncryptedBackupCommand}"
                                 Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"
                                 FontSize="11" FontWeight="Bold"/>
@@ -65,9 +65,9 @@
             </GroupBox>
 
             <!-- Auto Backup Folder -->
-            <GroupBox Header="🔄 Auto Backup Folder (Автоматичний бекап)" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_AutoBackup}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Шлях для автоматичного збереження копій (OneDrive, Dropbox тощо):" Margin="0,0,0,5" FontWeight="SemiBold"/>
+                    <TextBlock Text="{x:Static h:L.Settings_AutoBackupDesc}" Margin="0,0,0,5" FontWeight="SemiBold"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -75,15 +75,15 @@
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{Binding BackupFolderPath, Mode=OneWay}"
                                  IsReadOnly="True" Padding="8,6"/>
-                        <Button Grid.Column="1" Content="Browse..." Padding="12,6" Margin="8,0,0,0"
+                        <Button Grid.Column="1" Content="{x:Static h:L.Settings_Browse}" Padding="12,6" Margin="8,0,0,0"
                                 Command="{Binding ChangeBackupFolderCommand}"
                                 Background="{StaticResource AccentBrush}"
                                 Foreground="White" BorderThickness="0" Cursor="Hand"/>
                     </Grid>
-                    <TextBlock Text="Примітка: При налаштуванні цієї папки база даних, налаштування та паролі будуть автоматично копіюватися туди після кожної зміни. Паролі шифруються локальним ключем Windows DPAPI (відновлення паролів можливе на цьому ж ПК під цим же користувачем)." 
+                    <TextBlock Text="{x:Static h:L.Settings_BackupNote}" 
                                FontSize="11" Opacity="0.6" Margin="0,5,0,0" TextWrapping="Wrap"/>
                     
-                    <Button Content="✕ Clear Backup Path" Padding="12,6" Margin="0,10,0,0"
+                    <Button Content="{x:Static h:L.Settings_ClearBackupPath}" Padding="12,6" Margin="0,10,0,0"
                             Command="{Binding ClearBackupFolderCommand}"
                             Background="Transparent" Foreground="Red" BorderBrush="Red" BorderThickness="1"
                             Cursor="Hand" HorizontalAlignment="Left" FontSize="11" FontWeight="SemiBold"/>
@@ -91,20 +91,20 @@
             </GroupBox>
 
             <!-- Security -->
-            <GroupBox Header="🔐 Security" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_Security}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Master Password (AES-256):" Margin="0,0,0,5" FontWeight="SemiBold"/>
-                    <CheckBox Content="Use Master Password" IsChecked="{Binding UseMasterPassword}" Margin="0,0,0,10" Foreground="{StaticResource FgBrush}"/>
+                    <TextBlock Text="{x:Static h:L.Settings_MasterPassword}" Margin="0,0,0,5" FontWeight="SemiBold"/>
+                    <CheckBox Content="{x:Static h:L.Settings_UseMasterPassword}" IsChecked="{Binding UseMasterPassword}" Margin="0,0,0,10" Foreground="{StaticResource FgBrush}"/>
                     <StackPanel Orientation="Horizontal">
                         <PasswordBox x:Name="MasterPwdBox" Width="200" Height="26" Margin="0,0,10,0" Padding="4"/>
-                        <Button Content="Set / Change" Padding="12,4" Command="{Binding ChangeMasterPasswordCommand}" CommandParameter="{Binding ElementName=MasterPwdBox}" Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                        <Button Content="{x:Static h:L.Settings_SetChange}" Padding="12,4" Command="{Binding ChangeMasterPasswordCommand}" CommandParameter="{Binding ElementName=MasterPwdBox}" Background="{StaticResource AccentBrush}" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                     </StackPanel>
-                    <TextBlock Text="Requires restart to apply. If forgotten, your passwords will be lost!" Foreground="Red" FontSize="11" Margin="0,5,0,0"/>
+                    <TextBlock Text="{x:Static h:L.Settings_MasterPasswordWarning}" Foreground="Red" FontSize="11" Margin="0,5,0,0"/>
                 </StackPanel>
             </GroupBox>
 
             <!-- Appearance -->
-            <GroupBox Header="🎨 Appearance" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_Appearance}" Padding="15" Margin="0,0,0,15">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -114,19 +114,19 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Theme:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static h:L.Settings_Theme}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Themes}"
                               SelectedItem="{Binding SelectedTheme}"
                               Width="150" HorizontalAlignment="Left" Padding="8,4"/>
 
                     <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" 
-                              Content="Minimize to system tray"
+                              Content="{x:Static h:L.Settings_MinimizeToTray}"
                               IsChecked="{Binding MinimizeToTray}" Margin="0,10,0,0"/>
                 </Grid>
             </GroupBox>
 
             <!-- Defaults -->
-            <GroupBox Header="⚙️ Defaults" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_Defaults}" Padding="15" Margin="0,0,0,15">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -140,26 +140,26 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Default RDP port:" 
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static h:L.Settings_DefaultRDPPort}" 
                                VerticalAlignment="Center" Margin="0,0,10,10"/>
                     <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding DefaultRdpPort}"
                              Width="80" HorizontalAlignment="Left" Padding="6,3"/>
 
-                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Default SSH port:" 
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{x:Static h:L.Settings_DefaultSSHPort}" 
                                VerticalAlignment="Center" Margin="0,0,10,10"/>
                     <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding DefaultSshPort}"
                              Width="80" HorizontalAlignment="Left" Padding="6,3"/>
 
                     <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" 
-                              Content="Auto-reconnect on disconnect"
+                              Content="{x:Static h:L.Settings_AutoReconnect}"
                               IsChecked="{Binding AutoReconnect}" Margin="0,5,0,0"/>
                 </Grid>
             </GroupBox>
 
             <!-- Domain Credentials Mapping -->
-            <GroupBox Header="🔑 Domain Credentials (Автопідстановка паролів)" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_DomainCredentials}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Налаштуйте логіни та паролі для кожного домену (наприклад, IT або smarttender). Вони автоматично підставлятимуться при підключенні!" 
+                    <TextBlock Text="{x:Static h:L.Settings_DomainCredentialsDesc}" 
                                FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     
                     <Grid Margin="0,0,0,5">
@@ -169,9 +169,9 @@
                             <ColumnDefinition Width="*" MinWidth="100"/>
                             <ColumnDefinition Width="30"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Domain / Домен" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
-                        <TextBlock Grid.Column="1" Text="Username / Логін" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
-                        <TextBlock Grid.Column="2" Text="Password / Пароль" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="0" Text="{x:Static h:L.Settings_Domain}" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="1" Text="{x:Static h:L.Settings_Username}" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="2" Text="{x:Static h:L.Settings_Password}" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
                     </Grid>
 
                     <ItemsControl ItemsSource="{Binding DomainCredentials}" Margin="0,0,0,10">
@@ -196,7 +196,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Button Content="➕ Add Domain Credential" Padding="12,6"
+                    <Button Content="{x:Static h:L.Settings_AddDomainCredential}" Padding="12,6"
                             Command="{Binding AddDomainCredentialCommand}"
                             Background="Transparent" Foreground="{StaticResource AccentBrush}"
                             BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
@@ -205,9 +205,9 @@
             </GroupBox>
 
             <!-- Snippets -->
-            <GroupBox Header="📝 Snippets / Macros (Скрипти та команди)" Padding="15" Margin="0,0,0,15">
+            <GroupBox Header="{x:Static h:L.Settings_Snippets}" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
-                    <TextBlock Text="Додайте часто використовувані скрипти, які можна буде швидко виконати в SSH терміналі в один клік!" 
+                    <TextBlock Text="{x:Static h:L.Settings_SnippetsDesc}" 
                                FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     
                     <Grid Margin="0,0,0,5">
@@ -216,8 +216,8 @@
                             <ColumnDefinition Width="5*" MinWidth="120"/>
                             <ColumnDefinition Width="30"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Name / Назва" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
-                        <TextBlock Grid.Column="1" Text="Command / Команда" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="0" Text="{x:Static h:L.Settings_Name}" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Column="1" Text="{x:Static h:L.Settings_Command}" FontWeight="SemiBold" FontSize="11" Margin="0,0,4,0"/>
                     </Grid>
 
                     <ItemsControl ItemsSource="{Binding Snippets}" Margin="0,0,0,10">
@@ -240,7 +240,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Button Content="➕ Add Snippet" Padding="12,6"
+                    <Button Content="{x:Static h:L.Settings_AddSnippet}" Padding="12,6"
                             Command="{Binding AddSnippetCommand}"
                             Background="Transparent" Foreground="{StaticResource AccentBrush}"
                             BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
@@ -248,7 +248,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <Button Content="💾 Save Settings" Padding="14,10"
+            <Button Content="{x:Static h:L.Settings_SaveSettings}" Padding="14,10"
                     Command="{Binding SaveSettingsCommand}"
                     Background="{StaticResource AccentBrush}"
                     Foreground="White" BorderThickness="0"

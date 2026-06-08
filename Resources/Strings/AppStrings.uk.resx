@@ -279,6 +279,7 @@
   <data name="Main_Active" xml:space="preserve"><value>Активні:</value></data>
   <data name="Main_Pending" xml:space="preserve"><value>Очікують:</value></data>
   <data name="Main_Latency" xml:space="preserve"><value>Затримка:</value></data>
+  <data name="Main_Latency_Unit" xml:space="preserve"><value>мс</value></data>
   <data name="Main_AddNewConnection" xml:space="preserve"><value>Нове підключення</value></data>
   <data name="Main_Tabs" xml:space="preserve"><value>Вкладки: {0}</value></data>
   <data name="Main_Tabs_Prefix" xml:space="preserve"><value>Вкладки: </value></data>

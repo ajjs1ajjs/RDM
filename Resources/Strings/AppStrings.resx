@@ -305,6 +305,7 @@ If configured, a copy of the database, settings, and passwords will be automatic
   <data name="Main_Active" xml:space="preserve"><value>Active:</value></data>
   <data name="Main_Pending" xml:space="preserve"><value>Pending:</value></data>
   <data name="Main_Latency" xml:space="preserve"><value>Latency:</value></data>
+  <data name="Main_Latency_Unit" xml:space="preserve"><value>ms</value></data>
   <data name="Main_AddNewConnection" xml:space="preserve"><value>Add New Connection</value></data>
   <data name="Main_Tabs" xml:space="preserve"><value>Tabs: {0}</value></data>
   <data name="Main_Tabs_Prefix" xml:space="preserve"><value>Tabs: </value></data>

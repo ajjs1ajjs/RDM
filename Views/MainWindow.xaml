@@ -413,11 +413,11 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Column="0" Content="☰" FontSize="14" Padding="12,6"
+                    <Button Grid.Column="0" Content="{x:Static helpers:L.Main_ToggleSidebar}" FontSize="14" Padding="12,6"
                             Background="Transparent" Foreground="{StaticResource FgBrush}"
                             BorderThickness="0" Cursor="Hand"
                             Command="{Binding ToggleSidebarCommand}"
-                            ToolTip="Toggle Sidebar&#10;&#10;Shortcuts:&#10;F5: Refresh&#10;Ctrl+W: Close tab&#10;Ctrl+T: New SSH&#10;Ctrl+R: New RDP"/>
+                            ToolTip="{x:Static helpers:L.Main_Shortcuts}"/>
 
                     <ListBox Grid.Column="1" ItemsSource="{Binding OpenTabs}"
                              SelectedItem="{Binding SelectedTab}"
@@ -696,7 +696,9 @@
                                     </Grid>
                                     <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,5,0,0">
                                         <TextBlock Text="{x:Static helpers:L.Main_Latency}" FontSize="10" Foreground="#94A3B8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Latency, StringFormat={}{0}ms}" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                        <TextBlock FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center">
+                                            <Run Text="{Binding Latency}"/><Run Text="{x:Static helpers:L.Main_Latency_Unit}"/>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Grid>
                             </Grid>

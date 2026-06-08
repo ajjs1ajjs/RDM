@@ -263,6 +263,7 @@ internal static class L
     public static string Main_Active => Get(nameof(Main_Active));
     public static string Main_Pending => Get(nameof(Main_Pending));
     public static string Main_Latency => Get(nameof(Main_Latency));
+    public static string Main_Latency_Unit => Get(nameof(Main_Latency_Unit));
     public static string Main_AddNewConnection => Get(nameof(Main_AddNewConnection));
     public static string Main_Tabs => Get(nameof(Main_Tabs));
     public static string Main_Tabs_Prefix => Get(nameof(Main_Tabs_Prefix));
