@@ -1,0 +1,26 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# C# project files
+*.cs text diff=csharp
+*.csproj text
+*.slnx text
+*.xaml text
+*.resx text
+
+# Shell scripts
+*.ps1 text eol=crlf
+
+# Config files
+*.json text
+*.xml text
+*.iss text
+*.yml text
+*.yaml text
+*.md text
+
+# Binary files
+*.png binary
+*.ico binary
+*.db binary
+*.bin binary

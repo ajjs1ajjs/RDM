@@ -142,4 +142,53 @@
   <data name="SessionInfo_Web" xml:space="preserve"><value>Веб-сесія: {0}</value></data>
 
   <data name="Sftp_TabHeader" xml:space="preserve"><value>SFTP - {0}</value></data>
+
+  <!-- Missing Import Preview Messages -->
+  <data name="Import_PreviewMessage" xml:space="preserve"><value>Знайдено {0} груп та {1} підключень.
+
+Попередній перегляд груп:
+{2}
+
+Попередній перегляд підключень:
+{3}
+
+Бажаєте імпортувати всі?</value></data>
+  <data name="Import_PreviewEncryptedMessage" xml:space="preserve"><value>Розшифровано успішно!
+Знайдено {0} груп та {1} підключень.
+
+Попередній перегляд груп:
+{2}
+
+Попередній перегляд підключень:
+{3}
+
+Бажаєте імпортувати всі?</value></data>
+
+  <!-- Missing First Run Messages -->
+  <data name="FirstRun_Title" xml:space="preserve"><value>Початковий імпорт та відновлення</value></data>
+  <data name="FirstRun_Message" xml:space="preserve"><value>Ласкаво просимо до RemoteManager!
+
+Бажаєте імпортувати існуючі дані або відновити з бекапу?
+
+ТАК — Відновити всі дані (БД, налаштування, паролі) з папки автоматичного бекапу (OneDrive тощо).
+НІ — Імпортувати підключення з файлу (.enc, .json, .xml).
+СКАСУВАТИ — Почати з порожнім профілем.</value></data>
+  <data name="FirstRun_RestoreFolderTitle" xml:space="preserve"><value>Виберіть папку бекапу для відновлення</value></data>
+  <data name="FirstRun_RestoreSuccess" xml:space="preserve"><value>Дані успішно відновлено з бекапу!</value></data>
+  <data name="FirstRun_RestoreFailed" xml:space="preserve"><value>Помилка відновлення даних: {0}</value></data>
+  <data name="FirstRun_ImportFilter" xml:space="preserve"><value>Всі підтримувані файли (*.json, *.xml, *.rdm, *.enc)|*.json;*.xml;*.rdm;*.enc|JSON файли (*.json)|*.json|RDM XML файли (*.xml, *.rdm)|*.xml;*.rdm|Зашифрований бекап (*.enc)|*.enc|Всі файли (*.*)|*.*</value></data>
+  <data name="FirstRun_ImportTitle" xml:space="preserve"><value>Виберіть файл для імпорту</value></data>
+  <data name="FirstRun_DecryptDialog" xml:space="preserve"><value>Введіть пароль для розшифрування файлу:</value></data>
+  <data name="FirstRun_DecryptTitle" xml:space="preserve"><value>Пароль бекапу</value></data>
+  <data name="FirstRun_BackupMessage" xml:space="preserve"><value>Бажаєте налаштувати папку для автоматичного бекапу даних?
+
+Якщо налаштовано, копія бази даних, налаштувань та паролів буде автоматично оновлюватися в цій папці (напр. OneDrive) після кожної зміни.</value></data>
+  <data name="FirstRun_BackupTitle" xml:space="preserve"><value>Налаштування автоматичного бекапу</value></data>
+  <data name="FirstRun_BackupFolderTitle" xml:space="preserve"><value>Виберіть папку для автоматичних бекапів (напр. в OneDrive)</value></data>
+  <data name="FirstRun_BackupConfigured" xml:space="preserve"><value>Автоматичний бекап налаштовано в папку:
+{0}</value></data>
+  <data name="FirstRun_BackupConfiguredTitle" xml:space="preserve"><value>Бекап налаштовано</value></data>
+
+  <!-- Missing Additional Status -->
+  <data name="Status_ConnectedText" xml:space="preserve"><value>Підключено</value></data>
 </root>

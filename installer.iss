@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define SetupName "RemoteManager"
-#define SetupVersion "1.1.0"
+#define SetupVersion "1.2.0"
 #define SetupPublisher "ajjs1ajjs"
 #define SetupAppURL "https://github.com/ajjs1ajjs/RDM"
 #define SetupExeName "RemoteManager.exe"

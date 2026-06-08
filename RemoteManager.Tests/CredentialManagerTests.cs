@@ -118,4 +118,73 @@ public class CredentialManagerTests : IDisposable
         // Assert
         Assert.Null(result);
     }
+
+    [Fact]
+    public void TestAdditionalCredential_SaveAndLoad()
+    {
+        var connectionId = Guid.NewGuid();
+        _credentialService.SaveAdditional(connectionId, "passphrase", "MyPrivateKeyPass123");
+        _credentialService.SaveAdditional(connectionId, "jumphost_password", "JumpHostPass456!");
+
+        var passphrase = _credentialService.LoadAdditional(connectionId, "passphrase");
+        var jumpPass = _credentialService.LoadAdditional(connectionId, "jumphost_password");
+
+        Assert.Equal("MyPrivateKeyPass123", passphrase);
+        Assert.Equal("JumpHostPass456!", jumpPass);
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_LoadNonExistent_ReturnsNull()
+    {
+        var connectionId = Guid.NewGuid();
+        Assert.Null(_credentialService.LoadAdditional(connectionId, "nonexistent"));
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_Delete()
+    {
+        var connectionId = Guid.NewGuid();
+        _credentialService.SaveAdditional(connectionId, "passphrase", "DeleteMe");
+        Assert.NotNull(_credentialService.LoadAdditional(connectionId, "passphrase"));
+
+        _credentialService.DeleteAdditional(connectionId, "passphrase");
+
+        Assert.Null(_credentialService.LoadAdditional(connectionId, "passphrase"));
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_Overwrite()
+    {
+        var connectionId = Guid.NewGuid();
+        _credentialService.SaveAdditional(connectionId, "key", "OriginalValue");
+        _credentialService.SaveAdditional(connectionId, "key", "UpdatedValue");
+
+        var loaded = _credentialService.LoadAdditional(connectionId, "key");
+        Assert.Equal("UpdatedValue", loaded);
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_EmptyValue_DeletesFile()
+    {
+        var connectionId = Guid.NewGuid();
+        _credentialService.SaveAdditional(connectionId, "tempsetting", "SomeValue");
+        Assert.NotNull(_credentialService.LoadAdditional(connectionId, "tempsetting"));
+
+        _credentialService.SaveAdditional(connectionId, "tempsetting", "");
+
+        Assert.Null(_credentialService.LoadAdditional(connectionId, "tempsetting"));
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_EmptyConnectionId_ReturnsNull()
+    {
+        Assert.Null(_credentialService.LoadAdditional(Guid.Empty, "anykey"));
+    }
+
+    [Fact]
+    public void TestAdditionalCredential_EmptyKey_ReturnsNull()
+    {
+        Assert.Null(_credentialService.LoadAdditional(Guid.NewGuid(), ""));
+        Assert.Null(_credentialService.LoadAdditional(Guid.NewGuid(), "   "));
+    }
 }
