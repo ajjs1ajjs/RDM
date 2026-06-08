@@ -634,6 +634,18 @@ public partial class MainViewModel : ObservableObject
             _credentialService.Save(copy.Id, existingPassword);
         }
 
+        // Copy SSH additional credentials (passphrase, jump host password)
+        if (original.Type == ConnectionType.SSH && original.SshSettings != null)
+        {
+            var passphrase = _credentialService.LoadAdditional(original.Id, "passphrase");
+            if (passphrase != null)
+                _credentialService.SaveAdditional(copy.Id, "passphrase", passphrase);
+
+            var jumpHostPassword = _credentialService.LoadAdditional(original.Id, "jumphost_password");
+            if (jumpHostPassword != null)
+                _credentialService.SaveAdditional(copy.Id, "jumphost_password", jumpHostPassword);
+        }
+
         RefreshTree();
     }
 

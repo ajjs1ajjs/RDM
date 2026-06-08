@@ -408,9 +408,17 @@ public partial class ConnectionEditViewModel : ObservableObject
 
         _db.SaveConnection(conn);
 
-        if (SavePassword && !string.IsNullOrEmpty(Password))
+        if (SavePassword)
         {
-            _credentialService.Save(conn.Id, Password);
+            if (!string.IsNullOrEmpty(Password))
+            {
+                _credentialService.Save(conn.Id, Password);
+            }
+            else if (_existing == null)
+            {
+                // New connection with no password
+            }
+            // else: editing connection, password field is empty - keep existing password
         }
         else
         {

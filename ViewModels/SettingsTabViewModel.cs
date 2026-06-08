@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using RemoteManager.Helpers;
 using RemoteManager.ViewModels;
 
 namespace RemoteManager.ViewModels;
@@ -11,6 +12,6 @@ public partial class SettingsTabViewModel : SessionTabViewModel
     {
         if (settings != null)
             Settings = settings;
-        Header = "Settings";
+        Header = L.Tab_Settings;
     }
 }
