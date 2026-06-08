@@ -355,7 +355,7 @@
                                         <Condition Binding="{Binding PingStatus}" Value="Online"/>
                                     </MultiDataTrigger.Conditions>
                                     <Setter TargetName="StatusDot" Property="Fill" Value="#34D399"/>
-                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat={x:Static helpers:L.Main_Online}}"/>
+                                    <Setter TargetName="StatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat='Online ({0}ms)'}"/>
                                 </MultiDataTrigger>
                                 <MultiDataTrigger>
                                     <MultiDataTrigger.Conditions>
@@ -575,7 +575,7 @@
                                                         <Condition Binding="{Binding PingStatus}" Value="Online"/>
                                                     </MultiDataTrigger.Conditions>
                                                     <Setter TargetName="RecentStatusDot" Property="Fill" Value="#34D399"/>
-                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat={x:Static helpers:L.Main_Online}}"/>
+                                                    <Setter TargetName="RecentStatusDot" Property="ToolTip" Value="{Binding PingLatency, StringFormat='Online ({0}ms)'}"/>
                                                 </MultiDataTrigger>
                                                 <MultiDataTrigger>
                                                     <MultiDataTrigger.Conditions>
