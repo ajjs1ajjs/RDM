@@ -173,4 +173,199 @@ internal static class L
 
     // Sftp tab header
     public static string Sftp_TabHeader => Get(nameof(Sftp_TabHeader));
+
+    // === UI Labels ===
+
+    // ConnectionEdit Dialog
+    public static string ConnEdit_RDP => Get(nameof(ConnEdit_RDP));
+    public static string ConnEdit_SSH => Get(nameof(ConnEdit_SSH));
+    public static string ConnEdit_General => Get(nameof(ConnEdit_General));
+    public static string ConnEdit_Name => Get(nameof(ConnEdit_Name));
+    public static string ConnEdit_Host => Get(nameof(ConnEdit_Host));
+    public static string ConnEdit_Port => Get(nameof(ConnEdit_Port));
+    public static string ConnEdit_Username => Get(nameof(ConnEdit_Username));
+    public static string ConnEdit_Password => Get(nameof(ConnEdit_Password));
+    public static string ConnEdit_Generate => Get(nameof(ConnEdit_Generate));
+    public static string ConnEdit_GenerateTooltip => Get(nameof(ConnEdit_GenerateTooltip));
+    public static string ConnEdit_Save => Get(nameof(ConnEdit_Save));
+    public static string ConnEdit_Group => Get(nameof(ConnEdit_Group));
+    public static string ConnEdit_MacAddress => Get(nameof(ConnEdit_MacAddress));
+    public static string ConnEdit_MacAddressTooltip => Get(nameof(ConnEdit_MacAddressTooltip));
+    public static string ConnEdit_Tags => Get(nameof(ConnEdit_Tags));
+    public static string ConnEdit_TagsTooltip => Get(nameof(ConnEdit_TagsTooltip));
+    public static string ConnEdit_RdpSettings => Get(nameof(ConnEdit_RdpSettings));
+    public static string ConnEdit_RdpWidth => Get(nameof(ConnEdit_RdpWidth));
+    public static string ConnEdit_RdpHeight => Get(nameof(ConnEdit_RdpHeight));
+    public static string ConnEdit_RdpRedirectClipboard => Get(nameof(ConnEdit_RdpRedirectClipboard));
+    public static string ConnEdit_RdpRedirectDrives => Get(nameof(ConnEdit_RdpRedirectDrives));
+    public static string ConnEdit_RdpRedirectPrinters => Get(nameof(ConnEdit_RdpRedirectPrinters));
+    public static string ConnEdit_RdpUseMultimon => Get(nameof(ConnEdit_RdpUseMultimon));
+    public static string ConnEdit_RdpCredSsp => Get(nameof(ConnEdit_RdpCredSsp));
+    public static string ConnEdit_RdpAudioMode => Get(nameof(ConnEdit_RdpAudioMode));
+    public static string ConnEdit_RdpPlayLocally => Get(nameof(ConnEdit_RdpPlayLocally));
+    public static string ConnEdit_RdpPlayOnServer => Get(nameof(ConnEdit_RdpPlayOnServer));
+    public static string ConnEdit_RdpNoAudio => Get(nameof(ConnEdit_RdpNoAudio));
+    public static string ConnEdit_RdpGatewayHost => Get(nameof(ConnEdit_RdpGatewayHost));
+    public static string ConnEdit_RdpGatewayPort => Get(nameof(ConnEdit_RdpGatewayPort));
+    public static string ConnEdit_SshSettings => Get(nameof(ConnEdit_SshSettings));
+    public static string ConnEdit_SshAuthType => Get(nameof(ConnEdit_SshAuthType));
+    public static string ConnEdit_SshPassword => Get(nameof(ConnEdit_SshPassword));
+    public static string ConnEdit_SshKey => Get(nameof(ConnEdit_SshKey));
+    public static string ConnEdit_SshKeyFile => Get(nameof(ConnEdit_SshKeyFile));
+    public static string ConnEdit_Browse => Get(nameof(ConnEdit_Browse));
+    public static string ConnEdit_GenerateKey => Get(nameof(ConnEdit_GenerateKey));
+    public static string ConnEdit_SshKeepAlive => Get(nameof(ConnEdit_SshKeepAlive));
+    public static string ConnEdit_SshJumpHost => Get(nameof(ConnEdit_SshJumpHost));
+    public static string ConnEdit_SshJumpHostPort => Get(nameof(ConnEdit_SshJumpHostPort));
+    public static string ConnEdit_SshJumpHostUser => Get(nameof(ConnEdit_SshJumpHostUser));
+    public static string ConnEdit_SshJumpHostPass => Get(nameof(ConnEdit_SshJumpHostPass));
+    public static string ConnEdit_SshKeyPassphrase => Get(nameof(ConnEdit_SshKeyPassphrase));
+    public static string ConnEdit_SshPortForwarding => Get(nameof(ConnEdit_SshPortForwarding));
+    public static string ConnEdit_SshPortForwardingEnable => Get(nameof(ConnEdit_SshPortForwardingEnable));
+    public static string ConnEdit_SshPortForwardingLocalPort => Get(nameof(ConnEdit_SshPortForwardingLocalPort));
+    public static string ConnEdit_SshPortForwardingRemoteHost => Get(nameof(ConnEdit_SshPortForwardingRemoteHost));
+    public static string ConnEdit_SshPortForwardingRemotePort => Get(nameof(ConnEdit_SshPortForwardingRemotePort));
+    public static string ConnEdit_Description => Get(nameof(ConnEdit_Description));
+    public static string ConnEdit_Cancel => Get(nameof(ConnEdit_Cancel));
+    public static string ConnEdit_SaveConnection => Get(nameof(ConnEdit_SaveConnection));
+
+    // InputDialog
+    public static string Input_Rename => Get(nameof(Input_Rename));
+    public static string Input_Cancel => Get(nameof(Input_Cancel));
+    public static string Input_OK => Get(nameof(Input_OK));
+
+    // MainWindow
+    public static string Main_ConnectionCenter => Get(nameof(Main_ConnectionCenter));
+    public static string Main_SearchTooltip => Get(nameof(Main_SearchTooltip));
+    public static string Main_Group => Get(nameof(Main_Group));
+    public static string Main_RDP => Get(nameof(Main_RDP));
+    public static string Main_SSH => Get(nameof(Main_SSH));
+    public static string Main_Settings => Get(nameof(Main_Settings));
+    public static string Main_RenameGroup => Get(nameof(Main_RenameGroup));
+    public static string Main_DeleteGroup => Get(nameof(Main_DeleteGroup));
+    public static string Main_AddRDP => Get(nameof(Main_AddRDP));
+    public static string Main_AddSSH => Get(nameof(Main_AddSSH));
+    public static string Main_Connect => Get(nameof(Main_Connect));
+    public static string Main_OpenSFTP => Get(nameof(Main_OpenSFTP));
+    public static string Main_WakeOnLAN => Get(nameof(Main_WakeOnLAN));
+    public static string Main_Edit => Get(nameof(Main_Edit));
+    public static string Main_Duplicate => Get(nameof(Main_Duplicate));
+    public static string Main_Delete => Get(nameof(Main_Delete));
+    public static string Main_StatusUnknown => Get(nameof(Main_StatusUnknown));
+    public static string Main_ConnectedSession => Get(nameof(Main_ConnectedSession));
+    public static string Main_Online => Get(nameof(Main_Online));
+    public static string Main_Offline => Get(nameof(Main_Offline));
+    public static string Main_Checking => Get(nameof(Main_Checking));
+    public static string Main_ToggleSidebar => Get(nameof(Main_ToggleSidebar));
+    public static string Main_ToggleSidebarTooltip => Get(nameof(Main_ToggleSidebarTooltip));
+    public static string Main_RecentSessions => Get(nameof(Main_RecentSessions));
+    public static string Main_StatusDashboard => Get(nameof(Main_StatusDashboard));
+    public static string Main_Active => Get(nameof(Main_Active));
+    public static string Main_Pending => Get(nameof(Main_Pending));
+    public static string Main_Latency => Get(nameof(Main_Latency));
+    public static string Main_AddNewConnection => Get(nameof(Main_AddNewConnection));
+    public static string Main_Tabs => Get(nameof(Main_Tabs));
+    public static string Main_Tabs_Prefix => Get(nameof(Main_Tabs_Prefix));
+    public static string Main_Groups => Get(nameof(Main_Groups));
+    public static string Main_Groups_Prefix => Get(nameof(Main_Groups_Prefix));
+
+    // MasterPasswordWindow
+    public static string MasterPwd_Title => Get(nameof(MasterPwd_Title));
+    public static string MasterPwd_EnterPassword => Get(nameof(MasterPwd_EnterPassword));
+    public static string MasterPwd_Cancel => Get(nameof(MasterPwd_Cancel));
+    public static string MasterPwd_Unlock => Get(nameof(MasterPwd_Unlock));
+
+    // RdpSessionView
+    public static string Rdp_FullScreen => Get(nameof(Rdp_FullScreen));
+    public static string Rdp_CtrlAltDel => Get(nameof(Rdp_CtrlAltDel));
+    public static string Rdp_Reconnect => Get(nameof(Rdp_Reconnect));
+    public static string Rdp_Disconnect => Get(nameof(Rdp_Disconnect));
+
+    // SettingsView
+    public static string Settings_Appearance => Get(nameof(Settings_Appearance));
+    public static string Settings_Theme => Get(nameof(Settings_Theme));
+    public static string Settings_MinimizeToTray => Get(nameof(Settings_MinimizeToTray));
+    public static string Settings_Defaults => Get(nameof(Settings_Defaults));
+    public static string Settings_DefaultRDPPort => Get(nameof(Settings_DefaultRDPPort));
+    public static string Settings_DefaultSSHPort => Get(nameof(Settings_DefaultSSHPort));
+    public static string Settings_AutoReconnect => Get(nameof(Settings_AutoReconnect));
+    public static string Settings_Database => Get(nameof(Settings_Database));
+    public static string Settings_DatabasePath => Get(nameof(Settings_DatabasePath));
+    public static string Settings_Browse => Get(nameof(Settings_Browse));
+    public static string Settings_DatabaseHint => Get(nameof(Settings_DatabaseHint));
+    public static string Settings_BackupSync => Get(nameof(Settings_BackupSync));
+    public static string Settings_BackupSyncDesc => Get(nameof(Settings_BackupSyncDesc));
+    public static string Settings_Import => Get(nameof(Settings_Import));
+    public static string Settings_Export => Get(nameof(Settings_Export));
+    public static string Settings_SecureBackup => Get(nameof(Settings_SecureBackup));
+    public static string Settings_SecureBackupDesc => Get(nameof(Settings_SecureBackupDesc));
+    public static string Settings_ImportSecure => Get(nameof(Settings_ImportSecure));
+    public static string Settings_ExportSecure => Get(nameof(Settings_ExportSecure));
+    public static string Settings_AutoBackup => Get(nameof(Settings_AutoBackup));
+    public static string Settings_AutoBackupDesc => Get(nameof(Settings_AutoBackupDesc));
+    public static string Settings_ClearBackup => Get(nameof(Settings_ClearBackup));
+    public static string Settings_BackupNote => Get(nameof(Settings_BackupNote));
+    public static string Settings_Security => Get(nameof(Settings_Security));
+    public static string Settings_MasterPassword => Get(nameof(Settings_MasterPassword));
+    public static string Settings_UseMasterPassword => Get(nameof(Settings_UseMasterPassword));
+    public static string Settings_SetChange => Get(nameof(Settings_SetChange));
+    public static string Settings_MasterPasswordWarning => Get(nameof(Settings_MasterPasswordWarning));
+    public static string Settings_DomainCredentials => Get(nameof(Settings_DomainCredentials));
+    public static string Settings_DomainCredentialsDesc => Get(nameof(Settings_DomainCredentialsDesc));
+    public static string Settings_Domain => Get(nameof(Settings_Domain));
+    public static string Settings_Username => Get(nameof(Settings_Username));
+    public static string Settings_Password => Get(nameof(Settings_Password));
+    public static string Settings_AddDomainCredential => Get(nameof(Settings_AddDomainCredential));
+    public static string Settings_Snippets => Get(nameof(Settings_Snippets));
+    public static string Settings_SnippetsDesc => Get(nameof(Settings_SnippetsDesc));
+    public static string Settings_Name => Get(nameof(Settings_Name));
+    public static string Settings_Command => Get(nameof(Settings_Command));
+    public static string Settings_AddSnippet => Get(nameof(Settings_AddSnippet));
+    public static string Settings_SaveSettings => Get(nameof(Settings_SaveSettings));
+    public static string Settings_ClearBackupPath => Get(nameof(Settings_ClearBackupPath));
+
+    // SftpSessionView
+    public static string Sftp_Disconnect => Get(nameof(Sftp_Disconnect));
+    public static string Sftp_Reconnect => Get(nameof(Sftp_Reconnect));
+    public static string Sftp_Up => Get(nameof(Sftp_Up));
+    public static string Sftp_Refresh => Get(nameof(Sftp_Refresh));
+    public static string Sftp_UploadFile => Get(nameof(Sftp_UploadFile));
+    public static string Sftp_EnterDirectory => Get(nameof(Sftp_EnterDirectory));
+    public static string Sftp_Download => Get(nameof(Sftp_Download));
+    public static string Sftp_Delete => Get(nameof(Sftp_Delete));
+    public static string Sftp_Name => Get(nameof(Sftp_Name));
+    public static string Sftp_Size => Get(nameof(Sftp_Size));
+    public static string Sftp_Modified => Get(nameof(Sftp_Modified));
+    public static string Sftp_Permissions => Get(nameof(Sftp_Permissions));
+
+    // SshKeyGeneratorDialog
+    public static string KeyGen_Title => Get(nameof(KeyGen_Title));
+    public static string KeyGen_GenerateKeys => Get(nameof(KeyGen_GenerateKeys));
+    public static string KeyGen_KeyType => Get(nameof(KeyGen_KeyType));
+    public static string KeyGen_RSA2048 => Get(nameof(KeyGen_RSA2048));
+    public static string KeyGen_RSA4096 => Get(nameof(KeyGen_RSA4096));
+    public static string KeyGen_ED25519 => Get(nameof(KeyGen_ED25519));
+    public static string KeyGen_ECDSA256 => Get(nameof(KeyGen_ECDSA256));
+    public static string KeyGen_ECDSA384 => Get(nameof(KeyGen_ECDSA384));
+    public static string KeyGen_ECDSA521 => Get(nameof(KeyGen_ECDSA521));
+    public static string KeyGen_Passphrase => Get(nameof(KeyGen_Passphrase));
+    public static string KeyGen_SaveToDirectory => Get(nameof(KeyGen_SaveToDirectory));
+    public static string KeyGen_KeyName => Get(nameof(KeyGen_KeyName));
+    public static string KeyGen_Cancel => Get(nameof(KeyGen_Cancel));
+    public static string KeyGen_GenerateSave => Get(nameof(KeyGen_GenerateSave));
+
+    // SshSessionView
+    public static string Ssh_Disconnect => Get(nameof(Ssh_Disconnect));
+    public static string Ssh_Reconnect => Get(nameof(Ssh_Reconnect));
+    public static string Ssh_Clear => Get(nameof(Ssh_Clear));
+    public static string Ssh_ClearTooltip => Get(nameof(Ssh_ClearTooltip));
+    public static string Ssh_Snippets => Get(nameof(Ssh_Snippets));
+    public static string Ssh_CopyPasteHint => Get(nameof(Ssh_CopyPasteHint));
+
+    // WebSessionView
+    public static string Web_BrowserError => Get(nameof(Web_BrowserError));
+    public static string Web_BrowserErrorTitle => Get(nameof(Web_BrowserErrorTitle));
+
+    // MainWindow additional
+    public static string Main_Shortcuts => Get(nameof(Main_Shortcuts));
 }

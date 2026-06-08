@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
+using RemoteManager.Helpers;
 using RemoteManager.ViewModels;
 
 namespace RemoteManager.Views;
@@ -40,8 +41,8 @@ public partial class WebSessionView : UserControl
             {
                 Services.Log.Error("Failed to initialize WebView2 in WebSessionView", ex);
                 System.Windows.MessageBox.Show(
-                    "Failed to initialize web browser. Please make sure WebView2 Runtime is installed.\n\n" + ex.Message,
-                    "Browser Error",
+                    L.Web_BrowserError + "\n\n" + ex.Message,
+                    L.Web_BrowserErrorTitle,
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
             }

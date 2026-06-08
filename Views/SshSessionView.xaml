@@ -1,7 +1,8 @@
 <UserControl x:Class="RemoteManager.Views.SshSessionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:RemoteManager.Controls">
+             xmlns:controls="clr-namespace:RemoteManager.Controls"
+             xmlns:helpers="clr-namespace:RemoteManager.Helpers">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -13,21 +14,21 @@
                 BorderBrush="{StaticResource CtrlBorderBrush}"
                 BorderThickness="0,0,0,1" Padding="8,4">
             <StackPanel Orientation="Horizontal">
-                <Button Content="⛔ Disconnect" Margin="2,0" FontSize="11"
+                <Button Content="{x:Static helpers:L.Ssh_Disconnect}" Margin="2,0" FontSize="11"
                         Command="{Binding DisconnectCommand}"
                         IsEnabled="{Binding IsConnected}"
                         Padding="8,4" Background="{StaticResource RedBrush}" Foreground="White"/>
-                <Button Content="↻ Reconnect" Margin="8,0,2,0" FontSize="11"
+                <Button Content="{x:Static helpers:L.Ssh_Reconnect}" Margin="8,0,2,0" FontSize="11"
                         Command="{Binding ReconnectCommand}"
                         IsEnabled="{Binding IsConnecting, Converter={StaticResource InverseBool}}"
                         Padding="8,4" Background="{StaticResource AccentBrush}" Foreground="White"/>
-                <Button Content="🗑 Clear" Margin="8,0,2,0" FontSize="11"
+                <Button Content="{x:Static helpers:L.Ssh_Clear}" Margin="8,0,2,0" FontSize="11"
                         Command="{Binding ClearCommand}"
                         Padding="8,4" Background="Transparent" Foreground="{StaticResource FgBrush}" BorderThickness="0"
-                        ToolTip="Clear terminal (Ctrl+L)"/>
+                        ToolTip="{x:Static helpers:L.Ssh_ClearTooltip}"/>
 
                 <Menu Background="Transparent" Margin="8,0,2,0" VerticalAlignment="Center">
-                    <MenuItem Header="📝 Snippets" ItemsSource="{Binding Snippets}" FontSize="11" Padding="8,4"
+                    <MenuItem Header="{x:Static helpers:L.Ssh_Snippets}" ItemsSource="{Binding Snippets}" FontSize="11" Padding="8,4"
                               Background="Transparent" Foreground="{StaticResource FgBrush}">
                         <MenuItem.ItemContainerStyle>
                             <Style TargetType="MenuItem">
@@ -40,7 +41,7 @@
                 </Menu>
 
                 <Separator Width="1" Background="{StaticResource CtrlBorderBrush}" Margin="8,4"/>
-                <TextBlock Text="Ctrl+Shift+C/V: Copy/Paste" VerticalAlignment="Center" Margin="4,0"
+                <TextBlock Text="{x:Static helpers:L.Ssh_CopyPasteHint}" VerticalAlignment="Center" Margin="4,0"
                            FontSize="10" Foreground="{StaticResource FgDimBrush}" Opacity="0.5"/>
                 <Separator Width="1" Background="{StaticResource CtrlBorderBrush}" Margin="8,4"/>
                 <TextBlock Text="{Binding SessionInfo}" VerticalAlignment="Center" Margin="10,0,4,0"

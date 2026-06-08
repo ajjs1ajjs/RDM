@@ -191,4 +191,202 @@
 
   <!-- Missing Additional Status -->
   <data name="Status_ConnectedText" xml:space="preserve"><value>Підключено</value></data>
+
+  <!-- ConnectionEdit Dialog -->
+  <data name="ConnEdit_RDP" xml:space="preserve"><value>RDP</value></data>
+  <data name="ConnEdit_SSH" xml:space="preserve"><value>SSH</value></data>
+  <data name="ConnEdit_General" xml:space="preserve"><value>Загальні</value></data>
+  <data name="ConnEdit_Name" xml:space="preserve"><value>Назва:</value></data>
+  <data name="ConnEdit_Host" xml:space="preserve"><value>Хост:</value></data>
+  <data name="ConnEdit_Port" xml:space="preserve"><value>Порт:</value></data>
+  <data name="ConnEdit_Username" xml:space="preserve"><value>Користувач:</value></data>
+  <data name="ConnEdit_Password" xml:space="preserve"><value>Пароль:</value></data>
+  <data name="ConnEdit_Generate" xml:space="preserve"><value>Згенерувати</value></data>
+  <data name="ConnEdit_GenerateTooltip" xml:space="preserve"><value>Згенерувати випадковий пароль</value></data>
+  <data name="ConnEdit_Save" xml:space="preserve"><value>Зберегти</value></data>
+  <data name="ConnEdit_Group" xml:space="preserve"><value>Група:</value></data>
+  <data name="ConnEdit_MacAddress" xml:space="preserve"><value>MAC адреса:</value></data>
+  <data name="ConnEdit_MacAddressTooltip" xml:space="preserve"><value>Використовується для Wake-on-LAN (напр., 00-11-22-33-44-55)</value></data>
+  <data name="ConnEdit_Tags" xml:space="preserve"><value>Теги:</value></data>
+  <data name="ConnEdit_TagsTooltip" xml:space="preserve"><value>Теги через кому (напр. Prod, Linux, Web)</value></data>
+  <data name="ConnEdit_RdpSettings" xml:space="preserve"><value>Налаштування RDP</value></data>
+  <data name="ConnEdit_RdpWidth" xml:space="preserve"><value>Ширина екрану:</value></data>
+  <data name="ConnEdit_RdpHeight" xml:space="preserve"><value>Висота екрану:</value></data>
+  <data name="ConnEdit_RdpRedirectClipboard" xml:space="preserve"><value>Перенаправлення буфера обміну</value></data>
+  <data name="ConnEdit_RdpRedirectDrives" xml:space="preserve"><value>Перенаправлення дисків</value></data>
+  <data name="ConnEdit_RdpRedirectPrinters" xml:space="preserve"><value>Перенаправлення принтерів</value></data>
+  <data name="ConnEdit_RdpUseMultimon" xml:space="preserve"><value>Всі монітори (Multimon)</value></data>
+  <data name="ConnEdit_RdpCredSsp" xml:space="preserve"><value>Підтримка CredSSP</value></data>
+  <data name="ConnEdit_RdpAudioMode" xml:space="preserve"><value>Режим звуку:</value></data>
+  <data name="ConnEdit_RdpPlayLocally" xml:space="preserve"><value>Відтворювати локально</value></data>
+  <data name="ConnEdit_RdpPlayOnServer" xml:space="preserve"><value>Відтворювати на сервері</value></data>
+  <data name="ConnEdit_RdpNoAudio" xml:space="preserve"><value>Без звуку</value></data>
+  <data name="ConnEdit_RdpGatewayHost" xml:space="preserve"><value>Шлюз хост:</value></data>
+  <data name="ConnEdit_RdpGatewayPort" xml:space="preserve"><value>Шлюз порт:</value></data>
+  <data name="ConnEdit_SshSettings" xml:space="preserve"><value>Налаштування SSH</value></data>
+  <data name="ConnEdit_SshAuthType" xml:space="preserve"><value>Тип авторизації:</value></data>
+  <data name="ConnEdit_SshPassword" xml:space="preserve"><value>Пароль</value></data>
+  <data name="ConnEdit_SshKey" xml:space="preserve"><value>Ключ</value></data>
+  <data name="ConnEdit_SshKeyFile" xml:space="preserve"><value>Файл ключа:</value></data>
+  <data name="ConnEdit_Browse" xml:space="preserve"><value>Огляд</value></data>
+  <data name="ConnEdit_GenerateKey" xml:space="preserve"><value>Згенерувати</value></data>
+  <data name="ConnEdit_SshKeepAlive" xml:space="preserve"><value>Keep alive (с):</value></data>
+  <data name="ConnEdit_SshJumpHost" xml:space="preserve"><value>Проміжний хост:</value></data>
+  <data name="ConnEdit_SshJumpHostPort" xml:space="preserve"><value>Порт проміжного хосту:</value></data>
+  <data name="ConnEdit_SshJumpHostUser" xml:space="preserve"><value>Користувач проміжного хосту:</value></data>
+  <data name="ConnEdit_SshJumpHostPass" xml:space="preserve"><value>Пароль проміжного хосту:</value></data>
+  <data name="ConnEdit_SshKeyPassphrase" xml:space="preserve"><value>Пароль ключа:</value></data>
+  <data name="ConnEdit_SshPortForwarding" xml:space="preserve"><value>Проброс локальних портів</value></data>
+  <data name="ConnEdit_SshPortForwardingEnable" xml:space="preserve"><value>Увімкнути проброс портів</value></data>
+  <data name="ConnEdit_SshPortForwardingLocalPort" xml:space="preserve"><value>Локальний порт:</value></data>
+  <data name="ConnEdit_SshPortForwardingRemoteHost" xml:space="preserve"><value>Віддалений хост:</value></data>
+  <data name="ConnEdit_SshPortForwardingRemotePort" xml:space="preserve"><value>Віддалений порт:</value></data>
+  <data name="ConnEdit_Description" xml:space="preserve"><value>Опис</value></data>
+  <data name="ConnEdit_Cancel" xml:space="preserve"><value>Скасувати</value></data>
+  <data name="ConnEdit_SaveConnection" xml:space="preserve"><value>Зберегти підключення</value></data>
+
+  <!-- InputDialog -->
+  <data name="Input_Rename" xml:space="preserve"><value>Перейменувати</value></data>
+  <data name="Input_Cancel" xml:space="preserve"><value>Скасувати</value></data>
+  <data name="Input_OK" xml:space="preserve"><value>OK</value></data>
+
+  <!-- MainWindow -->
+  <data name="Main_ConnectionCenter" xml:space="preserve"><value>ЦЕНТР ПІДКЛЮЧЕНЬ</value></data>
+  <data name="Main_SearchTooltip" xml:space="preserve"><value>Пошук підключень...</value></data>
+  <data name="Main_Group" xml:space="preserve"><value>Група</value></data>
+  <data name="Main_RDP" xml:space="preserve"><value>RDP</value></data>
+  <data name="Main_SSH" xml:space="preserve"><value>SSH</value></data>
+  <data name="Main_Settings" xml:space="preserve"><value>Налаштування</value></data>
+  <data name="Main_RenameGroup" xml:space="preserve"><value>Перейменувати групу</value></data>
+  <data name="Main_DeleteGroup" xml:space="preserve"><value>Видалити групу</value></data>
+  <data name="Main_AddRDP" xml:space="preserve"><value>Додати RDP підключення</value></data>
+  <data name="Main_AddSSH" xml:space="preserve"><value>Додати SSH підключення</value></data>
+  <data name="Main_Connect" xml:space="preserve"><value>Підключитися</value></data>
+  <data name="Main_OpenSFTP" xml:space="preserve"><value>Відкрити SFTP</value></data>
+  <data name="Main_WakeOnLAN" xml:space="preserve"><value>Wake on LAN</value></data>
+  <data name="Main_Edit" xml:space="preserve"><value>Редагувати...</value></data>
+  <data name="Main_Duplicate" xml:space="preserve"><value>Дублювати</value></data>
+  <data name="Main_Delete" xml:space="preserve"><value>Видалити</value></data>
+  <data name="Main_StatusUnknown" xml:space="preserve"><value>Статус: Невідомо</value></data>
+  <data name="Main_ConnectedSession" xml:space="preserve"><value>Підключено (Активна сесія)</value></data>
+  <data name="Main_Online" xml:space="preserve"><value>Онлайн ({0}мс)</value></data>
+  <data name="Main_Offline" xml:space="preserve"><value>Офлайн</value></data>
+  <data name="Main_Checking" xml:space="preserve"><value>Перевірка статусу...</value></data>
+  <data name="Main_ToggleSidebar" xml:space="preserve"><value>☰</value></data>
+  <data name="Main_ToggleSidebarTooltip" xml:space="preserve"><value>Бокова панель</value></data>
+  <data name="Main_RecentSessions" xml:space="preserve"><value>Нещодавні сесії</value></data>
+  <data name="Main_StatusDashboard" xml:space="preserve"><value>Панель статусу</value></data>
+  <data name="Main_Active" xml:space="preserve"><value>Активні:</value></data>
+  <data name="Main_Pending" xml:space="preserve"><value>Очікують:</value></data>
+  <data name="Main_Latency" xml:space="preserve"><value>Затримка:</value></data>
+  <data name="Main_AddNewConnection" xml:space="preserve"><value>Нове підключення</value></data>
+  <data name="Main_Tabs" xml:space="preserve"><value>Вкладки: {0}</value></data>
+  <data name="Main_Tabs_Prefix" xml:space="preserve"><value>Вкладки: </value></data>
+  <data name="Main_Groups" xml:space="preserve"><value>Групи: {0}</value></data>
+  <data name="Main_Groups_Prefix" xml:space="preserve"><value>Групи: </value></data>
+
+  <!-- MasterPasswordWindow -->
+  <data name="MasterPwd_Title" xml:space="preserve"><value>Введіть майстер-пароль</value></data>
+  <data name="MasterPwd_EnterPassword" xml:space="preserve"><value>Введіть майстер-пароль:</value></data>
+  <data name="MasterPwd_Cancel" xml:space="preserve"><value>Скасувати</value></data>
+  <data name="MasterPwd_Unlock" xml:space="preserve"><value>Розблокувати</value></data>
+
+  <!-- RdpSessionView -->
+  <data name="Rdp_FullScreen" xml:space="preserve"><value>На весь екран</value></data>
+  <data name="Rdp_CtrlAltDel" xml:space="preserve"><value>Ctrl+Alt+Del</value></data>
+  <data name="Rdp_Reconnect" xml:space="preserve"><value>Перепідключитися</value></data>
+  <data name="Rdp_Disconnect" xml:space="preserve"><value>Відключитися</value></data>
+
+  <!-- SettingsView -->
+  <data name="Settings_Appearance" xml:space="preserve"><value>Зовнішній вигляд</value></data>
+  <data name="Settings_Theme" xml:space="preserve"><value>Тема:</value></data>
+  <data name="Settings_MinimizeToTray" xml:space="preserve"><value>Згортати в системний трей</value></data>
+  <data name="Settings_Defaults" xml:space="preserve"><value>За замовчуванням</value></data>
+  <data name="Settings_DefaultRDPPort" xml:space="preserve"><value>RDP порт:</value></data>
+  <data name="Settings_DefaultSSHPort" xml:space="preserve"><value>SSH порт:</value></data>
+  <data name="Settings_AutoReconnect" xml:space="preserve"><value>Авто-перепідключення</value></data>
+  <data name="Settings_Database" xml:space="preserve"><value>База даних</value></data>
+  <data name="Settings_DatabasePath" xml:space="preserve"><value>Шлях до БД:</value></data>
+  <data name="Settings_Browse" xml:space="preserve"><value>Огляд...</value></data>
+  <data name="Settings_DatabaseHint" xml:space="preserve"><value>Зберігайте БД в OneDrive або іншому місці</value></data>
+  <data name="Settings_BackupSync" xml:space="preserve"><value>Бекап та синхронізація</value></data>
+  <data name="Settings_BackupSyncDesc" xml:space="preserve"><value>Стандартний імпорт/експорт (без паролів):</value></data>
+  <data name="Settings_Import" xml:space="preserve"><value>Імпорт JSON/XML...</value></data>
+  <data name="Settings_Export" xml:space="preserve"><value>Експорт JSON...</value></data>
+  <data name="Settings_SecureBackup" xml:space="preserve"><value>Захищений бекап з паролями (AES-256)</value></data>
+  <data name="Settings_SecureBackupDesc" xml:space="preserve"><value>Зберегти підключення з паролями в один зашифрований файл</value></data>
+  <data name="Settings_ImportSecure" xml:space="preserve"><value>Імпорт бекапу...</value></data>
+  <data name="Settings_ExportSecure" xml:space="preserve"><value>Експорт бекапу...</value></data>
+  <data name="Settings_AutoBackup" xml:space="preserve"><value>Автоматичний бекап</value></data>
+  <data name="Settings_AutoBackupDesc" xml:space="preserve"><value>Шлях для автоматичних копій (OneDrive, Dropbox):</value></data>
+  <data name="Settings_ClearBackup" xml:space="preserve"><value>Очистити шлях</value></data>
+  <data name="Settings_BackupNote" xml:space="preserve"><value>Примітка: Дані будуть автоматично копіюватися після кожної зміни</value></data>
+  <data name="Settings_Security" xml:space="preserve"><value>Безпека</value></data>
+  <data name="Settings_MasterPassword" xml:space="preserve"><value>Майстер-пароль (AES-256):</value></data>
+  <data name="Settings_UseMasterPassword" xml:space="preserve"><value>Використовувати майстер-пароль</value></data>
+  <data name="Settings_SetChange" xml:space="preserve"><value>Встановити / Змінити</value></data>
+  <data name="Settings_MasterPasswordWarning" xml:space="preserve"><value>Потрібен перезапуск. При втраті паролі будуть втрачені!</value></data>
+  <data name="Settings_DomainCredentials" xml:space="preserve"><value>Доменні облікові дані</value></data>
+  <data name="Settings_DomainCredentialsDesc" xml:space="preserve"><value>Налаштуйте логіни та паролі для доменів</value></data>
+  <data name="Settings_Domain" xml:space="preserve"><value>Domain / Домен</value></data>
+  <data name="Settings_Username" xml:space="preserve"><value>Username / Логін</value></data>
+  <data name="Settings_Password" xml:space="preserve"><value>Password / Пароль</value></data>
+  <data name="Settings_AddDomainCredential" xml:space="preserve"><value>Додати доменний запис</value></data>
+  <data name="Settings_Snippets" xml:space="preserve"><value>Сніпети / Макроси</value></data>
+  <data name="Settings_SnippetsDesc" xml:space="preserve"><value>Додайте скрипти для швидкого виконання в SSH</value></data>
+  <data name="Settings_Name" xml:space="preserve"><value>Name / Назва</value></data>
+  <data name="Settings_Command" xml:space="preserve"><value>Command / Команда</value></data>
+  <data name="Settings_AddSnippet" xml:space="preserve"><value>Додати сніпет</value></data>
+  <data name="Settings_SaveSettings" xml:space="preserve"><value>Зберегти налаштування</value></data>
+  <data name="Settings_ClearBackupPath" xml:space="preserve"><value>Очистити шлях бекапу</value></data>
+
+  <!-- SftpSessionView -->
+  <data name="Sftp_Disconnect" xml:space="preserve"><value>Відключитися</value></data>
+  <data name="Sftp_Reconnect" xml:space="preserve"><value>Перепідключитися</value></data>
+  <data name="Sftp_Up" xml:space="preserve"><value>Вгору</value></data>
+  <data name="Sftp_Refresh" xml:space="preserve"><value>Оновити</value></data>
+  <data name="Sftp_UploadFile" xml:space="preserve"><value>Завантажити файл</value></data>
+  <data name="Sftp_EnterDirectory" xml:space="preserve"><value>Відкрити / Перейти</value></data>
+  <data name="Sftp_Download" xml:space="preserve"><value>Завантажити</value></data>
+  <data name="Sftp_Delete" xml:space="preserve"><value>Видалити</value></data>
+  <data name="Sftp_Name" xml:space="preserve"><value>Ім'я</value></data>
+  <data name="Sftp_Size" xml:space="preserve"><value>Розмір</value></data>
+  <data name="Sftp_Modified" xml:space="preserve"><value>Змінено</value></data>
+  <data name="Sftp_Permissions" xml:space="preserve"><value>Права</value></data>
+
+  <!-- SshKeyGeneratorDialog -->
+  <data name="KeyGen_Title" xml:space="preserve"><value>Генерація SSH ключа</value></data>
+  <data name="KeyGen_GenerateKeys" xml:space="preserve"><value>Генерація пари SSH ключів</value></data>
+  <data name="KeyGen_KeyType" xml:space="preserve"><value>Тип ключа:</value></data>
+  <data name="KeyGen_RSA2048" xml:space="preserve"><value>RSA 2048</value></data>
+  <data name="KeyGen_RSA4096" xml:space="preserve"><value>RSA 4096</value></data>
+  <data name="KeyGen_ED25519" xml:space="preserve"><value>ED25519</value></data>
+  <data name="KeyGen_ECDSA256" xml:space="preserve"><value>ECDSA 256</value></data>
+  <data name="KeyGen_ECDSA384" xml:space="preserve"><value>ECDSA 384</value></data>
+  <data name="KeyGen_ECDSA521" xml:space="preserve"><value>ECDSA 521</value></data>
+  <data name="KeyGen_Passphrase" xml:space="preserve"><value>Парольна фраза (необов'язково):</value></data>
+  <data name="KeyGen_SaveToDirectory" xml:space="preserve"><value>Зберегти в папку:</value></data>
+  <data name="KeyGen_KeyName" xml:space="preserve"><value>Ім'я ключа (напр. id_rsa):</value></data>
+  <data name="KeyGen_Cancel" xml:space="preserve"><value>Скасувати</value></data>
+  <data name="KeyGen_GenerateSave" xml:space="preserve"><value>Згенерувати та зберегти</value></data>
+
+  <!-- SshSessionView -->
+  <data name="Ssh_Disconnect" xml:space="preserve"><value>Відключитися</value></data>
+  <data name="Ssh_Reconnect" xml:space="preserve"><value>Перепідключитися</value></data>
+  <data name="Ssh_Clear" xml:space="preserve"><value>Очистити</value></data>
+  <data name="Ssh_ClearTooltip" xml:space="preserve"><value>Очистити термінал (Ctrl+L)</value></data>
+  <data name="Ssh_Snippets" xml:space="preserve"><value>Сніпети</value></data>
+  <data name="Ssh_CopyPasteHint" xml:space="preserve"><value>Ctrl+Shift+C/V: Копіювати/Вставити</value></data>
+
+  <!-- WebSessionView -->
+  <data name="Web_BrowserError" xml:space="preserve"><value>Не вдалося ініціалізувати браузер. Переконайтеся що WebView2 Runtime встановлено.</value></data>
+  <data name="Web_BrowserErrorTitle" xml:space="preserve"><value>Помилка браузера</value></data>
+
+  <!-- MainWindow additional -->
+  <data name="Main_Shortcuts" xml:space="preserve"><value>Бокова панель
+
+F5: Оновити
+Ctrl+W: Закрити
+Ctrl+T: Новий SSH
+Ctrl+R: Новий RDP</value></data>
 </root>
