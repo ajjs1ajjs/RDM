@@ -1,9 +1,10 @@
 # 🖥️ RemoteManager (RDM)
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
+[![CI](https://github.com/ajjs1ajjs/RDM/actions/workflows/ci.yml/badge.svg)](https://github.com/ajjs1ajjs/RDM/actions/workflows/ci.yml)
 [![Target Framework](https://img.shields.io/badge/.NET-8.0--windows-blue.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-38%20passed-brightgreen.svg)](#)
 
 **RemoteManager** — це сучасний, швидкий та безпечний десктопний менеджер віддалених підключень для Windows. Додаток розроблено на базі платформи **.NET 8.0** та **WPF (Windows Presentation Foundation)** за патерном MVVM.
 
