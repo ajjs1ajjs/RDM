@@ -696,9 +696,8 @@
                                     </Grid>
                                     <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,5,0,0">
                                         <TextBlock Text="{x:Static helpers:L.Main_Latency}" FontSize="10" Foreground="#94A3B8" HorizontalAlignment="Center"/>
-                                        <TextBlock FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center">
-                                            <Run Text="{Binding Latency}"/><Run Text="{x:Static helpers:L.Main_Latency_Unit}"/>
-                                        </TextBlock>
+                                        <TextBlock FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"
+                                                   Text="{Binding Latency, StringFormat={}{0}ms}"/>
                                     </StackPanel>
                                 </Grid>
                             </Grid>
@@ -754,12 +753,18 @@
                     <SolidColorBrush Color="#0C1122" Opacity="0.8"/>
                 </Border.Background>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}">
-                        <Run Text="{x:Static helpers:L.Main_Tabs_Prefix}"/><Run Text="{Binding OpenTabs.Count}"/>
-                    </TextBlock>
-                    <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}" Margin="15,0,0,0">
-                        <Run Text="{x:Static helpers:L.Main_Groups_Prefix}"/><Run Text="{Binding Groups.Count}"/>
-                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,15,0">
+                        <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}"
+                                   Text="{x:Static helpers:L.Main_Tabs_Prefix}"/>
+                        <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}"
+                                   Text="{Binding OpenTabs.Count}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}"
+                                   Text="{x:Static helpers:L.Main_Groups_Prefix}"/>
+                        <TextBlock FontSize="11" Foreground="{StaticResource FgDimBrush}"
+                                   Text="{Binding Groups.Count}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>
