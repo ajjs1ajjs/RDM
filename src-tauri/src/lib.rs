@@ -556,29 +556,56 @@ fn connect_rdp(
     port: u32,
     fullscreen: bool,
     credential_id: Option<String>,
+    server_id: Option<String>,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let mut decrypted_password = None;
     let mut username = None;
 
-    if let Some(cred_id) = credential_id {
-        let kek_guard = state.kek.lock().unwrap();
-        let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
+    let conn = db.conn.lock().unwrap();
 
-        let conn = db.conn.lock().unwrap();
-        let list = db::get_credentials(&conn)?;
-        let cred = list.iter().find(|c| c.id == cred_id)
-            .ok_or_else(|| "Credential not found".to_string())?;
+    // Check if server has manual credentials first
+    if let Some(ref srv_id) = server_id {
+        let list = db::get_servers(&conn)?;
+        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            if let Some(ref manual_user) = srv.username {
+                if !manual_user.is_empty() {
+                    username = Some(manual_user.clone());
+                }
+            }
+            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
+                if !encrypted_pass_json.is_empty() {
+                    let kek_guard = state.kek.lock().unwrap();
+                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
+                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
+                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    decrypted_password = Some(decrypted);
+                }
+            }
+        }
+    }
 
-        let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-            .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+    // Fallback to linked credential if manual was not found
+    if username.is_none() && decrypted_password.is_none() {
+        if let Some(cred_id) = credential_id {
+            let kek_guard = state.kek.lock().unwrap();
+            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
 
-        let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+            let list = db::get_credentials(&conn)?;
+            let cred = list.iter().find(|c| c.id == cred_id)
+                .ok_or_else(|| "Credential not found".to_string())?;
 
-        username = Some(cred.username.clone());
-        if cred.r#type == "password" {
-            decrypted_password = Some(decrypted);
+            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
+                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+
+            username = Some(cred.username.clone());
+            if cred.r#type == "password" {
+                decrypted_password = Some(decrypted);
+            }
         }
     }
 
@@ -589,6 +616,112 @@ fn connect_rdp(
         username.as_deref(),
         decrypted_password.as_deref(),
     )
+}
+
+#[tauri::command]
+fn connect_rdp_embedded(
+    session_id: String,
+    host: String,
+    port: u32,
+    credential_id: Option<String>,
+    server_id: Option<String>,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    app: AppHandle,
+    state: State<'_, SessionState>,
+    rdp_state: State<'_, rdp::RdpState>,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let mut decrypted_password = None;
+    let mut username = None;
+
+    let conn = db.conn.lock().unwrap();
+
+    // Check if server has manual credentials first
+    if let Some(ref srv_id) = server_id {
+        let list = db::get_servers(&conn)?;
+        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            if let Some(ref manual_user) = srv.username {
+                if !manual_user.is_empty() {
+                    username = Some(manual_user.clone());
+                }
+            }
+            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
+                if !encrypted_pass_json.is_empty() {
+                    let kek_guard = state.kek.lock().unwrap();
+                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
+                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
+                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    decrypted_password = Some(decrypted);
+                }
+            }
+        }
+    }
+
+    // Fallback to linked vault credential if manual was not found
+    if username.is_none() && decrypted_password.is_none() {
+        if let Some(cred_id) = credential_id {
+            let kek_guard = state.kek.lock().unwrap();
+            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
+
+            let list = db::get_credentials(&conn)?;
+            let cred = list.iter().find(|c| c.id == cred_id)
+                .ok_or_else(|| "Credential not found".to_string())?;
+
+            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
+                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+
+            username = Some(cred.username.clone());
+            if cred.r#type == "password" {
+                decrypted_password = Some(decrypted);
+            }
+        }
+    }
+
+    // Get parent HWND from main window
+    let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
+    let parent_hwnd = main_window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    rdp::launch_rdp_embedded(
+        session_id,
+        &host,
+        port,
+        username.as_deref(),
+        decrypted_password.as_deref(),
+        parent_hwnd,
+        x,
+        y,
+        width,
+        height,
+        app_data_dir,
+        rdp_state.inner(),
+    )
+}
+
+#[tauri::command]
+fn resize_rdp_embedded(
+    session_id: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    rdp_state: State<'_, rdp::RdpState>,
+) -> Result<(), String> {
+    rdp::resize_rdp_embedded(&session_id, x, y, width, height, rdp_state.inner())
+}
+
+#[tauri::command]
+fn disconnect_rdp_embedded(
+    session_id: String,
+    rdp_state: State<'_, rdp::RdpState>,
+) -> Result<(), String> {
+    rdp::disconnect_rdp_embedded(&session_id, rdp_state.inner())
 }
 
 #[tauri::command]
@@ -869,6 +1002,7 @@ pub fn run() {
             app.manage(DbState { conn: Mutex::new(conn) });
             app.manage(SessionState::new());
             app.manage(ssh::SshState::new());
+            app.manage(rdp::RdpState::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -894,6 +1028,9 @@ pub fn run() {
             resize_ssh_pty,
             disconnect_ssh,
             connect_rdp,
+            connect_rdp_embedded,
+            resize_rdp_embedded,
+            disconnect_rdp_embedded,
             export_database_backup,
             import_database_backup,
             import_devolutions_csv,

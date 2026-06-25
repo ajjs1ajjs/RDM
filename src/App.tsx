@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ServerTable } from "./components/ServerTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { TerminalTab } from "./components/TerminalTab";
+import { RdpTab } from "./components/RdpTab";
 import { CommandPalette } from "./components/CommandPalette";
 import { KeyRound, Key, Plus, Terminal, LogOut, X } from "lucide-react";
 import "./App.css";
@@ -137,8 +138,8 @@ function App() {
       await invoke("lock_vault");
       setUnlocked(false);
       setCredentials([]);
-      // Close any running SSH tabs
-      setActiveTabs(prev => prev.filter(t => t.type !== 'ssh'));
+      // Close any running SSH/RDP tabs
+      setActiveTabs(prev => prev.filter(t => t.type !== 'ssh' && t.type !== 'rdp'));
       setCurrentTabId("dashboard");
       setActiveTabType("dashboard");
     } catch (e) {
@@ -149,14 +150,19 @@ function App() {
   // Connection Handler
   const handleConnect = (srv: Server) => {
     if (srv.protocol === "rdp") {
-      // Spawn mstsc natively
-      invoke("connect_rdp", {
-        host: srv.hostname || srv.ip,
-        port: srv.port,
-        fullscreen: false,
-        credentialId: srv.credential_id || null,
+      // Open embedded RDP tab
+      const tabId = `rdp-${srv.id}-${Date.now()}`;
+      const newTab: ActiveTab = {
+        id: tabId,
+        title: srv.name,
+        type: "rdp",
         serverId: srv.id,
-      }).catch((e) => alert(`Failed to launch RDP: ${e}`));
+        hostname: srv.hostname || srv.ip,
+      };
+
+      setActiveTabs((prev) => [...prev, newTab]);
+      setCurrentTabId(tabId);
+      setActiveTabType("rdp");
     } else {
       // Open SSH Terminal tab
       const tabId = `ssh-${srv.id}-${Date.now()}`;
@@ -540,6 +546,21 @@ function App() {
           username={server ? (server.username || credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
           credentialId={server?.credential_id}
           serverId={server?.id}
+        />
+      );
+    }
+
+    // Active RDP connections
+    if (currentTab && currentTab.type === "rdp") {
+      const server = servers.find((s) => s.id === currentTab.serverId);
+      return (
+        <RdpTab
+          key={currentTab.id}
+          sessionId={currentTab.id}
+          serverId={currentTab.serverId || ""}
+          host={currentTab.hostname || "127.0.0.1"}
+          port={server?.port || 3389}
+          credentialId={server?.credential_id}
         />
       );
     }
