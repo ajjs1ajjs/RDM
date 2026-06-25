@@ -464,8 +464,40 @@ fn connect_rdp(
     host: String,
     port: u32,
     fullscreen: bool,
+    credential_id: Option<String>,
+    state: State<'_, SessionState>,
+    db: State<'_, DbState>,
 ) -> Result<(), String> {
-    rdp::launch_rdp_session(&host, port, fullscreen)
+    let mut decrypted_password = None;
+    let mut username = None;
+
+    if let Some(cred_id) = credential_id {
+        let kek_guard = state.kek.lock().unwrap();
+        let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
+
+        let conn = db.conn.lock().unwrap();
+        let list = db::get_credentials(&conn)?;
+        let cred = list.iter().find(|c| c.id == cred_id)
+            .ok_or_else(|| "Credential not found".to_string())?;
+
+        let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
+            .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+
+        let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+
+        username = Some(cred.username.clone());
+        if cred.r#type == "password" {
+            decrypted_password = Some(decrypted);
+        }
+    }
+
+    rdp::launch_rdp_session(
+        &host,
+        port,
+        fullscreen,
+        username.as_deref(),
+        decrypted_password.as_deref(),
+    )
 }
 
 #[tauri::command]

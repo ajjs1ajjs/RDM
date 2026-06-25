@@ -152,6 +152,7 @@ function App() {
         host: srv.hostname || srv.ip,
         port: srv.port,
         fullscreen: false,
+        credentialId: srv.credential_id || null,
       }).catch((e) => alert(`Failed to launch RDP: ${e}`));
     } else {
       // Open SSH Terminal tab

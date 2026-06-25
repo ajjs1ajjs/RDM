@@ -138,7 +138,7 @@ pub fn connect_ssh(
                             if !password_sent && (lower.contains("password:") || lower.contains("password for")) {
                                 thread::sleep(Duration::from_millis(150)); // Wait for ssh to stabilize prompt
                                 let mut wr = writer_clone.lock().unwrap();
-                                let _ = write!(wr, "{}\n", pass);
+                                let _ = write!(wr, "{}\r", pass);
                                 password_sent = true;
                                 output_accumulated.clear();
                             }
@@ -148,7 +148,7 @@ pub fn connect_ssh(
                             if !passphrase_sent && (lower.contains("passphrase") || lower.contains("enter passphrase")) {
                                 thread::sleep(Duration::from_millis(150));
                                 let mut wr = writer_clone.lock().unwrap();
-                                let _ = write!(wr, "{}\n", phrase);
+                                let _ = write!(wr, "{}\r", phrase);
                                 passphrase_sent = true;
                                 output_accumulated.clear();
                             }
