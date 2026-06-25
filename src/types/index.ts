@@ -10,6 +10,8 @@ export interface Server {
   tags: string; // Comma separated
   description: string;
   credential_id?: string;
+  username?: string;
+  encrypted_password?: string;
   created_at?: string;
   updated_at?: string;
 }

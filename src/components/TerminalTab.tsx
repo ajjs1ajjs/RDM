@@ -11,6 +11,7 @@ interface TerminalTabProps {
   port: number;
   username: string;
   credentialId?: string;
+  serverId?: string;
 }
 
 export const TerminalTab: React.FC<TerminalTabProps> = ({
@@ -19,6 +20,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   port,
   username,
   credentialId,
+  serverId,
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -103,6 +105,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
           port,
           username,
           credentialId: credentialId || null,
+          serverId: serverId || null,
           cols,
           rows,
         });

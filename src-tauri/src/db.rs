@@ -16,6 +16,8 @@ pub struct Server {
     pub tags: String,
     pub description: String,
     pub credential_id: Option<String>,
+    pub username: Option<String>,
+    pub encrypted_password: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -86,12 +88,18 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             tags TEXT NOT NULL,
             description TEXT NOT NULL,
             credential_id TEXT,
+            username TEXT,
+            encrypted_password TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(credential_id) REFERENCES credentials(id) ON DELETE SET NULL
         );",
         [],
     ).map_err(|e| e.to_string())?;
+
+    // Migration to add custom credentials columns if updating from older database versions
+    let _ = conn.execute("ALTER TABLE servers ADD COLUMN username TEXT;", []);
+    let _ = conn.execute("ALTER TABLE servers ADD COLUMN encrypted_password TEXT;", []);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS connection_history (
@@ -192,9 +200,9 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
 // Servers helpers
 pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id],
+        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -202,8 +210,8 @@ pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
 
 pub fn update_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, updated_at = CURRENT_TIMESTAMP WHERE id = ?11",
-        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.id],
+        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, username = ?11, encrypted_password = ?12, updated_at = CURRENT_TIMESTAMP WHERE id = ?13",
+        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.id],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -217,7 +225,7 @@ pub fn delete_server(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, created_at, updated_at FROM servers ORDER BY name ASC")
+        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at FROM servers ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
     
     let rows = stmt
@@ -234,8 +242,10 @@ pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
                 tags: row.get(8)?,
                 description: row.get(9)?,
                 credential_id: row.get(10)?,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
+                username: row.get(11)?,
+                encrypted_password: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;

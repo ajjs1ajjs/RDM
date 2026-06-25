@@ -47,6 +47,8 @@ function App() {
   const [srvTags, setSrvTags] = useState("");
   const [srvDesc, setSrvDesc] = useState("");
   const [srvCredId, setSrvCredId] = useState("");
+  const [srvUsername, setSrvUsername] = useState("");
+  const [srvPassword, setSrvPassword] = useState("");
 
   const [credName, setCredName] = useState("");
   const [credType, setCredType] = useState<'password' | 'ssh_key'>("password");
@@ -153,6 +155,7 @@ function App() {
         port: srv.port,
         fullscreen: false,
         credentialId: srv.credential_id || null,
+        serverId: srv.id,
       }).catch((e) => alert(`Failed to launch RDP: ${e}`));
     } else {
       // Open SSH Terminal tab
@@ -207,6 +210,8 @@ function App() {
       setSrvTags(srv.tags);
       setSrvDesc(srv.description);
       setSrvCredId(srv.credential_id || "");
+      setSrvUsername(srv.username || "");
+      setSrvPassword(srv.encrypted_password ? "__UNCHANGED__" : "");
     } else {
       setSrvName("");
       setSrvHost("");
@@ -218,6 +223,8 @@ function App() {
       setSrvTags("");
       setSrvDesc("");
       setSrvCredId("");
+      setSrvUsername("");
+      setSrvPassword("");
     }
     setServerModalOpen(true);
   };
@@ -238,6 +245,8 @@ function App() {
           tags: srvTags,
           description: srvDesc,
           credentialId: srvCredId || null,
+          username: srvUsername || null,
+          password: srvPassword || null,
         });
       } else {
         await invoke("add_server", {
@@ -251,6 +260,8 @@ function App() {
           tags: srvTags,
           description: srvDesc,
           credentialId: srvCredId || null,
+          username: srvUsername || null,
+          password: srvPassword || null,
         });
       }
       setServerModalOpen(false);
@@ -526,8 +537,9 @@ function App() {
           sessionId={currentTab.id}
           host={currentTab.hostname || "127.0.0.1"}
           port={server?.port || 22}
-          username={server ? credentials.find(c => c.id === server.credential_id)?.username || "root" : "root"}
+          username={server ? (server.username || credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
           credentialId={server?.credential_id}
+          serverId={server?.id}
         />
       );
     }
@@ -715,6 +727,31 @@ function App() {
                   ))}
                 </select>
               </div>
+
+              {!srvCredId && (
+                <div className="form-grid-2" style={{ gap: "10px" }}>
+                  <div className="input-group">
+                    <label className="input-label">Custom Username (Manual)</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      value={srvUsername}
+                      onChange={(e) => setSrvUsername(e.target.value)}
+                      placeholder="e.g. root / Administrator"
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Custom Password (Manual)</label>
+                    <input
+                      type="password"
+                      className="text-input"
+                      value={srvPassword}
+                      onChange={(e) => setSrvPassword(e.target.value)}
+                      placeholder={srvPassword === "__UNCHANGED__" ? "•••••••• (Unchanged)" : "Enter password"}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="input-group">
                 <label className="input-label">Notes / Description</label>

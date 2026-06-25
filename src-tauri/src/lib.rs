@@ -255,6 +255,29 @@ fn decrypt_credential_secret(
     crypto::decrypt_secret(&kek, &encrypted)
 }
 
+#[tauri::command]
+fn decrypt_server_password(
+    id: String,
+    state: State<'_, SessionState>,
+    db: State<'_, DbState>,
+) -> Result<String, String> {
+    let kek_guard = state.kek.lock().unwrap();
+    let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
+
+    let conn = db.conn.lock().unwrap();
+    let list = db::get_servers(&conn)?;
+    let srv = list.iter().find(|s| s.id == id)
+        .ok_or_else(|| "Server not found".to_string())?;
+
+    let encrypted_json = srv.encrypted_password.as_ref()
+        .ok_or_else(|| "No manual password configured".to_string())?;
+
+    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_json)
+        .map_err(|e| format!("Failed to parse encrypted password: {}", e))?;
+
+    crypto::decrypt_secret(&kek, &encrypted)
+}
+
 // Servers commands
 #[tauri::command]
 fn get_servers(db: State<'_, DbState>) -> Result<Vec<db::Server>, String> {
@@ -274,8 +297,24 @@ fn add_server(
     tags: String,
     description: String,
     credential_id: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    let mut encrypted_password = None;
+
+    if let Some(ref pass_val) = password {
+        if !pass_val.is_empty() {
+            let kek_guard = state.kek.lock().unwrap();
+            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
+            let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
+            let encrypted_json = serde_json::to_string(&encrypted)
+                .map_err(|e| format!("Failed to serialize manual password: {}", e))?;
+            encrypted_password = Some(encrypted_json);
+        }
+    }
+
     let srv = db::Server {
         id: Uuid::new_v4().to_string(),
         name,
@@ -288,6 +327,8 @@ fn add_server(
         tags,
         description,
         credential_id,
+        username,
+        encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
     };
@@ -309,8 +350,32 @@ fn update_server(
     tags: String,
     description: String,
     credential_id: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    let conn = db.conn.lock().unwrap();
+    let mut encrypted_password = None;
+
+    if let Some(ref pass_val) = password {
+        if !pass_val.is_empty() {
+            if pass_val == "__UNCHANGED__" {
+                let list = db::get_servers(&conn)?;
+                let existing = list.iter().find(|s| s.id == id)
+                    .ok_or_else(|| "Server not found".to_string())?;
+                encrypted_password = existing.encrypted_password.clone();
+            } else {
+                let kek_guard = state.kek.lock().unwrap();
+                let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
+                let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
+                let encrypted_json = serde_json::to_string(&encrypted)
+                    .map_err(|e| format!("Failed to serialize manual password: {}", e))?;
+                encrypted_password = Some(encrypted_json);
+            }
+        }
+    }
+
     let srv = db::Server {
         id,
         name,
@@ -323,11 +388,12 @@ fn update_server(
         tags,
         description,
         credential_id,
+        username,
+        encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
     };
 
-    let conn = db.conn.lock().unwrap();
     db::update_server(&conn, &srv)
 }
 
@@ -366,6 +432,7 @@ fn connect_ssh(
     port: u16,
     username: String,
     credential_id: Option<String>,
+    server_id: Option<String>,
     cols: u32,
     rows: u32,
     app: AppHandle,
@@ -375,41 +442,65 @@ fn connect_ssh(
     let mut decrypted_password = None;
     let mut decrypted_key = None;
     let mut passphrase = None;
+    let mut final_username = username;
 
-    if let Some(cred_id) = credential_id {
-        let kek_guard = state.kek.lock().unwrap();
-        let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
+    let conn = db.conn.lock().unwrap();
 
-        let conn = db.conn.lock().unwrap();
-        let list = db::get_credentials(&conn)?;
-        let cred = list.iter().find(|c| c.id == cred_id)
-            .ok_or_else(|| "Credential not found".to_string())?;
-
-        let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-            .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
-
-        let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
-
-        if cred.r#type == "password" {
-            decrypted_password = Some(decrypted);
-        } else if cred.r#type == "ssh_key" {
-            // Check if there is passphrase. In our DB, we store private key + passphrase.
-            // If the secret is JSON, let's handle it, otherwise it's just the key content.
-            // We can store it as private key string or a JSON containing { key: "...", passphrase: "..." }.
-            if decrypted.starts_with('{') {
-                #[derive(Deserialize)]
-                struct KeyDetails {
-                    key: String,
-                    passphrase: Option<String>,
+    // Check if server has manual credentials first
+    if let Some(ref srv_id) = server_id {
+        let list = db::get_servers(&conn)?;
+        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            if let Some(ref manual_user) = srv.username {
+                if !manual_user.is_empty() {
+                    final_username = manual_user.clone();
                 }
-                if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
-                    decrypted_key = Some(details.key);
-                    passphrase = details.passphrase;
+            }
+            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
+                if !encrypted_pass_json.is_empty() {
+                    let kek_guard = state.kek.lock().unwrap();
+                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
+                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
+                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    decrypted_password = Some(decrypted);
+                }
+            }
+        }
+    }
+
+    // Fallback to linked credential if manual password was not found
+    if decrypted_password.is_none() {
+        if let Some(cred_id) = credential_id {
+            let kek_guard = state.kek.lock().unwrap();
+            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
+
+            let list = db::get_credentials(&conn)?;
+            let cred = list.iter().find(|c| c.id == cred_id)
+                .ok_or_else(|| "Credential not found".to_string())?;
+
+            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
+                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+
+            if cred.r#type == "password" {
+                decrypted_password = Some(decrypted);
+            } else if cred.r#type == "ssh_key" {
+                if decrypted.starts_with('{') {
+                    #[derive(Deserialize)]
+                    struct KeyDetails {
+                        key: String,
+                        passphrase: Option<String>,
+                    }
+                    if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
+                        decrypted_key = Some(details.key);
+                        passphrase = details.passphrase;
+                    } else {
+                        decrypted_key = Some(decrypted);
+                    }
                 } else {
                     decrypted_key = Some(decrypted);
                 }
-            } else {
-                decrypted_key = Some(decrypted);
             }
         }
     }
@@ -423,7 +514,7 @@ fn connect_ssh(
         session_id,
         &host,
         port,
-        &username,
+        &final_username,
         password_ref,
         key_ref,
         passphrase_ref,
@@ -715,6 +806,8 @@ fn import_devolutions_csv(
             tags: "imported".to_string(),
             description,
             credential_id,
+            username: None,
+            encrypted_password: None,
             created_at: String::new(),
             updated_at: String::new(),
         };
@@ -805,7 +898,8 @@ pub fn run() {
             import_database_backup,
             import_devolutions_csv,
             select_and_export_backup,
-            select_and_import_backup
+            select_and_import_backup,
+            decrypt_server_password
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

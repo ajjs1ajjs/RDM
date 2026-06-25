@@ -48,21 +48,30 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
   };
 
   const handleCopyUsername = () => {
-    if (!associatedCred) return;
-    navigator.clipboard.writeText(associatedCred.username);
+    if (!server) return;
+    const user = associatedCred ? associatedCred.username : (server.username || "");
+    if (!user) return;
+    navigator.clipboard.writeText(user);
   };
 
   const handleRevealPassword = async () => {
-    if (!associatedCred || !server) return;
+    if (!server) return;
     if (revealingPassword) {
       setRevealingPassword(false);
       return;
     }
 
     try {
-      const plain = await invoke<string>("decrypt_credential_secret", {
-        id: associatedCred.id,
-      });
+      let plain = "";
+      if (associatedCred) {
+        plain = await invoke<string>("decrypt_credential_secret", {
+          id: associatedCred.id,
+        });
+      } else if (server.encrypted_password) {
+        plain = await invoke<string>("decrypt_server_password", {
+          id: server.id,
+        });
+      }
       setDecryptedSecret(plain);
       setRevealingPassword(true);
     } catch (err) {
@@ -71,11 +80,19 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
   };
 
   const handleCopyPassword = async () => {
-    if (!associatedCred || !server) return;
+    if (!server) return;
     try {
-      const plain = await invoke<string>("decrypt_credential_secret", {
-        id: associatedCred.id,
-      });
+      let plain = "";
+      if (associatedCred) {
+        plain = await invoke<string>("decrypt_credential_secret", {
+          id: associatedCred.id,
+        });
+      } else if (server.encrypted_password) {
+        plain = await invoke<string>("decrypt_server_password", {
+          id: server.id,
+        });
+      }
+      if (!plain) return;
       
       // Copy to clipboard
       await navigator.clipboard.writeText(plain);
@@ -134,17 +151,24 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
         </div>
       </div>
 
-      {associatedCred && (
+      {(associatedCred || server.username) && (
         <div>
           <div className="details-section-title">Credentials</div>
-          <div className="details-row">
-            <div className="details-label">Linked Account</div>
-            <div className="details-value">{associatedCred.name}</div>
-          </div>
+          {associatedCred ? (
+            <div className="details-row">
+              <div className="details-label">Linked Account</div>
+              <div className="details-value">{associatedCred.name}</div>
+            </div>
+          ) : (
+            <div className="details-row">
+              <div className="details-label">Auth Mode</div>
+              <div className="details-value">Custom / Manual</div>
+            </div>
+          )}
           <div className="details-row">
             <div className="details-label">Username</div>
             <div className="details-value" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>{associatedCred.username}</span>
+              <span>{associatedCred ? associatedCred.username : server.username}</span>
               <button
                 className="btn btn-secondary"
                 style={{ padding: "4px 6px" }}
@@ -155,35 +179,37 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
               </button>
             </div>
           </div>
-          <div className="details-row" style={{ marginTop: "10px" }}>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button className="btn btn-secondary" style={{ flexGrow: 1, padding: "8px" }} onClick={handleRevealPassword}>
-                {revealingPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                <span style={{ fontSize: "0.8rem", marginLeft: "4px" }}>{revealingPassword ? "Hide" : "Show"}</span>
-              </button>
-              <button className="btn btn-secondary" style={{ flexGrow: 1, padding: "8px" }} onClick={handleCopyPassword} disabled={copyingPassword}>
-                {copyingPassword ? <ClipboardCheck size={14} style={{ color: "var(--accent-green)" }} /> : <Copy size={14} />}
-                <span style={{ fontSize: "0.8rem", marginLeft: "4px" }}>
-                  {copyingPassword ? "Copied (15s)" : "Copy Secret"}
-                </span>
-              </button>
-            </div>
-            {revealingPassword && (
-              <div
-                className="details-value mono"
-                style={{
-                  marginTop: "8px",
-                  wordBreak: "break-all",
-                  backgroundColor: "rgba(0, 0, 0, 0.4)",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border-color)",
-                }}
-              >
-                {decryptedSecret}
+          {(associatedCred || server.encrypted_password) && (
+            <div className="details-row" style={{ marginTop: "10px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn btn-secondary" style={{ flexGrow: 1, padding: "8px" }} onClick={handleRevealPassword}>
+                  {revealingPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span style={{ fontSize: "0.8rem", marginLeft: "4px" }}>{revealingPassword ? "Hide" : "Show"}</span>
+                </button>
+                <button className="btn btn-secondary" style={{ flexGrow: 1, padding: "8px" }} onClick={handleCopyPassword} disabled={copyingPassword}>
+                  {copyingPassword ? <ClipboardCheck size={14} style={{ color: "var(--accent-green)" }} /> : <Copy size={14} />}
+                  <span style={{ fontSize: "0.8rem", marginLeft: "4px" }}>
+                    {copyingPassword ? "Copied (15s)" : "Copy Secret"}
+                  </span>
+                </button>
               </div>
-            )}
-          </div>
+              {revealingPassword && (
+                <div
+                  className="details-value mono"
+                  style={{
+                    marginTop: "8px",
+                    wordBreak: "break-all",
+                    backgroundColor: "rgba(0, 0, 0, 0.4)",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  {decryptedSecret}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
