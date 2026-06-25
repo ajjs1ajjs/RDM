@@ -631,7 +631,7 @@ fn connect_rdp_embedded(
     height: i32,
     app: AppHandle,
     state: State<'_, SessionState>,
-    rdp_state: State<'_, rdp::RdpState>,
+    _rdp_state: State<'_, rdp::RdpState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let mut decrypted_password = None;
@@ -700,7 +700,7 @@ fn connect_rdp_embedded(
         width,
         height,
         app_data_dir,
-        rdp_state.inner(),
+        app.clone(),
     )
 }
 
