@@ -7,7 +7,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, SetParent, SetWindowLongW,
     GetWindowLongW, GWL_STYLE, WS_CHILD, WS_POPUP, WS_CAPTION, WS_THICKFRAME,
     GetClassNameW, GetParent, GetWindowTextW,
-    SetWindowPos, SWP_NOZORDER, SWP_SHOWWINDOW, SWP_FRAMECHANGED,
+    SetWindowPos, SWP_SHOWWINDOW, SWP_FRAMECHANGED,
 };
 use tauri::Manager;
 
@@ -252,7 +252,7 @@ pub fn launch_rdp_embedded(
                     y,
                     width,
                     height,
-                    SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                    SWP_FRAMECHANGED | SWP_SHOWWINDOW,
                 );
             }
 
@@ -287,7 +287,7 @@ pub fn resize_rdp_embedded(
                     y,
                     width,
                     height,
-                    SWP_NOZORDER | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
+                    SWP_SHOWWINDOW | SWP_FRAMECHANGED,
                 );
             }
         }
