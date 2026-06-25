@@ -105,6 +105,12 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         [],
     ).map_err(|e| e.to_string())?;
 
+    // Auto-fix any misconfigured RDP servers imported as SSH on port 3389
+    let _ = conn.execute(
+        "UPDATE servers SET protocol = 'rdp', os = 'windows' WHERE port = 3389 AND protocol = 'ssh';",
+        [],
+    );
+
     Ok(conn)
 }
 

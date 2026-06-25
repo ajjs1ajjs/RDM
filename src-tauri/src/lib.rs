@@ -627,7 +627,7 @@ fn import_devolutions_csv(
         let description = description_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
 
         let protocol_str = protocol_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_lowercase();
-        let protocol = if protocol_str.contains("rdp") || protocol_str.contains("remote") {
+        let mut protocol = if protocol_str.contains("rdp") || protocol_str.contains("remote") {
             "rdp".to_string()
         } else {
             "ssh".to_string()
@@ -636,6 +636,13 @@ fn import_devolutions_csv(
         let port = port_str.parse::<u32>().unwrap_or_else(|_| {
             if protocol == "rdp" { 3389 } else { 22 }
         });
+
+        // Override protocol based on standard port overrides if mismatching
+        if port == 3389 && protocol != "rdp" {
+            protocol = "rdp".to_string();
+        } else if port == 22 && protocol != "ssh" {
+            protocol = "ssh".to_string();
+        }
 
         let username = username_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
         let password = password_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
