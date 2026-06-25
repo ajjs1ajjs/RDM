@@ -554,8 +554,23 @@ fn import_devolutions_csv(
 
     let conn = db.conn.lock().unwrap();
 
+    // Detect delimiter dynamically (handles comma, semicolon, tab)
+    let mut delimiter = b',';
+    if let Some(first_line) = csv_content.lines().next() {
+        let commas = first_line.matches(',').count();
+        let semicolons = first_line.matches(';').count();
+        let tabs = first_line.matches('\t').count();
+        
+        if semicolons > commas && semicolons > tabs {
+            delimiter = b';';
+        } else if tabs > commas && tabs > semicolons {
+            delimiter = b'\t';
+        }
+    }
+
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
+        .delimiter(delimiter)
         .from_reader(csv_content.as_bytes());
 
     let headers = reader.headers()
@@ -573,28 +588,28 @@ fn import_devolutions_csv(
     let mut description_idx = None;
 
     for (idx, header) in headers.iter().enumerate() {
-        let h = header.to_lowercase();
-        if h == "name" || h == "connectionname" {
+        let h = header.to_lowercase().replace(' ', "").replace('_', "").replace('-', "");
+        if h == "name" || h == "connectionname" || h == "displayname" || h == "session" || h == "sessionname" || h == "title" || h == "назва" || h == "имя" {
             name_idx = Some(idx);
-        } else if h == "host" || h == "computer" || h == "ip" || h == "hostname" {
+        } else if h == "host" || h == "computer" || h == "ip" || h == "hostname" || h == "ipaddress" || h == "хост" || h == "адреса" || h == "адрес" {
             host_idx = Some(idx);
-        } else if h == "port" {
+        } else if h == "port" || h == "порт" {
             port_idx = Some(idx);
-        } else if h == "group" || h == "folder" || h == "folderpath" {
+        } else if h == "group" || h == "folder" || h == "folderpath" || h == "directory" || h == "група" || h == "группа" || h == "папка" {
             group_idx = Some(idx);
-        } else if h == "type" || h == "connectiontype" || h == "protocol" {
+        } else if h == "type" || h == "connectiontype" || h == "protocol" || h == "тип" || h == "протокол" {
             protocol_idx = Some(idx);
-        } else if h == "username" || h == "user" {
+        } else if h == "username" || h == "user" || h == "credentialusername" || h == "login" || h == "користувач" || h == "логін" || h == "пользователь" || h == "логин" {
             username_idx = Some(idx);
-        } else if h == "password" || h == "pass" {
+        } else if h == "password" || h == "pass" || h == "credentialpassword" || h == "secret" || h == "пароль" {
             password_idx = Some(idx);
-        } else if h == "description" || h == "notes" {
+        } else if h == "description" || h == "notes" || h == "comment" || h == "опис" || h == "описание" || h == "примітка" || h == "примечание" {
             description_idx = Some(idx);
         }
     }
 
-    let name_idx = name_idx.ok_or_else(|| "CSV must contain a 'Name' or 'ConnectionName' column".to_string())?;
-    let host_idx = host_idx.ok_or_else(|| "CSV must contain a 'Host' or 'Computer' or 'IP' column".to_string())?;
+    let name_idx = name_idx.ok_or_else(|| "CSV must contain a 'Name', 'DisplayName', 'Session', 'Title' or 'Назва' column".to_string())?;
+    let host_idx = host_idx.ok_or_else(|| "CSV must contain a 'Host', 'Computer', 'IP', 'Hostname' or 'Хост' column".to_string())?;
 
     let mut imported_count = 0;
 
