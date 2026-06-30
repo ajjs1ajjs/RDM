@@ -7,6 +7,8 @@ interface ServerTableProps {
   selectedFolder: string;
   selectedTag: string;
   favorites: string[];
+  selectedServer: Server | null;
+  onSelectServer: (server: Server) => void;
   onConnect: (server: Server) => void;
   onEdit: (server: Server) => void;
   onDelete: (id: string) => void;
@@ -20,6 +22,8 @@ export const ServerTable: React.FC<ServerTableProps> = ({
   selectedFolder,
   selectedTag,
   favorites,
+  selectedServer,
+  onSelectServer,
   onConnect,
   onEdit,
   onDelete,
@@ -103,8 +107,14 @@ export const ServerTable: React.FC<ServerTableProps> = ({
             <tbody>
               {filteredServers.map((s) => {
                 const isFavorite = favorites.includes(s.id);
+                const isSelected = selectedServer?.id === s.id;
                 return (
-                  <tr key={s.id} onDoubleClick={() => onConnect(s)}>
+                  <tr
+                    key={s.id}
+                    className={isSelected ? "selected" : ""}
+                    onClick={() => onSelectServer(s)}
+                    onDoubleClick={() => onConnect(s)}
+                  >
                     <td onClick={(e) => { e.stopPropagation(); onToggleFavorite(s.id); }}>
                       <Star
                         size={16}

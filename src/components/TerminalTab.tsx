@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { invoke } from "@tauri-apps/api/core";
@@ -25,6 +25,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -73,45 +74,62 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     const cols = dims.cols;
     const rows = dims.rows;
 
-    let unlistenOutput: (() => void) | null = null;
-    let unlistenClosed: (() => void) | null = null;
+    let isDestroyed = false;
+    const unlisteners: (() => void)[] = [];
     let isConnected = false;
 
     // Setup Tauri Event Listeners
     const setupListeners = async () => {
-      // Listen for stdout data stream
-      unlistenOutput = await listen<{ session_id: string; data: string }>(
-        "ssh-output",
-        (event) => {
-          if (event.payload.session_id === sessionId) {
-            term.write(event.payload.data);
-          }
-        }
-      );
-
-      // Listen for connection close events
-      unlistenClosed = await listen<string>("ssh-closed", (event) => {
-        if (event.payload === sessionId) {
-          term.writeln("\r\n\x1b[1;31m[RDM] SSH Connection closed by remote host.\x1b[0m");
-          isConnected = false;
-        }
-      });
-
       try {
-        // Trigger SSH connection on backend
-        await invoke("connect_ssh", {
-          sessionId,
-          host,
-          port,
-          username,
-          credentialId: credentialId || null,
-          serverId: serverId || null,
-          cols,
-          rows,
+        // Listen for stdout data stream
+        const unlistenOutput = await listen<{ session_id: string; data: string }>(
+          "ssh-output",
+          (event) => {
+            if (event.payload.session_id === sessionId) {
+              term.write(event.payload.data);
+            }
+          }
+        );
+        if (isDestroyed) {
+          unlistenOutput();
+        } else {
+          unlisteners.push(unlistenOutput);
+        }
+
+        // Listen for connection close events
+        const unlistenClosed = await listen<string>("ssh-closed", (event) => {
+          if (event.payload === sessionId) {
+            term.writeln("\r\n\x1b[1;31m[RDM] SSH Connection closed by remote host.\x1b[0m");
+            isConnected = false;
+            setStatus('disconnected');
+          }
         });
-        isConnected = true;
+        if (isDestroyed) {
+          unlistenClosed();
+        } else {
+          unlisteners.push(unlistenClosed);
+        }
+
+        if (!isDestroyed) {
+          // Trigger SSH connection on backend
+          await invoke("connect_ssh", {
+            sessionId,
+            host,
+            port,
+            username,
+            credentialId: credentialId || null,
+            serverId: serverId || null,
+            cols,
+            rows,
+          });
+          isConnected = true;
+          setStatus('connected');
+        }
       } catch (err: any) {
-        term.writeln(`\r\n\x1b[1;31m[RDM] Error: ${err}\x1b[0m`);
+        if (!isDestroyed) {
+          term.writeln(`\r\n\x1b[1;31m[RDM] Error: ${err}\x1b[0m`);
+          setStatus('disconnected');
+        }
       }
     };
 
@@ -149,13 +167,13 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
 
     // Component Cleanup
     return () => {
+      isDestroyed = true;
       window.removeEventListener("resize", handleResize);
       dataSubscription.dispose();
       resizeSubscription.dispose();
       term.dispose();
       
-      if (unlistenOutput) unlistenOutput();
-      if (unlistenClosed) unlistenClosed();
+      unlisteners.forEach((unsub) => unsub());
       
       // Notify backend to drop process resources
       invoke("disconnect_ssh", { sessionId }).catch((e) =>
@@ -168,7 +186,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     <div className="terminal-container">
       <div className="terminal-header">
         <span>SSH: {username}@{host}:{port}</span>
-        <span style={{ color: "var(--accent-cyan)" }}>connected</span>
+        <span style={{ 
+          color: status === 'connected' ? 'var(--accent-green)' : status === 'disconnected' ? 'var(--accent-red)' : 'var(--accent-cyan)' 
+        }}>
+          {status}
+        </span>
       </div>
       <div className="terminal-body" ref={terminalRef} />
     </div>

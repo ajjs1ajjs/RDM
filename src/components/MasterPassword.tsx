@@ -107,7 +107,6 @@ export const MasterPassword: React.FC<MasterPasswordProps> = ({ onUnlock }) => {
 
         <form onSubmit={isSetup ? handleUnlock : handleSetup} className="lock-form">
           <div className="input-group">
-            <label className="input-label">Master Password Label</label>
             <input
               type="password"
               className="text-input"
@@ -121,7 +120,6 @@ export const MasterPassword: React.FC<MasterPasswordProps> = ({ onUnlock }) => {
 
           {!isSetup && (
             <div className="input-group">
-              <label className="input-label">Confirm Master Password Label</label>
               <input
                 type="password"
                 className="text-input"

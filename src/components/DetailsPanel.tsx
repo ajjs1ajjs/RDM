@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Server, Credential, ConnectionHistory } from "../types";
 import { invoke } from "@tauri-apps/api/core";
 import { Copy, Eye, EyeOff, ClipboardCheck, Terminal, Info } from "lucide-react";
@@ -22,6 +22,8 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
   const [revealingPassword, setRevealingPassword] = useState<boolean>(false);
   const [decryptedSecret, setDecryptedSecret] = useState<string>("");
 
+  const timerRef = useRef<number | null>(null);
+
   const associatedCred = credentials.find((c) => c.id === server?.credential_id);
 
   useEffect(() => {
@@ -30,6 +32,13 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
       setDecryptedSecret("");
       setRevealingPassword(false);
     }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [server]);
 
   const loadHistory = async () => {
@@ -98,13 +107,18 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
       await navigator.clipboard.writeText(plain);
       setCopyingPassword(true);
 
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+
       // Auto-clear clipboard after 15 seconds
-      setTimeout(async () => {
+      timerRef.current = window.setTimeout(async () => {
         const currentClipboard = await navigator.clipboard.readText();
         if (currentClipboard === plain) {
           await navigator.clipboard.writeText("");
           setCopyingPassword(false);
         }
+        timerRef.current = null;
       }, 15000);
     } catch (err) {
       alert("Failed to decrypt and copy secret.");
@@ -150,6 +164,42 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
           <div className="details-value">{server.description || "No description provided."}</div>
         </div>
       </div>
+
+      {server.protocol === 'rdp' && (
+        <div>
+          <div className="details-section-title">RDP Redirection Settings</div>
+          <div className="details-row">
+            <div className="details-label">Clipboard</div>
+            <div className="details-value">{server.rdp_clipboard !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">Smart Sizing</div>
+            <div className="details-value">{server.rdp_smart_sizing !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">Local Drives</div>
+            <div className="details-value">{server.rdp_drives !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">Printers</div>
+            <div className="details-value">{server.rdp_printers !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">Smart Cards</div>
+            <div className="details-value">{server.rdp_smartcards !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">WebAuthn</div>
+            <div className="details-value">{server.rdp_webauthn !== 0 ? "Enabled" : "Disabled"}</div>
+          </div>
+          <div className="details-row">
+            <div className="details-label">Audio</div>
+            <div className="details-value">
+              {server.rdp_audio === 0 ? "Play locally" : server.rdp_audio === 1 ? "Play on remote" : "Muted"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {(associatedCred || server.username) && (
         <div>

@@ -20,6 +20,13 @@ pub struct Server {
     pub encrypted_password: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub rdp_clipboard: Option<i32>,
+    pub rdp_drives: Option<i32>,
+    pub rdp_printers: Option<i32>,
+    pub rdp_smart_sizing: Option<i32>,
+    pub rdp_audio: Option<i32>,
+    pub rdp_smartcards: Option<i32>,
+    pub rdp_webauthn: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +47,18 @@ pub struct ConnectionHistory {
     pub timestamp: String,
     pub status: String,
     pub log: String,
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, rusqlite::Error> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
@@ -92,14 +111,17 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             encrypted_password TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            rdp_clipboard INTEGER DEFAULT 1,
+            rdp_drives INTEGER DEFAULT 0,
+            rdp_printers INTEGER DEFAULT 0,
+            rdp_smart_sizing INTEGER DEFAULT 1,
+            rdp_audio INTEGER DEFAULT 0,
+            rdp_smartcards INTEGER DEFAULT 0,
+            rdp_webauthn INTEGER DEFAULT 0,
             FOREIGN KEY(credential_id) REFERENCES credentials(id) ON DELETE SET NULL
         );",
         [],
     ).map_err(|e| e.to_string())?;
-
-    // Migration to add custom credentials columns if updating from older database versions
-    let _ = conn.execute("ALTER TABLE servers ADD COLUMN username TEXT;", []);
-    let _ = conn.execute("ALTER TABLE servers ADD COLUMN encrypted_password TEXT;", []);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS connection_history (
@@ -113,11 +135,35 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         [],
     ).map_err(|e| e.to_string())?;
 
-    // Auto-fix any misconfigured RDP servers imported as SSH on port 3389
-    let _ = conn.execute(
-        "UPDATE servers SET protocol = 'rdp', os = 'windows' WHERE port = 3389 AND protocol = 'ssh';",
-        [],
-    );
+    // Safe versioned schema migration
+    let current_version: u32 = conn
+        .query_row("PRAGMA user_version;", [], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    if current_version < 2 {
+        let columns_to_add = [
+            ("username", "TEXT"),
+            ("encrypted_password", "TEXT"),
+            ("rdp_clipboard", "INTEGER DEFAULT 1"),
+            ("rdp_drives", "INTEGER DEFAULT 0"),
+            ("rdp_printers", "INTEGER DEFAULT 0"),
+            ("rdp_smart_sizing", "INTEGER DEFAULT 1"),
+            ("rdp_audio", "INTEGER DEFAULT 0"),
+            ("rdp_smartcards", "INTEGER DEFAULT 0"),
+            ("rdp_webauthn", "INTEGER DEFAULT 0"),
+        ];
+
+        for &(col_name, col_type) in &columns_to_add {
+            if !column_exists(&conn, "servers", col_name).map_err(|e| e.to_string())? {
+                conn.execute(
+                    &format!("ALTER TABLE servers ADD COLUMN {} {};", col_name, col_type),
+                    [],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+
+        conn.execute("PRAGMA user_version = 2;", []).map_err(|e| e.to_string())?;
+    }
 
     Ok(conn)
 }
@@ -200,9 +246,9 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
 // Servers helpers
 pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password],
+        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -210,8 +256,8 @@ pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
 
 pub fn update_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, username = ?11, encrypted_password = ?12, updated_at = CURRENT_TIMESTAMP WHERE id = ?13",
-        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.id],
+        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, username = ?11, encrypted_password = ?12, rdp_clipboard = ?13, rdp_drives = ?14, rdp_printers = ?15, rdp_smart_sizing = ?16, rdp_audio = ?17, rdp_smartcards = ?18, rdp_webauthn = ?19, updated_at = CURRENT_TIMESTAMP WHERE id = ?20",
+        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn, srv.id],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -225,7 +271,7 @@ pub fn delete_server(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at FROM servers ORDER BY name ASC")
+        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn FROM servers ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
     
     let rows = stmt
@@ -246,6 +292,13 @@ pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
                 encrypted_password: row.get(12)?,
                 created_at: row.get(13)?,
                 updated_at: row.get(14)?,
+                rdp_clipboard: row.get(15)?,
+                rdp_drives: row.get(16)?,
+                rdp_printers: row.get(17)?,
+                rdp_smart_sizing: row.get(18)?,
+                rdp_audio: row.get(19)?,
+                rdp_smartcards: row.get(20)?,
+                rdp_webauthn: row.get(21)?,
             })
         })
         .map_err(|e| e.to_string())?;

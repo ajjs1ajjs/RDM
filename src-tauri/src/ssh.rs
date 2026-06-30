@@ -5,8 +5,21 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 use std::path::PathBuf;
+
+
+pub struct TempKeyGuard {
+    pub path: Option<PathBuf>,
+}
+
+impl Drop for TempKeyGuard {
+    fn drop(&mut self) {
+        if let Some(ref path) = self.path {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
 
 #[derive(Clone, Serialize)]
 pub struct SshOutputPayload {
@@ -44,7 +57,17 @@ pub fn connect_ssh(
     passphrase: Option<&str>,
     cols: u32,
     rows: u32,
+    server_id: Option<String>,
 ) -> Result<(), String> {
+    // Validate host and username to prevent option injection
+    if username.starts_with('-') || host.starts_with('-') {
+        return Err("Invalid username or hostname (cannot start with a hyphen)".to_string());
+    }
+    if username.contains(' ') || host.contains(' ') {
+        return Err("Username and hostname cannot contain spaces".to_string());
+    }
+
+    let mut key_guard = None;
     let mut temp_key_path = None;
     let mut args = vec![
         "-o".to_string(), "StrictHostKeyChecking=no".to_string(),
@@ -70,9 +93,11 @@ pub fn connect_ssh(
 
         args.push("-i".to_string());
         args.push(key_file.to_string_lossy().to_string());
+        key_guard = Some(TempKeyGuard { path: Some(key_file.clone()) });
         temp_key_path = Some(key_file);
     }
 
+    args.push("--".to_string());
     args.push(format!("{}@{}", username, host));
 
     // Open PTY
@@ -109,10 +134,12 @@ pub fn connect_ssh(
     let password_clone = password.map(|s| s.to_string());
     let passphrase_clone = passphrase.map(|s| s.to_string());
     let app_clone = app.clone();
-    let temp_key_path_clone = temp_key_path.clone();
+    let temp_key_path_for_thread = key_guard.as_mut().and_then(|g| g.path.take());
+    let server_id_clone = server_id;
 
     // Spawn reader thread
     thread::spawn(move || {
+        let _thread_key_guard = TempKeyGuard { path: temp_key_path_for_thread };
         let mut buf = [0u8; 8192];
         let mut password_sent = false;
         let mut passphrase_sent = false;
@@ -172,9 +199,19 @@ pub fn connect_ssh(
 
         // Clean up
         let _ = app_clone.emit("ssh-closed", &session_id_clone);
-        
-        if let Some(path) = temp_key_path_clone {
-            let _ = std::fs::remove_file(path);
+
+        if let Some(ref srv_id) = server_id_clone {
+            if let Some(db_state) = app_clone.try_state::<crate::DbState>() {
+                let conn = db_state.conn.lock().unwrap();
+                let hist = crate::db::ConnectionHistory {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    server_id: srv_id.clone(),
+                    timestamp: String::new(),
+                    status: "disconnected".to_string(),
+                    log: "SSH connection closed".to_string(),
+                };
+                let _ = crate::db::add_history(&conn, &hist);
+            }
         }
 
         if let Some(state) = app_clone.try_state::<SshState>() {

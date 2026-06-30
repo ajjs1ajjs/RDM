@@ -1,5 +1,5 @@
 {
-  "name": "tauri-app",
+  "name": "rdm-manager",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:installer": "npm run tauri build",
+    "build:portable": "powershell -ExecutionPolicy Bypass -File scripts/build-portable.ps1",
+    "build:all": "powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

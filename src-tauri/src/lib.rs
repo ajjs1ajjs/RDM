@@ -3,6 +3,8 @@ mod db;
 mod rdp;
 mod ssh;
 
+pub use windows_core;
+
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -52,16 +54,13 @@ fn is_vault_unlocked(state: State<'_, SessionState>) -> Result<bool, String> {
     Ok(kek.is_some())
 }
 
-#[tauri::command]
-fn setup_master_password(
-    password: String,
-    state: State<'_, SessionState>,
-    db: State<'_, DbState>,
+fn setup_master_password_impl(
+    conn: &rusqlite::Connection,
+    session_kek_mutex: &Mutex<Option<[u8; 32]>>,
+    password: &str,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
-    
     // Check if already setup
-    if db::get_setting(&conn, "sentinel")?.is_some() {
+    if db::get_setting(conn, "sentinel")?.is_some() {
         return Err("Vault is already initialized".to_string());
     }
 
@@ -71,7 +70,7 @@ fn setup_master_password(
     let salt_hex = hex::encode(salt);
 
     // Derive Key Encryption Key (KEK)
-    let kek = crypto::derive_key(&password, &salt)?;
+    let kek = crypto::derive_key(password, &salt)?;
 
     // Encrypt authentication sentinel
     let sentinel_plaintext = "rdm-auth-sentinel";
@@ -80,14 +79,55 @@ fn setup_master_password(
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
 
     // Store salt and sentinel in db
-    db::set_setting(&conn, "salt", &salt_hex)?;
-    db::set_setting(&conn, "sentinel", &sentinel_json)?;
+    db::set_setting(conn, "salt", &salt_hex)?;
+    db::set_setting(conn, "sentinel", &sentinel_json)?;
 
     // Store KEK in session state
-    let mut session_kek = state.kek.lock().unwrap();
+    let mut session_kek = session_kek_mutex.lock().unwrap();
     *session_kek = Some(kek);
 
     Ok(())
+}
+
+fn unlock_vault_impl(
+    conn: &rusqlite::Connection,
+    session_kek_mutex: &Mutex<Option<[u8; 32]>>,
+    password: &str,
+) -> Result<bool, String> {
+    let salt_hex = db::get_setting(conn, "salt")?
+        .ok_or_else(|| "Vault has not been initialized yet".to_string())?;
+    
+    let sentinel_json = db::get_setting(conn, "sentinel")?
+        .ok_or_else(|| "Vault sentinel not found".to_string())?;
+
+    let salt = hex::decode(&salt_hex)
+        .map_err(|e| format!("Invalid salt encoding: {}", e))?;
+
+    let kek = crypto::derive_key(password, &salt)?;
+
+    let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
+        .map_err(|e| format!("Failed to parse sentinel data: {}", e))?;
+
+    // Try to decrypt sentinel
+    match crypto::decrypt_secret(&kek, &encrypted_sentinel) {
+        Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
+            // Save KEK in session state
+            let mut session_kek = session_kek_mutex.lock().unwrap();
+            *session_kek = Some(kek);
+            Ok(true)
+        }
+        _ => Ok(false), // Incorrect password
+    }
+}
+
+#[tauri::command]
+fn setup_master_password(
+    password: String,
+    state: State<'_, SessionState>,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().unwrap();
+    setup_master_password_impl(&conn, &state.kek, &password)
 }
 
 #[tauri::command]
@@ -97,31 +137,7 @@ fn unlock_vault(
     db: State<'_, DbState>,
 ) -> Result<bool, String> {
     let conn = db.conn.lock().unwrap();
-
-    let salt_hex = db::get_setting(&conn, "salt")?
-        .ok_or_else(|| "Vault has not been initialized yet".to_string())?;
-    
-    let sentinel_json = db::get_setting(&conn, "sentinel")?
-        .ok_or_else(|| "Vault sentinel not found".to_string())?;
-
-    let salt = hex::decode(&salt_hex)
-        .map_err(|e| format!("Invalid salt encoding: {}", e))?;
-
-    let kek = crypto::derive_key(&password, &salt)?;
-
-    let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
-        .map_err(|e| format!("Failed to parse sentinel data: {}", e))?;
-
-    // Try to decrypt sentinel
-    match crypto::decrypt_secret(&kek, &encrypted_sentinel) {
-        Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
-            // Save KEK in session state
-            let mut session_kek = state.kek.lock().unwrap();
-            *session_kek = Some(kek);
-            Ok(true)
-        }
-        _ => Ok(false), // Incorrect password
-    }
+    unlock_vault_impl(&conn, &state.kek, &password)
 }
 
 #[tauri::command]
@@ -253,6 +269,7 @@ fn decrypt_credential_secret(
         .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
 
     crypto::decrypt_secret(&kek, &encrypted)
+        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())
 }
 
 #[tauri::command]
@@ -276,6 +293,7 @@ fn decrypt_server_password(
         .map_err(|e| format!("Failed to parse encrypted password: {}", e))?;
 
     crypto::decrypt_secret(&kek, &encrypted)
+        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())
 }
 
 // Servers commands
@@ -295,10 +313,17 @@ fn add_server(
     os: String,
     folder_path: String,
     tags: String,
-    description: String,
+        description: String,
     credential_id: Option<String>,
     username: Option<String>,
     password: Option<String>,
+    rdp_clipboard: Option<i32>,
+    rdp_drives: Option<i32>,
+    rdp_printers: Option<i32>,
+    rdp_smart_sizing: Option<i32>,
+    rdp_audio: Option<i32>,
+    rdp_smartcards: Option<i32>,
+    rdp_webauthn: Option<i32>,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
@@ -331,6 +356,13 @@ fn add_server(
         encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
+        rdp_clipboard,
+        rdp_drives,
+        rdp_printers,
+        rdp_smart_sizing,
+        rdp_audio,
+        rdp_smartcards,
+        rdp_webauthn,
     };
 
     let conn = db.conn.lock().unwrap();
@@ -352,6 +384,13 @@ fn update_server(
     credential_id: Option<String>,
     username: Option<String>,
     password: Option<String>,
+    rdp_clipboard: Option<i32>,
+    rdp_drives: Option<i32>,
+    rdp_printers: Option<i32>,
+    rdp_smart_sizing: Option<i32>,
+    rdp_audio: Option<i32>,
+    rdp_smartcards: Option<i32>,
+    rdp_webauthn: Option<i32>,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
@@ -392,6 +431,13 @@ fn update_server(
         encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
+        rdp_clipboard,
+        rdp_drives,
+        rdp_printers,
+        rdp_smart_sizing,
+        rdp_audio,
+        rdp_smartcards,
+        rdp_webauthn,
     };
 
     db::update_server(&conn, &srv)
@@ -418,10 +464,17 @@ fn add_connection_history(
     server_id: String,
     status: String,
     log: String,
+    db: State<'_, DbState>,
 ) -> Result<(), String> {
-    // Wait, let's get db from app handle or state
-    // Let's implement it inside the app
-    Ok(())
+    let conn = db.conn.lock().unwrap();
+    let hist = db::ConnectionHistory {
+        id: Uuid::new_v4().to_string(),
+        server_id,
+        timestamp: String::new(),
+        status,
+        log,
+    };
+    db::add_history(&conn, &hist)
 }
 
 // Connect commands
@@ -461,7 +514,8 @@ fn connect_ssh(
                     let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
                     let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
                         .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
                     decrypted_password = Some(decrypted);
                 }
             }
@@ -481,8 +535,9 @@ fn connect_ssh(
             let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
                 .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
 
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
-
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password/key again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль/ключ заново.)".to_string())?;
+            
             if cred.r#type == "password" {
                 decrypted_password = Some(decrypted);
             } else if cred.r#type == "ssh_key" {
@@ -509,7 +564,7 @@ fn connect_ssh(
     let key_ref = decrypted_key.as_deref();
     let passphrase_ref = passphrase.as_deref();
 
-    ssh::connect_ssh(
+    let res = ssh::connect_ssh(
         app,
         session_id,
         &host,
@@ -520,7 +575,25 @@ fn connect_ssh(
         passphrase_ref,
         cols,
         rows,
-    )
+        server_id.clone(),
+    );
+
+    if let Some(ref srv_id) = server_id {
+        let hist = db::ConnectionHistory {
+            id: Uuid::new_v4().to_string(),
+            server_id: srv_id.clone(),
+            timestamp: String::new(),
+            status: if res.is_ok() { "connected".to_string() } else { "failed".to_string() },
+            log: if res.is_ok() {
+                format!("SSH session initiated to {}:{}", host, port)
+            } else {
+                format!("Failed to initiate SSH session: {}", res.as_ref().err().unwrap())
+            },
+        };
+        let _ = db::add_history(&conn, &hist);
+    }
+
+    res
 }
 
 #[tauri::command]
@@ -557,11 +630,19 @@ fn connect_rdp(
     fullscreen: bool,
     credential_id: Option<String>,
     server_id: Option<String>,
+    app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let mut decrypted_password = None;
     let mut username = None;
+    let mut rdp_clipboard = true;
+    let mut rdp_drives = false;
+    let mut rdp_printers = false;
+    let mut rdp_smart_sizing = true;
+    let mut rdp_audio = 0;
+    let mut rdp_smartcards = false;
+    let mut rdp_webauthn = false;
 
     let conn = db.conn.lock().unwrap();
 
@@ -569,6 +650,14 @@ fn connect_rdp(
     if let Some(ref srv_id) = server_id {
         let list = db::get_servers(&conn)?;
         if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
+            rdp_drives = srv.rdp_drives.unwrap_or(0) != 0;
+            rdp_printers = srv.rdp_printers.unwrap_or(0) != 0;
+            rdp_smart_sizing = srv.rdp_smart_sizing.unwrap_or(1) != 0;
+            rdp_audio = srv.rdp_audio.unwrap_or(0) as u32;
+            rdp_smartcards = srv.rdp_smartcards.unwrap_or(0) != 0;
+            rdp_webauthn = srv.rdp_webauthn.unwrap_or(0) != 0;
+
             if let Some(ref manual_user) = srv.username {
                 if !manual_user.is_empty() {
                     username = Some(manual_user.clone());
@@ -580,15 +669,16 @@ fn connect_rdp(
                     let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
                     let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
                         .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені passwords не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
                     decrypted_password = Some(decrypted);
                 }
             }
         }
     }
 
-    // Fallback to linked credential if manual was not found
-    if username.is_none() && decrypted_password.is_none() {
+    // Fallback to linked credential if password was not found from manual config
+    if decrypted_password.is_none() {
         if let Some(cred_id) = credential_id {
             let kek_guard = state.kek.lock().unwrap();
             let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
@@ -600,22 +690,53 @@ fn connect_rdp(
             let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
                 .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
 
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())?;
 
-            username = Some(cred.username.clone());
+            if username.is_none() {
+                username = Some(cred.username.clone());
+            }
             if cred.r#type == "password" {
                 decrypted_password = Some(decrypted);
             }
         }
     }
 
-    rdp::launch_rdp_session(
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    let res = rdp::launch_rdp_session(
         &host,
         port,
         fullscreen,
         username.as_deref(),
         decrypted_password.as_deref(),
-    )
+        app_data_dir,
+        server_id.clone(),
+        rdp_clipboard,
+        rdp_drives,
+        rdp_printers,
+        rdp_smart_sizing,
+        rdp_audio,
+        rdp_smartcards,
+        rdp_webauthn,
+    );
+
+    if let Some(ref srv_id) = server_id {
+        let hist = db::ConnectionHistory {
+            id: Uuid::new_v4().to_string(),
+            server_id: srv_id.clone(),
+            timestamp: String::new(),
+            status: if res.is_ok() { "connected".to_string() } else { "failed".to_string() },
+            log: if res.is_ok() {
+                format!("External RDP session launched to {}:{}", host, port)
+            } else {
+                format!("Failed to launch RDP session: {}", res.as_ref().err().unwrap())
+            },
+        };
+        let _ = db::add_history(&conn, &hist);
+    }
+
+    res
 }
 
 #[tauri::command]
@@ -629,6 +750,7 @@ fn connect_rdp_embedded(
     y: i32,
     width: i32,
     height: i32,
+    device_pixel_ratio: f64,
     app: AppHandle,
     state: State<'_, SessionState>,
     _rdp_state: State<'_, rdp::RdpState>,
@@ -636,6 +758,13 @@ fn connect_rdp_embedded(
 ) -> Result<(), String> {
     let mut decrypted_password = None;
     let mut username = None;
+    let mut rdp_clipboard = true;
+    let mut rdp_drives = false;
+    let mut rdp_printers = false;
+    let mut rdp_smart_sizing = true;
+    let mut rdp_audio = 0;
+    let mut rdp_smartcards = false;
+    let mut rdp_webauthn = false;
 
     let conn = db.conn.lock().unwrap();
 
@@ -643,6 +772,14 @@ fn connect_rdp_embedded(
     if let Some(ref srv_id) = server_id {
         let list = db::get_servers(&conn)?;
         if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
+            rdp_drives = srv.rdp_drives.unwrap_or(0) != 0;
+            rdp_printers = srv.rdp_printers.unwrap_or(0) != 0;
+            rdp_smart_sizing = srv.rdp_smart_sizing.unwrap_or(1) != 0;
+            rdp_audio = srv.rdp_audio.unwrap_or(0) as u32;
+            rdp_smartcards = srv.rdp_smartcards.unwrap_or(0) != 0;
+            rdp_webauthn = srv.rdp_webauthn.unwrap_or(0) != 0;
+
             if let Some(ref manual_user) = srv.username {
                 if !manual_user.is_empty() {
                     username = Some(manual_user.clone());
@@ -654,15 +791,16 @@ fn connect_rdp_embedded(
                     let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
                     let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
                         .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
                     decrypted_password = Some(decrypted);
                 }
             }
         }
     }
 
-    // Fallback to linked vault credential if manual was not found
-    if username.is_none() && decrypted_password.is_none() {
+    // Fallback to linked vault credential if password was not found from manual config
+    if decrypted_password.is_none() {
         if let Some(cred_id) = credential_id {
             let kek_guard = state.kek.lock().unwrap();
             let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
@@ -674,9 +812,12 @@ fn connect_rdp_embedded(
             let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
                 .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
 
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)?;
+            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
+                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())?;
 
-            username = Some(cred.username.clone());
+            if username.is_none() {
+                username = Some(cred.username.clone());
+            }
             if cred.r#type == "password" {
                 decrypted_password = Some(decrypted);
             }
@@ -685,10 +826,10 @@ fn connect_rdp_embedded(
 
     // Get parent HWND from main window
     let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
-    let parent_hwnd = main_window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
+    let parent_hwnd = windows::Win32::Foundation::HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
-    rdp::launch_rdp_embedded(
+    let res = rdp::launch_rdp_embedded(
         session_id,
         &host,
         port,
@@ -699,9 +840,35 @@ fn connect_rdp_embedded(
         y,
         width,
         height,
+        device_pixel_ratio,
         app_data_dir,
         app.clone(),
-    )
+        server_id.clone(),
+        rdp_clipboard,
+        rdp_drives,
+        rdp_printers,
+        rdp_smart_sizing,
+        rdp_audio,
+        rdp_smartcards,
+        rdp_webauthn,
+    );
+
+    if let Some(ref srv_id) = server_id {
+        let hist = db::ConnectionHistory {
+            id: Uuid::new_v4().to_string(),
+            server_id: srv_id.clone(),
+            timestamp: String::new(),
+            status: if res.is_ok() { "connected".to_string() } else { "failed".to_string() },
+            log: if res.is_ok() {
+                format!("Embedded RDP session launched to {}:{}", host, port)
+            } else {
+                format!("Failed to launch embedded RDP session: {}", res.as_ref().err().unwrap())
+            },
+        };
+        let _ = db::add_history(&conn, &hist);
+    }
+
+    res
 }
 
 #[tauri::command]
@@ -711,49 +878,184 @@ fn resize_rdp_embedded(
     y: i32,
     width: i32,
     height: i32,
+    device_pixel_ratio: f64,
+    app: AppHandle,
     rdp_state: State<'_, rdp::RdpState>,
 ) -> Result<(), String> {
-    rdp::resize_rdp_embedded(&session_id, x, y, width, height, rdp_state.inner())
+    rdp::resize_rdp_embedded(&session_id, x, y, width, height, device_pixel_ratio, &app, rdp_state.inner())
 }
 
 #[tauri::command]
 fn disconnect_rdp_embedded(
     session_id: String,
     rdp_state: State<'_, rdp::RdpState>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    rdp::disconnect_rdp_embedded(&session_id, rdp_state.inner())
+    rdp::disconnect_rdp_embedded(&session_id, rdp_state.inner(), &app)
+}
+
+#[tauri::command]
+fn bypass_rdp_warnings() -> Result<(), String> {
+    let script = "Start-Process cmd.exe -ArgumentList '/c reg add \"HKLM\\Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\Client\" /v RedirectionWarningDialogVersion /t REG_DWORD /d 1 /f' -Verb RunAs";
+    
+    let status = std::process::Command::new("powershell")
+        .args(&["-Command", script])
+        .status()
+        .map_err(|e| format!("Failed to spawn elevated process: {}", e))?;
+        
+    if !status.success() {
+        return Err("UAC elevation was cancelled or failed".to_string());
+    }
+        
+    Ok(())
+}
+
+fn re_encrypt_database(
+    db_path: &std::path::Path,
+    old_kek: &[u8; 32],
+    new_kek: &[u8; 32],
+    new_salt_hex: &str,
+) -> Result<(), String> {
+    let conn = rusqlite::Connection::open(db_path)
+        .map_err(|e| format!("Failed to open export database for re-encryption: {}", e))?;
+
+    // Update settings table
+    let sentinel_plaintext = "rdm-auth-sentinel";
+    let encrypted_sentinel = crypto::encrypt_secret(new_kek, sentinel_plaintext)?;
+    let sentinel_json = serde_json::to_string(&encrypted_sentinel)
+        .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
+
+    conn.execute(
+        "UPDATE settings SET value = ?1 WHERE key = 'salt';",
+        [&new_salt_hex],
+    ).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE settings SET value = ?1 WHERE key = 'sentinel';",
+        [&sentinel_json],
+    ).map_err(|e| e.to_string())?;
+
+    // Re-encrypt credentials table
+    let mut stmt = conn
+        .prepare("SELECT id, encrypted_secret FROM credentials")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+    
+    let mut creds_to_update = Vec::new();
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let id: String = row.get(0).map_err(|e| e.to_string())?;
+        let encrypted_secret_json: String = row.get(1).map_err(|e| e.to_string())?;
+        
+        let encrypted_secret: crypto::EncryptedData = serde_json::from_str(&encrypted_secret_json)
+            .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+        
+        let secret = crypto::decrypt_secret(old_kek, &encrypted_secret)?;
+        let re_encrypted = crypto::encrypt_secret(new_kek, &secret)?;
+        let re_encrypted_json = serde_json::to_string(&re_encrypted)
+            .map_err(|e| e.to_string())?;
+            
+        creds_to_update.push((id, re_encrypted_json));
+    }
+    drop(rows);
+    drop(stmt);
+
+    for (id, secret_json) in creds_to_update {
+        conn.execute(
+            "UPDATE credentials SET encrypted_secret = ?1 WHERE id = ?2",
+            [&secret_json, &id],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    // Re-encrypt servers table
+    let mut stmt = conn
+        .prepare("SELECT id, encrypted_password FROM servers WHERE encrypted_password IS NOT NULL AND encrypted_password != ''")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+    
+    let mut servers_to_update = Vec::new();
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let id: String = row.get(0).map_err(|e| e.to_string())?;
+        let encrypted_password_json: String = row.get(1).map_err(|e| e.to_string())?;
+        
+        let encrypted_password: crypto::EncryptedData = serde_json::from_str(&encrypted_password_json)
+            .map_err(|e| format!("Failed to parse server password: {}", e))?;
+        
+        let password = crypto::decrypt_secret(old_kek, &encrypted_password)?;
+        let re_encrypted = crypto::encrypt_secret(new_kek, &password)?;
+        let re_encrypted_json = serde_json::to_string(&re_encrypted)
+            .map_err(|e| e.to_string())?;
+            
+        servers_to_update.push((id, re_encrypted_json));
+    }
+    drop(rows);
+    drop(stmt);
+
+    for (id, password_json) in servers_to_update {
+        conn.execute(
+            "UPDATE servers SET encrypted_password = ?1 WHERE id = ?2",
+            [&password_json, &id],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
 fn export_database_backup(
     destination_path: String,
+    password: String,
     app: AppHandle,
+    state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let app_dir = app.path().app_data_dir().unwrap();
     let db_path = app_dir.join("rdm.db");
 
-    // Lock connection
+    // Lock local connection
     let _conn_guard = db.conn.lock().unwrap();
 
+    // Copy to destination
     std::fs::copy(&db_path, &destination_path)
-        .map(|_| ())
-        .map_err(|e| format!("Failed to export database: {}", e))
+        .map_err(|e| format!("Failed to export database: {}", e))?;
+
+    // Derive KEKs
+    let local_kek = state.kek.lock().unwrap().ok_or_else(|| "Vault is locked".to_string())?;
+
+    let mut export_salt = [0u8; 16];
+    thread_rng().fill_bytes(&mut export_salt);
+    let export_salt_hex = hex::encode(export_salt);
+    let export_kek = crypto::derive_key(&password, &export_salt)?;
+
+    // Re-encrypt the exported file
+    re_encrypt_database(
+        std::path::Path::new(&destination_path),
+        &local_kek,
+        &export_kek,
+        &export_salt_hex,
+    )?;
+
+    Ok(())
 }
 
 #[tauri::command]
 fn import_database_backup(
     source_path: String,
+    password: String,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    // 1. Verify that this backup is valid and matches our Master Password KEK
-    let kek_guard = state.kek.lock().unwrap();
-    let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-
+    // 1. Open source database and read salt
     let backup_conn = rusqlite::Connection::open(&source_path)
         .map_err(|e| format!("Failed to open backup database: {}", e))?;
+
+    let salt_hex: String = backup_conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'salt'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Selected file is not a valid RDM backup (salt missing)".to_string())?;
 
     let sentinel_json: String = backup_conn
         .query_row(
@@ -763,11 +1065,18 @@ fn import_database_backup(
         )
         .map_err(|_| "Selected file is not a valid RDM backup (sentinel missing)".to_string())?;
 
+    let backup_salt = hex::decode(&salt_hex)
+        .map_err(|e| format!("Invalid salt encoding in backup: {}", e))?;
+
+    // Derive KEK for the backup database
+    let backup_kek = crypto::derive_key(&password, &backup_salt)?;
+
+    // Verify sentinel
     let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
         .map_err(|e| format!("Failed to parse backup sentinel: {}", e))?;
 
-    let decrypted = crypto::decrypt_secret(&kek, &encrypted_sentinel)
-        .map_err(|_| "The Master Password of the current session does not match the backup file. Cannot restore.".to_string())?;
+    let decrypted = crypto::decrypt_secret(&backup_kek, &encrypted_sentinel)
+        .map_err(|_| "Invalid backup password. Cannot restore. (Неправильний пароль резервної копії.)".to_string())?;
 
     if decrypted != "rdm-auth-sentinel" {
         return Err("Invalid sentinel inside backup database.".to_string());
@@ -775,10 +1084,34 @@ fn import_database_backup(
 
     drop(backup_conn); // Release handle to backup file
 
-    // 2. Safely swap connection and restore file
+    // 2. Prepare re-encryption to local_kek (derived from "default_rdm_key")
     let app_dir = app.path().app_data_dir().unwrap();
     let db_path = app_dir.join("rdm.db");
+    let temp_db_path = app_dir.join("rdm_import_temp.db");
 
+    if temp_db_path.exists() {
+        let _ = std::fs::remove_file(&temp_db_path);
+    }
+
+    // Copy backup to temp
+    std::fs::copy(&source_path, &temp_db_path)
+        .map_err(|e| format!("Failed to create temporary import file: {}", e))?;
+
+    // Generate new local salt & KEK for rdm.db
+    let mut local_salt = [0u8; 16];
+    thread_rng().fill_bytes(&mut local_salt);
+    let local_salt_hex = hex::encode(local_salt);
+    let local_kek = crypto::derive_key("default_rdm_key", &local_salt)?;
+
+    // Re-encrypt temporary import file to local_kek
+    re_encrypt_database(
+        &temp_db_path,
+        &backup_kek,
+        &local_kek,
+        &local_salt_hex,
+    )?;
+
+    // 3. Swap active connection to point to the imported file
     let mut conn_guard = db.conn.lock().unwrap();
     
     // Open in-memory temporary database to release locks on rdm.db
@@ -786,15 +1119,21 @@ fn import_database_backup(
     let old_conn = std::mem::replace(&mut *conn_guard, temp_conn);
     drop(old_conn); // Closes rdm.db file handle
 
-    // Copy backup file over active database
-    std::fs::copy(&source_path, &db_path)
+    // Copy temp file over active database
+    std::fs::copy(&temp_db_path, &db_path)
         .map_err(|e| format!("Failed to copy database file: {}", e))?;
+
+    let _ = std::fs::remove_file(&temp_db_path);
 
     // Reopen database connection
     let new_conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("Failed to reopen database: {}", e))?;
 
     *conn_guard = new_conn;
+
+    // Save new KEK in session state
+    let mut session_kek = state.kek.lock().unwrap();
+    *session_kek = Some(local_kek);
 
     Ok(())
 }
@@ -943,6 +1282,13 @@ fn import_devolutions_csv(
             encrypted_password: None,
             created_at: String::new(),
             updated_at: String::new(),
+            rdp_clipboard: Some(1),
+            rdp_drives: Some(0),
+            rdp_printers: Some(0),
+            rdp_smart_sizing: Some(1),
+            rdp_audio: Some(0),
+            rdp_smartcards: Some(0),
+            rdp_webauthn: Some(0),
         };
 
         db::add_server(&conn, &srv)?;
@@ -954,7 +1300,9 @@ fn import_devolutions_csv(
 
 #[tauri::command]
 fn select_and_export_backup(
+    password: String,
     app: AppHandle,
+    state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
     let file_path = rfd::FileDialog::new()
@@ -965,7 +1313,7 @@ fn select_and_export_backup(
 
     if let Some(path) = file_path {
         let dest = path.to_string_lossy().to_string();
-        export_database_backup(dest, app, db)?;
+        export_database_backup(dest, password, app, state, db)?;
         Ok(path.file_name().unwrap().to_string_lossy().to_string())
     } else {
         Err("Save cancelled".to_string())
@@ -974,6 +1322,7 @@ fn select_and_export_backup(
 
 #[tauri::command]
 fn select_and_import_backup(
+    password: String,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
@@ -985,7 +1334,7 @@ fn select_and_import_backup(
 
     if let Some(path) = file_path {
         let src = path.to_string_lossy().to_string();
-        import_database_backup(src, app, state, db)?;
+        import_database_backup(src, password, app, state, db)?;
         Ok(path.file_name().unwrap().to_string_lossy().to_string())
     } else {
         Err("Import cancelled".to_string())
@@ -999,8 +1348,18 @@ pub fn run() {
         .setup(|app| {
             let app_dir = app.path().app_data_dir().unwrap();
             let conn = db::init_db(app_dir)?;
+            let session_state = SessionState::new();
+
+            // Auto-unlock vault with default password if not already unlocked
+            let is_setup = db::get_setting(&conn, "sentinel")?.is_some();
+            if !is_setup {
+                let _ = setup_master_password_impl(&conn, &session_state.kek, "default_rdm_key");
+            } else {
+                let _ = unlock_vault_impl(&conn, &session_state.kek, "default_rdm_key");
+            }
+
             app.manage(DbState { conn: Mutex::new(conn) });
-            app.manage(SessionState::new());
+            app.manage(session_state);
             app.manage(ssh::SshState::new());
             app.manage(rdp::RdpState::new());
             Ok(())
@@ -1023,6 +1382,7 @@ pub fn run() {
             update_server,
             delete_server,
             get_connection_history,
+            add_connection_history,
             connect_ssh,
             write_ssh_input,
             resize_ssh_pty,
@@ -1036,7 +1396,8 @@ pub fn run() {
             import_devolutions_csv,
             select_and_export_backup,
             select_and_import_backup,
-            decrypt_server_password
+            decrypt_server_password,
+            bypass_rdp_warnings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

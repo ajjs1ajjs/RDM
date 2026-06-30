@@ -14,6 +14,13 @@ export interface Server {
   encrypted_password?: string;
   created_at?: string;
   updated_at?: string;
+  rdp_clipboard?: number;
+  rdp_drives?: number;
+  rdp_printers?: number;
+  rdp_smart_sizing?: number;
+  rdp_audio?: number;
+  rdp_smartcards?: number;
+  rdp_webauthn?: number;
 }
 
 export interface Credential {
