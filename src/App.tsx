@@ -8,6 +8,7 @@ import { ServerTable } from "./components/ServerTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { TerminalTab } from "./components/TerminalTab";
 import { RdpTab } from "./components/RdpTab";
+import { SftpTab } from "./components/SftpTab";
 import { CommandPalette } from "./components/CommandPalette";
 import { KeyRound, Key, Plus, Terminal, X } from "lucide-react";
 import "./App.css";
@@ -26,7 +27,42 @@ function App() {
   
   const [selectedFolder, setSelectedFolder] = useState<string>("");
   const [selectedTag, setSelectedTag] = useState<string>("");
-  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
+  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(() => {
+    return localStorage.getItem("rdm_favoritesOnly") === "true";
+  });
+  const [autoLockMinutes, setAutoLockMinutes] = useState<number>(() => {
+    return parseInt(localStorage.getItem("rdm_autoLockMinutes") || "0", 10);
+  });
+
+  useEffect(() => {
+    localStorage.setItem("rdm_favoritesOnly", favoritesOnly.toString());
+  }, [favoritesOnly]);
+
+  useEffect(() => {
+    localStorage.setItem("rdm_autoLockMinutes", autoLockMinutes.toString());
+    
+    if (autoLockMinutes === 0 || !unlocked) return;
+
+    let timeoutId: number;
+
+    const resetTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        setUnlocked(false);
+        invoke("lock_vault").catch(console.error);
+      }, autoLockMinutes * 60 * 1000);
+    };
+
+    resetTimer();
+
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
+    events.forEach((name) => document.addEventListener(name, resetTimer, true));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      events.forEach((name) => document.removeEventListener(name, resetTimer, true));
+    };
+  }, [autoLockMinutes, unlocked]);
 
   // Command Palette
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState<boolean>(false);
@@ -58,6 +94,8 @@ function App() {
   const [rdpAudio, setRdpAudio] = useState<number>(0);
   const [rdpSmartcards, setRdpSmartcards] = useState<boolean>(false);
   const [rdpWebauthn, setRdpWebauthn] = useState<boolean>(false);
+  const [rdpFullscreen, setRdpFullscreen] = useState<boolean>(false);
+  const [rdpMultimon, setRdpMultimon] = useState<boolean>(false);
 
   const [credName, setCredName] = useState("");
   const [credType, setCredType] = useState<'password' | 'ssh_key'>("password");
@@ -150,30 +188,13 @@ function App() {
       unlistenRdp = await listen<string>("rdp-closed", (event) => {
         const closedTabId = event.payload;
         console.log("RDP session closed event received for tab ID:", closedTabId);
-        setActiveTabs((prev) => prev.filter((t) => {
-          console.log(`Filtering active tab ${t.id} against closed ${closedTabId}`);
-          return t.id !== closedTabId;
-        }));
-        setCurrentTabId((curr) => {
-          if (curr === closedTabId) {
-            setActiveTabType("dashboard");
-            return "dashboard";
-          }
-          return curr;
-        });
+        setActiveTabs((prev) => prev.filter((t) => t.id !== closedTabId));
       });
 
       unlistenSsh = await listen<string>("ssh-closed", (event) => {
         const closedTabId = event.payload;
         console.log("SSH session closed event received for tab ID:", closedTabId);
         setActiveTabs((prev) => prev.filter((t) => t.id !== closedTabId));
-        setCurrentTabId((curr) => {
-          if (curr === closedTabId) {
-            setActiveTabType("dashboard");
-            return "dashboard";
-          }
-          return curr;
-        });
       });
     };
 
@@ -223,6 +244,33 @@ function App() {
     }
   };
 
+  const handleQuickConnect = (input: string, protocol: string) => {
+    // Parse host:port format
+    let host = input.trim();
+    let port = protocol === "rdp" ? 3389 : 22;
+    const colonIdx = host.lastIndexOf(":");
+    if (colonIdx > 0) {
+      const portStr = host.substring(colonIdx + 1);
+      const parsedPort = parseInt(portStr, 10);
+      if (!isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
+        port = parsedPort;
+        host = host.substring(0, colonIdx);
+      }
+    }
+
+    const tabId = `${protocol}-quick-${Date.now()}`;
+    const newTab: ActiveTab = {
+      id: tabId,
+      title: `${host}:${port}`,
+      type: protocol as ActiveTab["type"],
+      hostname: host,
+    };
+
+    setActiveTabs((prev) => [...prev, newTab]);
+    setCurrentTabId(tabId);
+    setActiveTabType(protocol);
+  };
+
   // Tab switcher
   const handleSelectTab = (tab: ActiveTab | string) => {
     if (typeof tab === "string") {
@@ -232,6 +280,16 @@ function App() {
       setCurrentTabId(tab.id);
       setActiveTabType(tab.type);
     }
+  };
+
+  const handleConnectSFTP = (server: Server) => {
+    const tabId = `sftp-${server.id}-${Date.now()}`;
+    setActiveTabs([
+      ...activeTabs,
+      { id: tabId, type: "sftp", serverId: server.id, hostname: server.hostname || server.ip, title: server.name },
+    ]);
+    setCurrentTabId(tabId);
+    setActiveTabType("sftp");
   };
 
   const handleCloseTab = (tabId: string, e: React.MouseEvent) => {
@@ -268,6 +326,8 @@ function App() {
       setRdpAudio(srv.rdp_audio !== undefined ? srv.rdp_audio : 0);
       setRdpSmartcards(srv.rdp_smartcards !== undefined ? srv.rdp_smartcards !== 0 : false);
       setRdpWebauthn(srv.rdp_webauthn !== undefined ? srv.rdp_webauthn !== 0 : false);
+      setRdpFullscreen(srv.rdp_fullscreen !== undefined ? srv.rdp_fullscreen !== 0 : false);
+      setRdpMultimon(srv.rdp_multimon !== undefined ? srv.rdp_multimon !== 0 : false);
     } else {
       setSrvName("");
       setSrvHost("");
@@ -288,6 +348,8 @@ function App() {
       setRdpAudio(0);
       setRdpSmartcards(false);
       setRdpWebauthn(false);
+      setRdpFullscreen(false);
+      setRdpMultimon(false);
     }
     setServerModalOpen(true);
   };
@@ -317,6 +379,8 @@ function App() {
           rdpAudio: rdpAudio,
           rdpSmartcards: rdpSmartcards ? 1 : 0,
           rdpWebauthn: rdpWebauthn ? 1 : 0,
+          rdpFullscreen: rdpFullscreen ? 1 : 0,
+          rdpMultimon: rdpMultimon ? 1 : 0,
         });
       } else {
         await invoke("add_server", {
@@ -339,6 +403,8 @@ function App() {
           rdpAudio: rdpAudio,
           rdpSmartcards: rdpSmartcards ? 1 : 0,
           rdpWebauthn: rdpWebauthn ? 1 : 0,
+          rdpFullscreen: rdpFullscreen ? 1 : 0,
+          rdpMultimon: rdpMultimon ? 1 : 0,
         });
       }
       setServerModalOpen(false);
@@ -510,6 +576,8 @@ function App() {
                 onAddServer={() => openServerForm(null)}
                 onImportCSV={handleImportCSV}
                 onToggleFavorite={toggleFavorite}
+                onConnectSFTP={handleConnectSFTP}
+                onQuickConnect={handleQuickConnect}
               />
             </main>
             <DetailsPanel
@@ -587,6 +655,28 @@ function App() {
             
             <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
+                <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Security</h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
+                  Automatically lock the Vault after a period of inactivity.
+                </p>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <select 
+                    className="input-field" 
+                    style={{ width: "200px" }}
+                    value={autoLockMinutes}
+                    onChange={(e) => setAutoLockMinutes(parseInt(e.target.value, 10))}
+                  >
+                    <option value={0}>Never</option>
+                    <option value={1}>1 minute</option>
+                    <option value={5}>5 minutes</option>
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={60}>1 hour</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Backup & Restore</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
                   Export a copy of the database, or restore from a previous backup file.
@@ -655,6 +745,21 @@ function App() {
                   serverId={tab.serverId || ""}
                   host={tab.hostname || "127.0.0.1"}
                   port={server?.port || 3389}
+                  credentialId={server?.credential_id}
+                />
+              </div>
+            );
+          }
+          
+          if (tab.type === "sftp") {
+            return (
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }}>
+                <SftpTab
+                  sessionId={tab.id}
+                  serverId={tab.serverId || ""}
+                  host={tab.hostname || "127.0.0.1"}
+                  port={server?.port || 22}
+                  username={server ? (server.username || credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
                   credentialId={server?.credential_id}
                 />
               </div>
@@ -915,7 +1020,15 @@ function App() {
 
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
                       <input type="checkbox" checked={rdpWebauthn} onChange={(e) => setRdpWebauthn(e.target.checked)} />
-                      Redirect WebAuthn
+                      WebAuthn (Windows Hello)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={rdpFullscreen} onChange={(e) => setRdpFullscreen(e.target.checked)} />
+                      Fullscreen Mode (Native Window)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={rdpMultimon} onChange={(e) => setRdpMultimon(e.target.checked)} />
+                      Use Multiple Monitors (Multi-mon)
                     </label>
                   </div>
 

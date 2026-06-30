@@ -27,6 +27,8 @@ pub struct Server {
     pub rdp_audio: Option<i32>,
     pub rdp_smartcards: Option<i32>,
     pub rdp_webauthn: Option<i32>,
+    pub rdp_fullscreen: Option<i32>,
+    pub rdp_multimon: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +120,8 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             rdp_audio INTEGER DEFAULT 0,
             rdp_smartcards INTEGER DEFAULT 0,
             rdp_webauthn INTEGER DEFAULT 0,
+            rdp_fullscreen INTEGER DEFAULT 0,
+            rdp_multimon INTEGER DEFAULT 0,
             FOREIGN KEY(credential_id) REFERENCES credentials(id) ON DELETE SET NULL
         );",
         [],
@@ -163,6 +167,24 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
         }
 
         conn.execute("PRAGMA user_version = 2;", []).map_err(|e| e.to_string())?;
+    }
+
+    if current_version < 3 {
+        let columns_to_add = [
+            ("rdp_fullscreen", "INTEGER DEFAULT 0"),
+            ("rdp_multimon", "INTEGER DEFAULT 0"),
+        ];
+
+        for &(col_name, col_type) in &columns_to_add {
+            if !column_exists(&conn, "servers", col_name).map_err(|e| e.to_string())? {
+                conn.execute(
+                    &format!("ALTER TABLE servers ADD COLUMN {} {};", col_name, col_type),
+                    [],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+
+        conn.execute("PRAGMA user_version = 3;", []).map_err(|e| e.to_string())?;
     }
 
     Ok(conn)
@@ -246,9 +268,9 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
 // Servers helpers
 pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
-        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn],
+        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+        params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn, srv.rdp_fullscreen, srv.rdp_multimon],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -256,8 +278,8 @@ pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
 
 pub fn update_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, username = ?11, encrypted_password = ?12, rdp_clipboard = ?13, rdp_drives = ?14, rdp_printers = ?15, rdp_smart_sizing = ?16, rdp_audio = ?17, rdp_smartcards = ?18, rdp_webauthn = ?19, updated_at = CURRENT_TIMESTAMP WHERE id = ?20",
-        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn, srv.id],
+        "UPDATE servers SET name = ?1, hostname = ?2, ip = ?3, port = ?4, protocol = ?5, os = ?6, folder_path = ?7, tags = ?8, description = ?9, credential_id = ?10, username = ?11, encrypted_password = ?12, rdp_clipboard = ?13, rdp_drives = ?14, rdp_printers = ?15, rdp_smart_sizing = ?16, rdp_audio = ?17, rdp_smartcards = ?18, rdp_webauthn = ?19, rdp_fullscreen = ?20, rdp_multimon = ?21, updated_at = CURRENT_TIMESTAMP WHERE id = ?22",
+        params![srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn, srv.rdp_fullscreen, srv.rdp_multimon, srv.id],
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
@@ -271,7 +293,7 @@ pub fn delete_server(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn FROM servers ORDER BY name ASC")
+        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon FROM servers ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
     
     let rows = stmt
@@ -299,6 +321,8 @@ pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
                 rdp_audio: row.get(19)?,
                 rdp_smartcards: row.get(20)?,
                 rdp_webauthn: row.get(21)?,
+                rdp_fullscreen: row.get(22)?,
+                rdp_multimon: row.get(23)?,
             })
         })
         .map_err(|e| e.to_string())?;

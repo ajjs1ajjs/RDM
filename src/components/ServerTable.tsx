@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Server } from "../types";
-import { Plus, Search, Play, Edit3, Trash2, Monitor, Terminal, Star } from "lucide-react";
+import { Plus, Search, Play, Edit3, Trash2, Monitor, Terminal, Star, HardDrive } from "lucide-react";
 
 interface ServerTableProps {
   servers: Server[];
@@ -15,6 +15,8 @@ interface ServerTableProps {
   onAddServer: () => void;
   onImportCSV: () => void;
   onToggleFavorite: (id: string) => void;
+  onConnectSFTP: (server: Server) => void;
+  onQuickConnect?: (host: string, protocol: string) => void;
 }
 
 export const ServerTable: React.FC<ServerTableProps> = ({
@@ -30,6 +32,8 @@ export const ServerTable: React.FC<ServerTableProps> = ({
   onAddServer,
   onImportCSV,
   onToggleFavorite,
+  onConnectSFTP,
+  onQuickConnect,
 }) => {
   const [search, setSearch] = useState<string>("");
 
@@ -86,6 +90,18 @@ export const ServerTable: React.FC<ServerTableProps> = ({
       </div>
 
       <div className="server-table-container glass-card" style={{ flexGrow: 1, padding: 0 }}>
+        {search.trim() !== "" && onQuickConnect && (
+          <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: "10px", backgroundColor: "rgba(0, 0, 0, 0.2)" }}>
+            <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>Quick connect to <strong>{search}</strong>:</span>
+            <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "0.85rem" }} onClick={() => onQuickConnect(search, "rdp")}>
+              <Monitor size={14} style={{ marginRight: "4px" }}/> RDP
+            </button>
+            <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "0.85rem" }} onClick={() => onQuickConnect(search, "ssh")}>
+              <Terminal size={14} style={{ marginRight: "4px" }}/> SSH
+            </button>
+          </div>
+        )}
+        
         {filteredServers.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>
             No servers found matching the filter criteria.
@@ -170,6 +186,16 @@ export const ServerTable: React.FC<ServerTableProps> = ({
                         >
                           <Play size={14} style={{ fill: "var(--accent-green)", color: "var(--accent-green)" }} />
                         </button>
+                        {s.protocol.toLowerCase() === "ssh" && (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: "6px 10px", color: "var(--accent-blue)" }}
+                            onClick={() => onConnectSFTP(s)}
+                            title="SFTP File Manager"
+                          >
+                            <HardDrive size={14} />
+                          </button>
+                        )}
                         <button
                           className="btn btn-secondary"
                           style={{ padding: "6px 10px" }}

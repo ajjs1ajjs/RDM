@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Server } from "../types";
 import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Terminal, Tag, ChevronDown, ChevronRight, Star } from "lucide-react";
 
@@ -31,7 +31,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleFavorites,
   onNavigateTo,
 }) => {
-  const [collapsedFolders, setCollapsedFolders] = useState<{ [key: string]: boolean }>({});
+  const [collapsedFolders, setCollapsedFolders] = useState<{ [key: string]: boolean }>(() => {
+    const saved = localStorage.getItem("rdm_collapsedFolders");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem("rdm_collapsedFolders", JSON.stringify(collapsedFolders));
+  }, [collapsedFolders]);
 
   // 1. Build folder tree dynamically
   const buildFolderTree = (serversList: Server[]): FolderNode => {

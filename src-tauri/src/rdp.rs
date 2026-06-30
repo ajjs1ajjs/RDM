@@ -259,15 +259,16 @@ pub fn launch_rdp_session(
     fullscreen: bool,
     username: Option<&str>,
     password: Option<&str>,
-    _app_data_dir: PathBuf,
-    _server_id: Option<String>,
-    _rdp_clipboard: bool,
-    _rdp_drives: bool,
-    _rdp_printers: bool,
-    _rdp_smart_sizing: bool,
-    _rdp_audio: u32,
-    _rdp_smartcards: bool,
-    _rdp_webauthn: bool,
+    app_data_dir: PathBuf,
+    server_id: Option<String>,
+    rdp_clipboard: bool,
+    rdp_drives: bool,
+    rdp_printers: bool,
+    rdp_smart_sizing: bool,
+    rdp_audio: u32,
+    rdp_smartcards: bool,
+    rdp_webauthn: bool,
+    rdp_multimon: bool,
 ) -> Result<(), String> {
     let connection_string = if port == 3389 {
         host.to_string()
@@ -289,13 +290,77 @@ pub fn launch_rdp_session(
         }
     }
 
-    let mut args = vec![format!("/v:{}", connection_string)];
-    if fullscreen {
-        args.push("/f".to_string());
-    }
+    let rdp_sessions_dir = app_data_dir.join("rdp_sessions");
+    let _ = std::fs::create_dir_all(&rdp_sessions_dir);
+
+    let file_name = format!("session_ext-{}-{}.rdp", server_id.unwrap_or_default(), uuid::Uuid::new_v4());
+    let rdp_file_path = rdp_sessions_dir.join(file_name);
+
+    let user_line = if let Some(user) = username {
+        format!("username:s:{}\r\n", user)
+    } else {
+        String::new()
+    };
+
+    let screen_mode = if fullscreen { 2 } else { 1 };
+    let multimon_line = if rdp_multimon { "use multimon:i:1\r\n" } else { "" };
+    
+    let smart_sizing_val = if rdp_smart_sizing { 1 } else { 0 };
+    let redirect_clipboard = if rdp_clipboard { 1 } else { 0 };
+    let redirect_drives = if rdp_drives { 1 } else { 0 };
+    let redirect_printers = if rdp_printers { 1 } else { 0 };
+    let redirect_smartcards = if rdp_smartcards { 1 } else { 0 };
+    let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
+    let audio_val = match rdp_audio {
+        0 => 0,
+        1 => 1,
+        2 => 2,
+        _ => 0,
+    };
+
+    let rdp_content = format!(
+        "full address:s:{}\r\n\
+         {}\
+         screen mode id:i:{}\r\n\
+         {}\
+         smart sizing:i:{}\r\n\
+         redirectclipboard:i:{}\r\n\
+         redirectdrives:i:{}\r\n\
+         redirectprinters:i:{}\r\n\
+         audiomode:i:{}\r\n\
+         redirectsmartcards:i:{}\r\n\
+         enablewebauthn:i:{}\r\n\
+         authentication level:i:0\r\n\
+         displayconnectionbar:i:1\r\n",
+        connection_string,
+        user_line,
+        screen_mode,
+        multimon_line,
+        smart_sizing_val,
+        redirect_clipboard,
+        redirect_drives,
+        redirect_printers,
+        audio_val,
+        redirect_smartcards,
+        redirect_webauthn
+    );
+
+    let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
+        .chain(rdp_content.encode_utf16())
+        .collect();
+    
+    let rdp_content_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            rdp_content_utf16.as_ptr() as *const u8,
+            rdp_content_utf16.len() * 2,
+        )
+    };
+
+    std::fs::write(&rdp_file_path, rdp_content_bytes)
+        .map_err(|e| format!("Failed to write external RDP file: {}", e))?;
 
     std::process::Command::new("mstsc")
-        .args(&args)
+        .arg(rdp_file_path.to_string_lossy().to_string())
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("Failed to spawn mstsc process: {}", e))

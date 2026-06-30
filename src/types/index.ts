@@ -21,6 +21,8 @@ export interface Server {
   rdp_audio?: number;
   rdp_smartcards?: number;
   rdp_webauthn?: number;
+  rdp_fullscreen?: number;
+  rdp_multimon?: number;
 }
 
 export interface Credential {
@@ -44,7 +46,8 @@ export interface ConnectionHistory {
 export interface ActiveTab {
   id: string; // Can be server.id or custom like 'credentials', 'dashboard'
   title: string;
-  type: 'ssh' | 'rdp' | 'dashboard' | 'credentials' | 'settings';
+  type: 'ssh' | 'rdp' | 'dashboard' | 'credentials' | 'settings' | 'sftp';
   serverId?: string;
   hostname?: string;
+  reconnecting?: boolean;
 }
