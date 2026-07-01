@@ -74,6 +74,14 @@ function App() {
   const [credModalOpen, setCredModalOpen] = useState<boolean>(false);
   const [editingCred, setEditingCred] = useState<Credential | null>(null);
 
+  // Custom Folders and Folder Modal States
+  const [customFolders, setCustomFolders] = useState<string[]>([]);
+  const [folderModalOpen, setFolderModalOpen] = useState<boolean>(false);
+  const [folderModalMode, setFolderModalMode] = useState<'create' | 'rename' | 'delete'>('create');
+  const [folderModalParent, setFolderModalParent] = useState<string>('');
+  const [folderModalPath, setFolderModalPath] = useState<string>('');
+  const [folderModalName, setFolderModalName] = useState<string>('');
+
   // Form States
   const [srvName, setSrvName] = useState("");
   const [srvHost, setSrvHost] = useState("");
@@ -106,6 +114,7 @@ function App() {
     checkUnlockStatus();
     loadServers();
     loadFavorites();
+    loadCustomFolders();
   }, []);
 
   useEffect(() => {
@@ -161,6 +170,125 @@ function App() {
       }
     } catch (e) {
       console.error("Failed to load favorites setting", e);
+    }
+  };
+
+  const loadCustomFolders = async () => {
+    try {
+      const foldersJson = await invoke<string | null>("get_setting", { key: "custom_folders" });
+      if (foldersJson) {
+        setCustomFolders(JSON.parse(foldersJson));
+      }
+    } catch (e) {
+      console.error("Failed to load custom folders setting", e);
+    }
+  };
+
+  const saveCustomFolders = async (folders: string[]) => {
+    setCustomFolders(folders);
+    try {
+      await invoke("set_setting", { key: "custom_folders", value: JSON.stringify(folders) });
+    } catch (e) {
+      console.error("Failed to save custom folders setting", e);
+    }
+  };
+
+  const handleRenameFolder = async (oldPath: string, newPath: string) => {
+    if (!newPath || oldPath === newPath) return;
+
+    try {
+      // 1. Update the servers in the database
+      const serversToUpdate = servers.filter(s => 
+        s.folder_path === oldPath || s.folder_path.startsWith(oldPath + "/")
+      );
+
+      for (const s of serversToUpdate) {
+        let updatedFolderPath = newPath;
+        if (s.folder_path.startsWith(oldPath + "/")) {
+          updatedFolderPath = newPath + s.folder_path.substring(oldPath.length);
+        }
+
+        await invoke("update_server", {
+          id: s.id,
+          name: s.name,
+          hostname: s.hostname,
+          ip: s.ip,
+          port: s.port,
+          protocol: s.protocol,
+          os: s.os,
+          folderPath: updatedFolderPath,
+          tags: s.tags,
+          description: s.description,
+          credentialId: s.credential_id || null,
+          username: s.username || null,
+          password: "__UNCHANGED__",
+          rdpClipboard: s.rdp_clipboard,
+          rdpDrives: s.rdp_drives,
+          rdpPrinters: s.rdp_printers,
+          rdpSmartSizing: s.rdp_smart_sizing,
+          rdpAudio: s.rdp_audio,
+          rdpSmartcards: s.rdp_smartcards,
+          rdpWebauthn: s.rdp_webauthn,
+          rdpFullscreen: s.rdp_fullscreen,
+          rdpMultimon: s.rdp_multimon,
+        });
+      }
+
+      // 2. Update custom folders
+      const updatedCustomFolders = customFolders.map(path => {
+        if (path === oldPath) {
+          return newPath;
+        } else if (path.startsWith(oldPath + "/")) {
+          return newPath + path.substring(oldPath.length);
+        }
+        return path;
+      });
+
+      await saveCustomFolders(updatedCustomFolders);
+
+      // 3. Reload servers
+      await loadServers();
+
+      // Clear or update selectedFolder if it was modified
+      if (selectedFolder === oldPath) {
+        setSelectedFolder(newPath);
+      } else if (selectedFolder.startsWith(oldPath + "/")) {
+        setSelectedFolder(newPath + selectedFolder.substring(oldPath.length));
+      }
+    } catch (e) {
+      console.error("Failed to rename folder", e);
+      alert("Error renaming folder: " + e);
+    }
+  };
+
+  const handleDeleteFolder = async (folderPath: string) => {
+    try {
+      // 1. Delete servers that match or are under folderPath
+      const serversToDelete = servers.filter(s => 
+        s.folder_path === folderPath || s.folder_path.startsWith(folderPath + "/")
+      );
+
+      for (const s of serversToDelete) {
+        await invoke("delete_server", { id: s.id });
+      }
+
+      // 2. Remove from custom folders
+      const updatedCustomFolders = customFolders.filter(path => 
+        path !== folderPath && !path.startsWith(folderPath + "/")
+      );
+
+      await saveCustomFolders(updatedCustomFolders);
+
+      // 3. Reload servers
+      await loadServers();
+
+      // Reset selectedFolder if it was deleted
+      if (selectedFolder === folderPath || selectedFolder.startsWith(folderPath + "/")) {
+        setSelectedFolder("");
+      }
+    } catch (e) {
+      console.error("Failed to delete folder", e);
+      alert("Error deleting folder: " + e);
     }
   };
 
@@ -782,6 +910,7 @@ function App() {
       {/* Dynamic Sidebar */}
       <Sidebar
         servers={servers}
+        customFolders={customFolders}
         activeTabType={activeTabType}
         selectedFolder={selectedFolder}
         selectedTag={selectedTag}
@@ -803,6 +932,24 @@ function App() {
           setSelectedFolder("");
           setSelectedTag("");
           setSelectedServer(null);
+        }}
+        onCreateFolder={(parentFolder) => {
+          setFolderModalMode('create');
+          setFolderModalParent(parentFolder);
+          setFolderModalName('');
+          setFolderModalOpen(true);
+        }}
+        onRenameFolder={(folderPath) => {
+          setFolderModalMode('rename');
+          setFolderModalPath(folderPath);
+          const parts = folderPath.split('/');
+          setFolderModalName(parts[parts.length - 1] || '');
+          setFolderModalOpen(true);
+        }}
+        onDeleteFolder={(folderPath) => {
+          setFolderModalMode('delete');
+          setFolderModalPath(folderPath);
+          setFolderModalOpen(true);
         }}
         onNavigateTo={(type) => {
           if (type !== 'dashboard') {
@@ -929,7 +1076,10 @@ function App() {
                     placeholder="Production/Linux"
                   />
                   <datalist id="existing-folders">
-                    {Array.from(new Set(servers.map((s) => s.folder_path).filter(Boolean))).map((folder) => (
+                    {Array.from(new Set([
+                      ...servers.map((s) => s.folder_path),
+                      ...customFolders
+                    ].filter(Boolean))).sort().map((folder) => (
                       <option key={folder} value={folder} />
                     ))}
                   </datalist>
@@ -1119,6 +1269,119 @@ function App() {
                 <button type="submit" className="btn btn-primary">Save Securely</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Folder CRUD Modal */}
+      {folderModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-box glass-card" style={{ maxWidth: "450px" }}>
+            <div className="header-row" style={{ marginBottom: "15px" }}>
+              <h3>
+                {folderModalMode === 'create' && "Create New Folder"}
+                {folderModalMode === 'rename' && "Rename Folder"}
+                {folderModalMode === 'delete' && "Delete Folder"}
+              </h3>
+              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => setFolderModalOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {folderModalMode === 'delete' ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.4" }}>
+                  Are you sure you want to delete the folder <strong style={{ color: "var(--accent-warn)" }}>{folderModalPath}</strong>?
+                  <br />
+                  <span style={{ color: "var(--accent-warn)", fontWeight: "bold" }}>Warning:</span> This will permanently delete the folder and <strong style={{ color: "var(--text-primary)" }}>ALL servers</strong> inside it.
+                </p>
+                <div className="form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setFolderModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ backgroundColor: "var(--accent-warn)", border: "none" }}
+                    onClick={async () => {
+                      await handleDeleteFolder(folderModalPath);
+                      setFolderModalOpen(false);
+                    }}
+                  >
+                    Delete Folder & Servers
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (folderModalMode === 'create') {
+                    const newPath = folderModalParent
+                      ? `${folderModalParent}/${folderModalName.trim()}`
+                      : folderModalName.trim();
+                    
+                    if (!folderModalName.trim()) return;
+
+                    if (customFolders.includes(newPath) || servers.some(s => s.folder_path === newPath || s.folder_path.startsWith(newPath + "/"))) {
+                      alert("Folder already exists!");
+                      return;
+                    }
+
+                    await saveCustomFolders([...customFolders, newPath]);
+                  } else {
+                    // Rename mode
+                    const parts = folderModalPath.split('/');
+                    parts[parts.length - 1] = folderModalName.trim();
+                    const newPath = parts.join('/');
+
+                    if (!folderModalName.trim()) return;
+
+                    if (folderModalPath !== newPath) {
+                      if (customFolders.includes(newPath) || servers.some(s => s.folder_path === newPath || s.folder_path.startsWith(newPath + "/"))) {
+                        alert("A folder with that name already exists in this location!");
+                        return;
+                      }
+                      await handleRenameFolder(folderModalPath, newPath);
+                    }
+                  }
+                  setFolderModalOpen(false);
+                }}
+                style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+              >
+                {folderModalMode === 'create' && (
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Creating under: <strong>{folderModalParent || "Root"}</strong>
+                  </div>
+                )}
+                {folderModalMode === 'rename' && (
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Renaming: <strong>{folderModalPath}</strong>
+                  </div>
+                )}
+
+                <div className="input-group">
+                  <label className="input-label">Folder Name</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={folderModalName}
+                    onChange={(e) => setFolderModalName(e.target.value)}
+                    required
+                    placeholder="e.g. Production"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setFolderModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {folderModalMode === 'create' ? "Create Folder" : "Rename Folder"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

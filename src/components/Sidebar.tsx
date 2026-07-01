@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Server } from "../types";
-import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Terminal, Tag, ChevronDown, ChevronRight, Star } from "lucide-react";
+import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Terminal, Tag, ChevronDown, ChevronRight, Star, Plus, Edit2, Trash2 } from "lucide-react";
 
 interface SidebarProps {
   servers: Server[];
+  customFolders: string[];
   activeTabType: string;
   selectedFolder: string;
   selectedTag: string;
@@ -12,6 +13,9 @@ interface SidebarProps {
   onSelectTag: (tag: string) => void;
   onToggleFavorites: () => void;
   onNavigateTo: (type: 'dashboard' | 'credentials' | 'settings') => void;
+  onCreateFolder: (parentFolder: string) => void;
+  onRenameFolder: (folderPath: string) => void;
+  onDeleteFolder: (folderPath: string) => void;
 }
 
 interface FolderNode {
@@ -22,6 +26,7 @@ interface FolderNode {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   servers,
+  customFolders,
   activeTabType,
   selectedFolder,
   selectedTag,
@@ -30,6 +35,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTag,
   onToggleFavorites,
   onNavigateTo,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
 }) => {
   const [collapsedFolders, setCollapsedFolders] = useState<{ [key: string]: boolean }>(() => {
     const saved = localStorage.getItem("rdm_collapsedFolders");
@@ -40,10 +48,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     localStorage.setItem("rdm_collapsedFolders", JSON.stringify(collapsedFolders));
   }, [collapsedFolders]);
 
-  // 1. Build folder tree dynamically
-  const buildFolderTree = (serversList: Server[]): FolderNode => {
+  // 1. Build folder tree dynamically from servers and custom manually created folders
+  const buildFolderTree = (serversList: Server[], customFoldersList: string[]): FolderNode => {
     const root: FolderNode = { name: "Root", fullPath: "", children: {} };
     
+    // Add custom manually created folders first
+    customFoldersList.forEach((folderPath) => {
+      if (!folderPath) return;
+      const parts = folderPath.split("/").filter(Boolean);
+      let current = root;
+      let accumulatedPath = "";
+      
+      parts.forEach((part) => {
+        accumulatedPath = accumulatedPath ? `${accumulatedPath}/${part}` : part;
+        if (!current.children[part]) {
+          current.children[part] = {
+            name: part,
+            fullPath: accumulatedPath,
+            children: {},
+          };
+        }
+        current = current.children[part];
+      });
+    });
+    
+    // Add folders from servers
     serversList.forEach((server) => {
       if (!server.folder_path) return;
       const parts = server.folder_path.split("/").filter(Boolean);
@@ -66,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return root;
   };
 
-  const folderTree = buildFolderTree(servers);
+  const folderTree = buildFolderTree(servers, customFolders);
 
   // 2. Extract all unique tags
   const extractTags = (serversList: Server[]): string[] => {
@@ -91,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Recursive folder node renderer
   const renderFolderNode = (node: FolderNode, depth: number = 0) => {
-    const childrenKeys = Object.keys(node.children);
+    const childrenKeys = Object.keys(node.children).sort((a, b) => a.localeCompare(b));
     if (depth > 0 && node.name === "Root") return null;
 
     const isCollapsed = collapsedFolders[node.fullPath];
@@ -108,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onNavigateTo("dashboard");
             }}
           >
-            <div onClick={(e) => toggleFolder(node.fullPath, e)}>
+            <div onClick={(e) => toggleFolder(node.fullPath, e)} style={{ display: "flex", alignItems: "center" }}>
               {childrenKeys.length > 0 ? (
                 isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />
               ) : (
@@ -120,7 +149,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               <FolderOpen size={16} className="logo-icon" style={{ color: "var(--accent-cyan)" }} />
             )}
-            <span style={{ marginLeft: "4px" }}>{node.name}</span>
+            <span style={{ marginLeft: "4px", flexGrow: 1 }} className="folder-name-text">{node.name}</span>
+
+            <div className="folder-row-actions">
+              <button
+                className="folder-action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateFolder(node.fullPath);
+                }}
+                title="Create Subfolder"
+              >
+                <Plus size={12} />
+              </button>
+              <button
+                className="folder-action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRenameFolder(node.fullPath);
+                }}
+                title="Rename Folder"
+              >
+                <Edit2 size={12} />
+              </button>
+              <button
+                className="folder-action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteFolder(node.fullPath);
+                }}
+                title="Delete Folder"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -179,7 +241,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="sidebar-section-title">Servers Directory</div>
+      <div className="sidebar-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Servers Directory</span>
+        <button
+          className="folder-action-btn"
+          onClick={() => onCreateFolder("")}
+          title="Create Root Folder"
+          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }}
+        >
+          <Plus size={14} />
+        </button>
+      </div>
       <div className="folder-tree">
         {renderFolderNode(folderTree, 0)}
       </div>
@@ -208,3 +280,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
+

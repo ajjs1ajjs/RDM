@@ -159,6 +159,7 @@ body {
   font-size: 0.85rem;
   color: var(--text-secondary);
   transition: var(--transition-smooth);
+  position: relative;
 }
 
 .tree-row:hover {
@@ -170,6 +171,47 @@ body {
   background-color: var(--bg-hover);
   color: var(--accent-cyan);
 }
+
+/* Folder Actions Styling */
+.folder-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.tree-row:hover .folder-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.folder-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.folder-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
 
 /* Main Content Area */
 .main-workspace {
