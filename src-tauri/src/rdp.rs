@@ -391,15 +391,15 @@ pub fn launch_rdp_embedded(
     };
 
     // Use monitor work area for desktop resolution (standard values that RDP server supports)
-    let (mon_w, mon_h) = unsafe {
+    let (mon_left, mon_top, mon_w, mon_h) = unsafe {
         use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST};
         let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
         let mut mi: MONITORINFO = std::mem::zeroed();
         mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
         if GetMonitorInfoW(hmon, &mut mi).as_bool() {
-            ((mi.rcWork.right - mi.rcWork.left) as i32, (mi.rcWork.bottom - mi.rcWork.top) as i32)
+            (mi.rcWork.left as i32, mi.rcWork.top as i32, (mi.rcWork.right - mi.rcWork.left) as i32, (mi.rcWork.bottom - mi.rcWork.top) as i32)
         } else {
-            (1920, 1080)
+            (0, 0, 1920, 1080)
         }
     };
     let desktop_w = mon_w;
@@ -414,7 +414,7 @@ pub fn launch_rdp_embedded(
          desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
          dynamic resolution:i:1\r\n\
-         winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
+          winposstr:s:0,1,{},{},{},{}\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
          redirectprinters:i:{}\r\n\
@@ -422,19 +422,24 @@ pub fn launch_rdp_embedded(
          redirectsmartcards:i:{}\r\n\
          enablewebauthn:i:{}\r\n\
          authentication level:i:0\r\n\
-         displayconnectionbar:i:1\r\n",
+          displayconnectionbar:i:1\r\n",
          connection_string,
          user_line,
          desktop_w,
          desktop_h,
          smart_sizing_val,
+         mon_left + physical_x,
+         mon_top + physical_y,
+         mon_left + physical_x + physical_width,
+         mon_top + physical_y + physical_height,
          redirect_clipboard,
         redirect_drives,
         redirect_printers,
-        audio_val,
-        redirect_smartcards,
-        redirect_webauthn
+         audio_val,
+         redirect_smartcards,
+         redirect_webauthn
     );
+    log_debug(&app_data_dir, &format!("RDP winposstr: ({},{})-({}x{}) on monitor at ({},{})", mon_left + physical_x, mon_top + physical_y, physical_width, physical_height, mon_left, mon_top));
 
     // MUST write RDP file as UTF-16 LE with BOM for mstsc to accept it on all systems
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF) // UTF-16 LE BOM
