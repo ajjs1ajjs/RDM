@@ -51,12 +51,17 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     let postConnectRetryTimer: ReturnType<typeof setInterval> | null = null;
 
     const doResizeIpc = (rect: DOMRect, dpr: number) => {
+      const px = Math.round(rect.left * dpr);
+      const py = Math.round(rect.top * dpr);
+      const pw = Math.round(rect.width * dpr);
+      const ph = Math.round(rect.height * dpr);
+      console.log(`[RDP resize] css=(${Math.round(rect.left)},${Math.round(rect.top)} ${Math.round(rect.width)}x${Math.round(rect.height)}) dpr=${dpr} phys=(${px},${py} ${pw}x${ph})`);
       invoke("resize_rdp_embedded", {
         sessionId: sid,
-        x: Math.round(rect.left * dpr),
-        y: Math.round(rect.top * dpr),
-        width: Math.round(rect.width * dpr),
-        height: Math.round(rect.height * dpr),
+        x: px,
+        y: py,
+        width: pw,
+        height: ph,
         devicePixelRatio: dpr,
       }).catch((err) => console.error("RDP resize error:", err));
     };
@@ -162,7 +167,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
   }, []);
 
   return (
-    <div className="terminal-container">
+      <div className="terminal-container" style={{ minHeight: 0 }}>
       <style>{`
         @keyframes rdp-spin {
           0% { transform: rotate(0deg); }
@@ -180,9 +185,9 @@ export const RdpTab: React.FC<RdpTabProps> = ({
         ref={containerRef}
         className="rdp-body-placeholder"
         style={{
-          flexGrow: 1,
-          width: "100%",
-          height: "100%",
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
           backgroundColor: "#000",
           position: "relative",
         }}

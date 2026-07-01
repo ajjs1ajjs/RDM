@@ -867,7 +867,7 @@ function App() {
           
           if (tab.type === "rdp") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }}>
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
                 <RdpTab
                   sessionId={tab.id}
                   serverId={tab.serverId || ""}
