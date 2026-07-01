@@ -758,8 +758,6 @@ fn connect_rdp_embedded(
     port: u32,
     credential_id: Option<String>,
     server_id: Option<String>,
-    x: i32,
-    y: i32,
     width: i32,
     height: i32,
     device_pixel_ratio: f64,
@@ -907,8 +905,6 @@ fn connect_rdp_embedded(
             username.as_deref(),
             decrypted_password.as_deref(),
             parent_hwnd,
-            x,
-            y,
             width,
             height,
             device_pixel_ratio,
@@ -946,15 +942,13 @@ fn connect_rdp_embedded(
 #[tauri::command]
 fn resize_rdp_embedded(
     session_id: String,
-    x: i32,
-    y: i32,
     width: i32,
     height: i32,
     device_pixel_ratio: f64,
     app: AppHandle,
     rdp_state: State<'_, rdp::RdpState>,
 ) -> Result<(), String> {
-    rdp::resize_rdp_embedded(&session_id, x, y, width, height, device_pixel_ratio, &app, rdp_state.inner())
+    rdp::resize_rdp_embedded(&session_id, width, height, device_pixel_ratio, &app, rdp_state.inner())
 }
 
 #[tauri::command]
@@ -964,6 +958,29 @@ fn disconnect_rdp_embedded(
     app: AppHandle,
 ) -> Result<(), String> {
     rdp::disconnect_rdp_embedded(&session_id, rdp_state.inner(), &app)
+}
+
+#[tauri::command]
+fn send_rdp_mouse(
+    session_id: String,
+    x: i32,
+    y: i32,
+    button: String,
+    action: String,
+    wheel_delta: i32,
+    rdp_state: State<'_, rdp::RdpState>,
+) -> Result<(), String> {
+    rdp::send_rdp_mouse(&session_id, x, y, &button, &action, wheel_delta, rdp_state.inner())
+}
+
+#[tauri::command]
+fn send_rdp_key(
+    session_id: String,
+    vk: u16,
+    key_up: bool,
+    rdp_state: State<'_, rdp::RdpState>,
+) -> Result<(), String> {
+    rdp::send_rdp_key(&session_id, vk, key_up, rdp_state.inner())
 }
 
 #[tauri::command]
@@ -1610,6 +1627,8 @@ pub fn run() {
             connect_rdp_embedded,
             resize_rdp_embedded,
             disconnect_rdp_embedded,
+            send_rdp_mouse,
+            send_rdp_key,
             export_database_backup,
             import_database_backup,
             import_devolutions_csv,
