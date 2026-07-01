@@ -1534,6 +1534,11 @@ pub fn run() {
             let conn = db::init_db(app_dir)?;
             let session_state = SessionState::new();
 
+            // Maximize main window on startup
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.maximize();
+            }
+
             // Auto-unlock vault with default password if not already unlocked
             let is_setup = db::get_setting(&conn, "sentinel")?.is_some();
             if !is_setup {

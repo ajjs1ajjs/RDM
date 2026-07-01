@@ -143,6 +143,7 @@ extern "system" {
     fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut u32) -> u32;
     fn EnumChildWindows(hwndParent: HWND, lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
+    fn GetClientRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
     fn GetDpiForWindow(hwnd: HWND) -> u32;
     fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> isize;
 }
@@ -645,6 +646,11 @@ pub fn launch_rdp_embedded(
                     let err = GetLastError();
                     let actual_parent = GetParent(hwnd);
                     log_debug(&app_data_dir_clone, &format!("SetParent called. Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
+                    
+                    // Log client rect of target parent to check for offset
+                    let mut client_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    let _ = GetClientRect(target_parent, &mut client_rect);
+                    log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
                     
                     // Apply layout update and repaint — no SWP_FRAMECHANGED to avoid mstsc recalculating chrome
                     let set_pos_res = SetWindowPos(
