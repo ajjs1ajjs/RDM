@@ -608,19 +608,19 @@ pub fn launch_rdp_embedded(
                     let mut parent_screen_y = 0i32;
                     if reparent_ok {
                         let _ = GetClientRect(target_parent, &mut client_rect);
-                        // Get screen position of parent for coordinate conversion
+                        // Get screen position of target_parent for coordinate conversion
                         let mut parent_screen_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(target_parent, &mut parent_screen_rect);
                         parent_screen_x = parent_screen_rect.left;
                         parent_screen_y = parent_screen_rect.top;
                     } else {
-                        // No reparent — use main window's content area
-                        let mut main_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                        let _ = GetWindowRect(parent_hwnd, &mut main_rect);
-                        parent_screen_x = main_rect.left;
-                        parent_screen_y = main_rect.top;
-                        client_rect.right = main_rect.right - main_rect.left;
-                        client_rect.bottom = main_rect.bottom - main_rect.top;
+                        // Reparent failed but target_parent (Chrome_WidgetWin_0) was found — use ITS screen position
+                        // as the reference for absolute positioning
+                        let _ = GetClientRect(target_parent, &mut client_rect);
+                        let mut target_parent_screen_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                        let _ = GetWindowRect(target_parent, &mut target_parent_screen_rect);
+                        parent_screen_x = target_parent_screen_rect.left;
+                        parent_screen_y = target_parent_screen_rect.top;
                     }
                     log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}, screen offset: ({},{})", client_rect, parent_screen_x, parent_screen_y));
                     
