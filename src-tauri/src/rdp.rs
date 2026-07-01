@@ -370,13 +370,8 @@ pub fn launch_rdp_embedded(
         format!("{}:{}", host, port)
     };
 
-    let scale_factor = device_pixel_ratio;
-    log_debug(&app_data_dir, &format!("launch_rdp_embedded: scale_factor resolved as {} (devicePixelRatio was {})", scale_factor, device_pixel_ratio));
-    
-    let physical_x = (x as f64 * scale_factor) as i32;
-    let physical_y = (y as f64 * scale_factor) as i32;
-    let physical_width = (width as f64 * scale_factor) as i32;
-    let physical_height = (height as f64 * scale_factor) as i32;
+    // Coordinates arrive pre-scaled from frontend (physical pixels via rect.* * devicePixelRatio)
+    log_debug(&app_data_dir, &format!("launch_rdp_embedded: physical coords ({}, {}, {}x{}), dpr = {}", x, y, width, height, device_pixel_ratio));
 
     // Register credentials using cmdkey
     if let (Some(user), Some(pass)) = (username, password) {
@@ -422,8 +417,8 @@ pub fn launch_rdp_embedded(
     };
 
     // Ensure minimum remote desktop resolution for usability with smart sizing
-    let desktop_w = if physical_width < 800 { 800 } else { physical_width };
-    let desktop_h = if physical_height < 600 { 600 } else { physical_height };
+    let desktop_w = if width < 800 { 800 } else { width };
+    let desktop_h = if height < 600 { 600 } else { height };
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
@@ -525,10 +520,10 @@ pub fn launch_rdp_embedded(
                 rdp_file_path,
                 target_host: host.to_string(),
                 server_id,
-                x: physical_x,
-                y: physical_y,
-                width: physical_width,
-                height: physical_height,
+                x,
+                y,
+                width,
+                height,
             },
         );
     }
@@ -586,7 +581,7 @@ pub fn launch_rdp_embedded(
                     session.hwnd = Some(SendHwnd(hwnd));
                     (session.x, session.y, session.width, session.height)
                 } else {
-                    (physical_x, physical_y, physical_width, physical_height)
+                    (x, y, width, height)
                 };
                 drop(sessions);
 
@@ -682,19 +677,15 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        let scale_factor = device_pixel_ratio;
-        log_debug(&app_data_dir, &format!("resize_rdp_embedded: Session {} resized to ({}, {}, {}x{}), scale_factor = {}", session_id, x, y, width, height, scale_factor));
-        let physical_x = (x as f64 * scale_factor) as i32;
-        let physical_y = (y as f64 * scale_factor) as i32;
-        let physical_width = (width as f64 * scale_factor) as i32;
-        let physical_height = (height as f64 * scale_factor) as i32;
-        session.x = physical_x;
-        session.y = physical_y;
-        session.width = physical_width;
-        session.height = physical_height;
+        // Coordinates arrive pre-scaled from frontend (physical pixels)
+        log_debug(&app_data_dir, &format!("resize_rdp_embedded: Session {} resized to ({}, {}, {}x{}), dpr = {}", session_id, x, y, width, height, device_pixel_ratio));
+        session.x = x;
+        session.y = y;
+        session.width = width;
+        session.height = height;
         if let Some(hwnd) = session.hwnd {
             unsafe {
-                let flags = if physical_width == 0 || physical_height == 0 {
+                let flags = if width == 0 || height == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
                     SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOZORDER
@@ -703,15 +694,15 @@ pub fn resize_rdp_embedded(
                 let _ = SetWindowPos(
                     hwnd.0,
                     HWND(std::ptr::null_mut()),
-                    physical_x,
-                    physical_y,
-                    physical_width,
-                    physical_height,
+                    x,
+                    y,
+                    width,
+                    height,
                     flags,
                 );
                 
-                if physical_width > 0 && physical_height > 0 {
-                    resize_all_children(hwnd.0, physical_width, physical_height);
+                if width > 0 && height > 0 {
+                    resize_all_children(hwnd.0, width, height);
                 }
             }
         }

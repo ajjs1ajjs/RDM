@@ -48,6 +48,18 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 
     const lastSize = { width: 0, height: 0, dpr: 0 };
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    let postConnectRetryTimer: ReturnType<typeof setInterval> | null = null;
+
+    const doResizeIpc = (rect: DOMRect, dpr: number) => {
+      invoke("resize_rdp_embedded", {
+        sessionId: sid,
+        x: Math.round(rect.left * dpr),
+        y: Math.round(rect.top * dpr),
+        width: Math.round(rect.width * dpr),
+        height: Math.round(rect.height * dpr),
+        devicePixelRatio: dpr,
+      }).catch((err) => console.error("RDP resize error:", err));
+    };
 
     const handleResize = () => {
       if (!containerRef.current) return;
@@ -65,21 +77,13 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        invoke("resize_rdp_embedded", {
-          sessionId: sid,
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
-          width,
-          height,
-          devicePixelRatio: dpr,
-        }).catch((err) => console.error("RDP resize error:", err));
-      }, 100);
+        doResizeIpc(rect, dpr);
+      }, 50);
     };
 
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Wait until the container has actual dimensions (prevent 0x0 or tiny initial size)
       let rect = containerRef.current.getBoundingClientRect();
       let attempts = 0;
       while ((rect.width < 100 || rect.height < 100) && attempts < 20) {
@@ -91,12 +95,12 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 
       if (!active || !containerRef.current) return;
 
-      // Fallback: if container is still too small, use 800x600 minimum
       let finalWidth = Math.round(rect.width);
       let finalHeight = Math.round(rect.height);
       if (finalWidth < 100) finalWidth = 800;
       if (finalHeight < 100) finalHeight = 600;
 
+      const dpr = window.devicePixelRatio || 1.0;
       try {
         await invoke("connect_rdp_embedded", {
           sessionId: sid,
@@ -104,16 +108,30 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           host,
           port,
           credentialId: credentialId || null,
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
-          width: finalWidth,
-          height: finalHeight,
-          devicePixelRatio: window.devicePixelRatio || 1.0,
+          x: Math.round(rect.left * dpr),
+          y: Math.round(rect.top * dpr),
+          width: Math.round(finalWidth * dpr),
+          height: Math.round(finalHeight * dpr),
+          devicePixelRatio: dpr,
         });
-        // Reset lastSize so handleResize is guaranteed to run!
+
+        // Retry resize every 250ms for 5 seconds until hwnd is available on the backend
         lastSize.width = 0;
         lastSize.height = 0;
-        handleResize();
+        lastSize.dpr = 0;
+        let retries = 0;
+        postConnectRetryTimer = setInterval(() => {
+          if (!active || !containerRef.current) {
+            if (postConnectRetryTimer) clearInterval(postConnectRetryTimer);
+            return;
+          }
+          handleResize();
+          retries++;
+          if (retries >= 20) {
+            if (postConnectRetryTimer) clearInterval(postConnectRetryTimer);
+            postConnectRetryTimer = null;
+          }
+        }, 250);
       } catch (err: any) {
         console.error("Failed to connect RDP:", err);
         alert(`RDP Error: ${err}`);
@@ -134,6 +152,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     return () => {
       active = false;
       if (resizeTimer) clearTimeout(resizeTimer);
+      if (postConnectRetryTimer) clearInterval(postConnectRetryTimer);
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
       invoke("disconnect_rdp_embedded", { sessionId: sid }).catch((err) =>
