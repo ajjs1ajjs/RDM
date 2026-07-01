@@ -690,8 +690,19 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        // Compute scale factor from actual window DPI, with frontend dpr as fallback
-        let scale = session.hwnd.map_or(device_pixel_ratio, |h| get_window_scale_factor(h.0, &app_data_dir));
+        // Get DPI from PARENT window (Chrome_WidgetWin_0), not the RDP window itself.
+        // mstsc is NOT per-monitor DPI aware, so GetDpiForWindow on it returns stale DPI.
+        // The parent WebView2 window IS per-monitor DPI aware.
+        let scale = if let Some(h) = session.hwnd {
+            let parent = unsafe { GetParent(h.0) };
+            if !parent.0.is_null() {
+                get_window_scale_factor(parent, &app_data_dir)
+            } else {
+                device_pixel_ratio
+            }
+        } else {
+            device_pixel_ratio
+        };
         let phys_x = (x as f64 * scale) as i32;
         let phys_y = (y as f64 * scale) as i32;
         let phys_w = (width as f64 * scale) as i32;
