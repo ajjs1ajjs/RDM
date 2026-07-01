@@ -393,11 +393,12 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Fixed 1920x1080 (16:9) desktop resolution — smart sizing scales to fit any window.
-    // Don't use the initial window size because it may be small (1280x800 default)
-    // and the .rdp can't be rewritten after launch. 1920x1080 matches most monitors.
-    let desktop_w = 1920;
-    let desktop_h = 1080;
+    // Use the actual physical container dimensions for desktop resolution.
+    // We now wait for maximize before reading the rect, so dimensions are accurate.
+    // Fallback to 1920x1080 if the computed size seems too small.
+    let desktop_w = if physical_width > 800 { physical_width } else { 1920 };
+    let desktop_h = if physical_height > 600 { physical_height } else { 1080 };
+    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (container phys: {}x{})", desktop_w, desktop_h, physical_width, physical_height));
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
