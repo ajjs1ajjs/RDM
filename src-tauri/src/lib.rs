@@ -849,20 +849,33 @@ fn connect_rdp_embedded(
             MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST
         };
         use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowPos, SWP_NOZORDER
+            SetWindowPos, SWP_NOZORDER, GetWindowRect, SWP_SHOWWINDOW
         };
+        use windows::Win32::Foundation::RECT;
         let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
         let mut mi: MONITORINFO = std::mem::zeroed();
         mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
         if GetMonitorInfoW(hmon, &mut mi).as_bool() {
-            let w = mi.rcWork.right - mi.rcWork.left;
-            let h = mi.rcWork.bottom - mi.rcWork.top;
+            let target_w = mi.rcWork.right - mi.rcWork.left;
+            let target_h = mi.rcWork.bottom - mi.rcWork.top;
             let _ = SetWindowPos(
                 parent_hwnd,
                 windows::Win32::Foundation::HWND(std::ptr::null_mut()),
-                mi.rcWork.left, mi.rcWork.top, w, h,
-                SWP_NOZORDER | windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                mi.rcWork.left, mi.rcWork.top, target_w, target_h,
+                SWP_NOZORDER | SWP_SHOWWINDOW,
             );
+            // Wait until the window actually reaches the target size
+            for _ in 0..100 {
+                let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                if GetWindowRect(parent_hwnd, &mut r).is_ok() {
+                    let w = r.right - r.left;
+                    let h = r.bottom - r.top;
+                    if w >= target_w - 10 && h >= target_h - 10 {
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
         }
     }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
