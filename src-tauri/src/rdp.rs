@@ -632,11 +632,11 @@ pub fn launch_rdp_embedded(
                     
                     // Reparent
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
-                    let target_parent = parent_hwnd;
+                    let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
                     let prev_parent = SetParent(hwnd, target_parent);
                     let err = GetLastError();
                     let actual_parent = GetParent(hwnd);
-                    log_debug(&app_data_dir_clone, &format!("SetParent called (direct parent). Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
+                    log_debug(&app_data_dir_clone, &format!("SetParent called. Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
                     
                     // Apply layout update and repaint
                     let set_pos_res = SetWindowPos(
@@ -667,8 +667,8 @@ pub fn launch_rdp_embedded(
                         // Check if session still exists and has hwnd
                         let sessions = state.sessions.lock().unwrap();
                         let session_exists = sessions.contains_key(&session_id_clone3);
-                        let session_data = if let Some(session) = sessions.get(&session_id_clone3) {
-                            session.hwnd.map(|h| (h.0.0 as isize, session.x, session.y, session.width, session.height))
+                        let hwnd_val = if let Some(session) = sessions.get(&session_id_clone3) {
+                            session.hwnd.map(|h| h.0.0 as isize)
                         } else {
                             None
                         };
@@ -678,52 +678,18 @@ pub fn launch_rdp_embedded(
                             break; // Exit loop if session was deleted
                         }
 
-                        if let Some((hwnd_val, x, y, width, height)) = session_data {
+                        if let Some(val) = hwnd_val {
                             let app_clone4 = app_clone3.clone();
                             let app_data_dir_clone4 = app_data_dir_clone3.clone();
                             let session_id_clone4 = session_id_clone3.clone();
                             let _ = app_clone3.run_on_main_thread(move || {
                                 unsafe {
-                                    let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
+                                    let hwnd = HWND(val as *mut std::ffi::c_void);
                                     if IsWindow(hwnd).0 == 0 {
                                         log_debug(&app_data_dir_clone4, "Window handle is no longer valid. Cleaning up session.");
                                         let state = app_clone4.state::<RdpState>();
                                         let _ = disconnect_rdp_embedded(&session_id_clone4, &state, &app_clone4);
                                         return;
-                                    }
-                                    
-                                    let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                                    let _ = GetWindowRect(hwnd, &mut rect);
-                                    
-                                    let parent = GetParent(hwnd);
-                                    let mut pt = POINT { x: rect.left, y: rect.top };
-                                    let _ = ScreenToClient(parent, &mut pt);
-                                    
-                                    let current_x = pt.x;
-                                    let current_y = pt.y;
-                                    let current_w = rect.right - rect.left;
-                                    let current_h = rect.bottom - rect.top;
-                                    
-                                    if current_x != x || current_y != y || current_w != width || current_h != height {
-                                        let flags = if width == 0 || height == 0 {
-                                            SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
-                                        } else {
-                                            SWP_SHOWWINDOW | SWP_NOACTIVATE
-                                        };
-                                        
-                                        let _ = SetWindowPos(
-                                            hwnd,
-                                            HWND(std::ptr::null_mut()),
-                                            x,
-                                            y,
-                                            width,
-                                            height,
-                                            flags,
-                                        );
-                                        
-                                        if width > 0 && height > 0 {
-                                            resize_all_children(hwnd, width, height);
-                                        }
                                     }
                                 }
                             });
