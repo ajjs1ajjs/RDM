@@ -845,6 +845,13 @@ fn connect_rdp_embedded(
     let parent_hwnd = windows::Win32::Foundation::HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
     unsafe {
         let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(parent_hwnd, windows::Win32::UI::WindowsAndMessaging::SW_MAXIMIZE);
+        // Wait until the window is actually maximized before proceeding
+        for _ in 0..50 {
+            if windows::Win32::UI::WindowsAndMessaging::IsZoomed(parent_hwnd).as_bool() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
