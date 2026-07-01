@@ -429,13 +429,18 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Don't set desktopwidth/desktopheight — let mstsc + dynamic resolution
-    // adapt to whatever window size we set via SetWindowPos. Fixed desktop
-    // dimensions cause black bars when the window changes size/monitor.
+    // Set desktopwidth/desktopheight to match the initial window — without these
+    // mstsc defaults to 1024x768 and ignores SetWindowPos. Dynamic resolution
+    // will adapt when the window is later resized.
+    let desktop_w = if physical_width > 0 { physical_width } else { 1280 };
+    let desktop_h = if physical_height > 0 { physical_height } else { 720 };
+
     let rdp_content = format!(
         "full address:s:{}\r\n\
          {}\
          screen mode id:i:1\r\n\
+         desktopwidth:i:{}\r\n\
+         desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
          dynamic resolution:i:1\r\n\
          winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
@@ -449,6 +454,8 @@ pub fn launch_rdp_embedded(
          displayconnectionbar:i:0\r\n",
          connection_string,
          user_line,
+         desktop_w,
+         desktop_h,
          smart_sizing_val,
          redirect_clipboard,
         redirect_drives,
@@ -572,8 +579,8 @@ pub fn launch_rdp_embedded(
         }
 
         if !found_hwnd.0.is_null() {
-            // Wait 50ms for window handles to stabilize
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            // Wait 500ms for mstsc to finish initializing its window
+            std::thread::sleep(std::time::Duration::from_millis(500));
 
             let found_hwnd_val = found_hwnd.0 as isize;
             let app_clone2 = app_clone.clone();
@@ -625,6 +632,31 @@ pub fn launch_rdp_embedded(
                     // Recursively resize all nested children of the RDP window container
                     resize_all_children(hwnd, current_width, current_height);
                 }
+
+                // Re-apply SetWindowPos after 1s — mstsc may resize itself after initialization
+                let app_clone_re = app_clone2.clone();
+                let session_id_re = session_id_clone2.clone();
+                let app_data_dir_re = app_data_dir_clone.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    let state = app_clone_re.state::<RdpState>();
+                    let sessions = state.sessions.lock().unwrap();
+                    if let Some(session) = sessions.get(&session_id_re) {
+                        if let Some(h) = session.hwnd {
+                            let hwnd_val = h.0.0 as isize;
+                            let (x, y, w, h2) = (session.x, session.y, session.width, session.height);
+                            drop(sessions);
+                            let _ = app_clone_re.run_on_main_thread(move || {
+                                unsafe {
+                                    let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
+                                    let _ = SetWindowPos(hwnd, HWND(std::ptr::null_mut()), x, y, w, h2, SWP_NOZORDER | SWP_SHOWWINDOW);
+                                    resize_all_children(hwnd, w, h2);
+                                    log_debug(&app_data_dir_re, &format!("Re-applied SetWindowPos after 1s: ({}, {}, {}x{})", x, y, w, h2));
+                                }
+                            });
+                        }
+                    }
+                });
 
                 // Spawn lightweight background watchdog (60s @ 500ms) - only checks window validity
                 let app_clone3 = app_clone2.clone();
