@@ -144,6 +144,7 @@ extern "system" {
     fn EnumChildWindows(hwndParent: HWND, lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
     fn GetDpiForWindow(hwnd: HWND) -> u32;
+    fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> isize;
 }
 
 #[repr(C)]
@@ -155,11 +156,39 @@ pub struct RECT {
     pub bottom: i32,
 }
 
-fn get_window_scale_factor(hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
-    let dpi = unsafe { GetDpiForWindow(hwnd) };
-    let factor = dpi as f64 / 96.0;
-    log_debug(app_data_dir, &format!("get_window_scale_factor: DPI={}, factor={}", dpi, factor));
-    if factor > 0.0 { factor } else { 1.0 }
+const MONITOR_DEFAULTTONEAREST: u32 = 2;
+const MDT_EFFECTIVE_DPI: u32 = 0;
+
+fn get_window_scale_factor(parent_hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
+    unsafe {
+        // Query the monitor that actually contains the parent window.
+        // GetDpiForWindow can return stale DPI if the window was created on a
+        // different monitor; GetDpiForMonitor returns the monitor's real DPI.
+        let hmonitor = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
+        if hmonitor != 0 {
+            let shcore = GetModuleHandleA("shcore.dll\0".as_ptr());
+            if shcore != 0 {
+                let proc = GetProcAddress(shcore, "GetDpiForMonitor\0".as_ptr());
+                if !proc.is_null() {
+                    let func: unsafe extern "system" fn(isize, u32, *mut u32, *mut u32) -> i32 = std::mem::transmute(proc);
+                    let mut dpi_x: u32 = 0;
+                    let mut dpi_y: u32 = 0;
+                    let hr = func(hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
+                    if hr == 0 && dpi_x > 0 {
+                        let factor = dpi_x as f64 / 96.0;
+                        log_debug(app_data_dir, &format!("get_window_scale_factor: monitor={} dpi={} factor={}", hmonitor, dpi_x, factor));
+                        return if factor > 0.0 { factor } else { 1.0 };
+                    }
+                    log_debug(app_data_dir, &format!("GetDpiForMonitor failed, hr={}", hr));
+                }
+            }
+        }
+        // Fallback to per-window DPI if monitor query is unavailable
+        let dpi = GetDpiForWindow(parent_hwnd);
+        let factor = dpi as f64 / 96.0;
+        log_debug(app_data_dir, &format!("get_window_scale_factor (fallback): DPI={}, factor={}", dpi, factor));
+        if factor > 0.0 { factor } else { 1.0 }
+    }
 }
 
 const GWL_STYLE: i32 = -16;
