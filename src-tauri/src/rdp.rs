@@ -580,19 +580,49 @@ pub fn launch_rdp_embedded(
                 unsafe {
                     set_dpi_hosting_behavior_mixed(&app_data_dir_clone);
 
-                    // Reparent to Chrome_WidgetWin_0 (WebView2 child)
-                    // Do NOT change window style — mstsc detects style changes and exits
+                    // Remove title bar and borders from mstsc window
+                    // Keep WS_POPUP (mstsc needs it) but remove WS_CAPTION and WS_THICKFRAME
+                    let style = GetWindowLongW(hwnd, GWL_STYLE);
+                    let new_style = style & !(WS_CAPTION | WS_THICKFRAME);
+                    let set_style_res = SetWindowLongW(hwnd, GWL_STYLE, new_style);
+                    log_debug(&app_data_dir_clone, &format!("Style updated. Old style: 0x{:X}, New style: 0x{:X}, Result: {}", style, new_style, set_style_res));
+
+                    // Try to reparent to Chrome_WidgetWin_0 (may fail on some systems)
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
                     let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
                     let prev_parent = SetParent(hwnd, target_parent);
+                    let actual_after = GetParent(hwnd);
                     let err = GetLastError();
-                    let actual_parent = GetParent(hwnd);
-                    log_debug(&app_data_dir_clone, &format!("SetParent called. Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
+                    let reparent_ok = !actual_after.0.is_null();
+                    log_debug(&app_data_dir_clone, &format!("SetParent called. Target: {:?}, Prev: {:?}, Actual: {:?}, Err: {}, reparent_ok={}", target_parent, prev_parent, actual_after, err, reparent_ok));
+                    
+                    if !reparent_ok {
+                        // Reparent failed — just set topmost so it stays above the main window
+                        log_debug(&app_data_dir_clone, "Reparent failed, using HWND_TOPMOST overlay approach");
+                        let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style | 0x00000008); // WS_EX_TOPMOST equivalent via style
+                    }
                     
                     // Log client rect of target parent to check for offset
                     let mut client_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                    let _ = GetClientRect(target_parent, &mut client_rect);
-                    log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
+                    let mut parent_screen_x = 0i32;
+                    let mut parent_screen_y = 0i32;
+                    if reparent_ok {
+                        let _ = GetClientRect(target_parent, &mut client_rect);
+                        // Get screen position of parent for coordinate conversion
+                        let mut parent_screen_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                        let _ = GetWindowRect(target_parent, &mut parent_screen_rect);
+                        parent_screen_x = parent_screen_rect.left;
+                        parent_screen_y = parent_screen_rect.top;
+                    } else {
+                        // No reparent — use main window's content area
+                        let mut main_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                        let _ = GetWindowRect(parent_hwnd, &mut main_rect);
+                        parent_screen_x = main_rect.left;
+                        parent_screen_y = main_rect.top;
+                        client_rect.right = main_rect.right - main_rect.left;
+                        client_rect.bottom = main_rect.bottom - main_rect.top;
+                    }
+                    log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}, screen offset: ({},{})", client_rect, parent_screen_x, parent_screen_y));
                     
                     // Position RDP window: use hardcoded CSS offsets when frontend coords are unreliable
                     // (on first launch, sidebar may not have rendered yet, so frontend sends x=0)
@@ -610,7 +640,14 @@ pub fn launch_rdp_embedded(
                     let parent_client_h = client_rect.bottom - phys_y;
                     let phys_w = if parent_client_w > 100 { parent_client_w } else { current_width };
                     let phys_h = if parent_client_h > 100 { parent_client_h } else { current_height };
-                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: pos=({},{}), parent=({}x{}), phys=({}, {}, {}x{})", phys_x, phys_y, client_rect.right, client_rect.bottom, phys_x, phys_y, phys_w, phys_h));
+                    
+                    // If reparent failed, convert to absolute screen coordinates
+                    let (final_x, final_y) = if reparent_ok {
+                        (phys_x, phys_y)
+                    } else {
+                        (parent_screen_x + phys_x, parent_screen_y + phys_y)
+                    };
+                    log_debug(&app_data_dir_clone, &format!("Positioning: reparent_ok={}, final=({},{}), size=({}x{})", reparent_ok, final_x, final_y, phys_w, phys_h));
                     
                     // Update session with corrected coordinates
                     {
@@ -626,16 +663,18 @@ pub fn launch_rdp_embedded(
                     }
                     
                     // Apply layout update and repaint — use HWND_TOP and SWP_FRAMECHANGED to force recalculation
+                    // If reparent failed, use HWND_TOPMOST so the window stays above the main window
+                    let z_order = if reparent_ok { HWND(0 as *mut _) } else { HWND(-1isize as *mut _) }; // HWND_TOP or HWND_TOPMOST
                     let set_pos_res = SetWindowPos(
                         hwnd,
-                        HWND(0 as *mut _),  // HWND_TOP
-                        phys_x,
-                        phys_y,
+                        z_order,
+                        final_x,
+                        final_y,
                         phys_w,
                         phys_h,
                         SWP_SHOWWINDOW | SWP_FRAMECHANGED,
                     );
-                    log_debug(&app_data_dir_clone, &format!("SetWindowPos called at coordinates ({}, {}), size: ({}x{}). Result: {}", phys_x, phys_y, phys_w, phys_h, set_pos_res.0));
+                    log_debug(&app_data_dir_clone, &format!("SetWindowPos called at coordinates ({}, {}), size: ({}x{}). Result: {}", final_x, final_y, phys_w, phys_h, set_pos_res.0));
                     
                     // Read back actual position/size
                     let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
