@@ -47,7 +47,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     let active = true;
     const sid = sessionId;
 
-    const lastSize = { width: 0, height: 0, dpr: 0 };
+    const lastSize = { left: 0, top: 0, width: 0, height: 0, dpr: 0 };
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let postConnectRetryTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -66,13 +66,17 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const handleResize = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
+      const left = Math.round(rect.left);
+      const top = Math.round(rect.top);
       const width = Math.round(rect.width);
       const height = Math.round(rect.height);
       const dpr = window.devicePixelRatio || 1.0;
 
-      if (width === lastSize.width && height === lastSize.height && dpr === lastSize.dpr) {
+      if (left === lastSize.left && top === lastSize.top && width === lastSize.width && height === lastSize.height && dpr === lastSize.dpr) {
         return;
       }
+      lastSize.left = left;
+      lastSize.top = top;
       lastSize.width = width;
       lastSize.height = height;
       lastSize.dpr = dpr;
@@ -86,14 +90,13 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Rust resizes the window to monitor work area before launching mstsc
+      // Wait until sidebar has rendered (left > 100px) so coordinates are correct
       let rect = containerRef.current.getBoundingClientRect();
-      let attempts = 0;
-      while ((rect.width < 100 || rect.height < 100) && attempts < 20) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      for (let i = 0; i < 30; i++) {
+        if (rect.left > 100 && rect.width > 100) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
         if (!active || !containerRef.current) return;
         rect = containerRef.current.getBoundingClientRect();
-        attempts++;
       }
 
       if (!active || !containerRef.current) return;
@@ -119,6 +122,8 @@ export const RdpTab: React.FC<RdpTabProps> = ({
         });
 
         // Retry resize every 250ms for 5 seconds until hwnd is available on the backend
+        lastSize.left = 0;
+        lastSize.top = 0;
         lastSize.width = 0;
         lastSize.height = 0;
         lastSize.dpr = 0;
