@@ -90,7 +90,6 @@ unsafe extern "system" fn enum_child_callback(hwnd: HWND, lparam: LPARAM) -> BOO
     true.into() // Continue enumeration to log all children
 }
 
-#[allow(dead_code)]
 unsafe fn get_webview_hwnd(parent_hwnd: HWND, app_data_dir: &std::path::Path) -> HWND {
     log_debug(app_data_dir, &format!("get_webview_hwnd: Starting search under parent HWND {:?}", parent_hwnd));
     let mut finder = WebViewFinder {
@@ -109,31 +108,6 @@ unsafe fn get_webview_hwnd(parent_hwnd: HWND, app_data_dir: &std::path::Path) ->
         log_debug(app_data_dir, &format!("get_webview_hwnd: Found Chrome_WidgetWin_0 at {:?}", finder.webview_hwnd));
         finder.webview_hwnd
     }
-}
-
-#[allow(dead_code)]
-unsafe fn get_real_monitor_scale_factor(hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
-    let hmonitor = MonitorFromWindow(hwnd, 2); // MONITOR_DEFAULTTONEAREST
-    let mut dpi_x = 0u32;
-    let mut dpi_y = 0u32;
-    
-    let lib_name = "shcore.dll\0".as_ptr();
-    let shcore = LoadLibraryA(lib_name);
-    if shcore != 0 {
-        let proc_name = "GetDpiForMonitor\0".as_ptr();
-        let get_dpi_proc = GetProcAddress(shcore, proc_name);
-        if !get_dpi_proc.is_null() {
-            let get_dpi: unsafe extern "system" fn(isize, u32, *mut u32, *mut u32) -> i32 = std::mem::transmute(get_dpi_proc);
-            let res = get_dpi(hmonitor, 0, &mut dpi_x, &mut dpi_y);
-            if res == 0 && dpi_x > 0 {
-                let factor = dpi_x as f64 / 96.0;
-                log_debug(app_data_dir, &format!("get_real_monitor_scale_factor: GetDpiForMonitor returned DPI {}, scale_factor: {}", dpi_x, factor));
-                return factor;
-            }
-        }
-    }
-    log_debug(app_data_dir, "get_real_monitor_scale_factor: GetDpiForMonitor failed or not available, returning 1.0");
-    1.0
 }
 
 
@@ -168,17 +142,7 @@ extern "system" {
     fn IsWindow(hWnd: HWND) -> BOOL;
     fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut u32) -> u32;
     fn EnumChildWindows(hwndParent: HWND, lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
-    fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> isize;
-    fn LoadLibraryA(lpLibFileName: *const u8) -> isize;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
-    fn ScreenToClient(hWnd: HWND, lpPoint: *mut POINT) -> BOOL;
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct POINT {
-    pub x: i32,
-    pub y: i32,
 }
 
 #[repr(C)]
@@ -457,6 +421,10 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
+    // Ensure minimum remote desktop resolution for usability with smart sizing
+    let desktop_w = if physical_width < 800 { 800 } else { physical_width };
+    let desktop_h = if physical_height < 600 { 600 } else { physical_height };
+
     let rdp_content = format!(
         "full address:s:{}\r\n\
          {}\
@@ -465,6 +433,7 @@ pub fn launch_rdp_embedded(
          desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
          dynamic resolution:i:1\r\n\
+         winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
          redirectprinters:i:{}\r\n\
@@ -475,8 +444,8 @@ pub fn launch_rdp_embedded(
          displayconnectionbar:i:0\r\n",
         connection_string,
         user_line,
-        physical_width,
-        physical_height,
+        desktop_w,
+        desktop_h,
         smart_sizing_val,
         redirect_clipboard,
         redirect_drives,
@@ -654,19 +623,17 @@ pub fn launch_rdp_embedded(
                     resize_all_children(hwnd, current_width, current_height);
                 }
 
-                // Spawn background enforcer thread loop
+                // Spawn lightweight background watchdog (60s @ 500ms) - only checks window validity
                 let app_clone3 = app_clone2.clone();
                 let session_id_clone3 = session_id_clone2.clone();
                 let app_data_dir_clone3 = app_data_dir_clone.clone();
                 std::thread::spawn(move || {
                     let state = app_clone3.state::<RdpState>();
-                    // Run for up to 3 hours (54000 * 200ms) to ensure it stays monitored
-                    for _ in 0..54000 {
-                        std::thread::sleep(std::time::Duration::from_millis(200));
+                    // Run for 60 seconds (120 * 500ms) to catch early window failures
+                    for _ in 0..120 {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
 
-                        // Check if session still exists and has hwnd
                         let sessions = state.sessions.lock().unwrap();
-                        let session_exists = sessions.contains_key(&session_id_clone3);
                         let hwnd_val = if let Some(session) = sessions.get(&session_id_clone3) {
                             session.hwnd.map(|h| h.0.0 as isize)
                         } else {
@@ -674,28 +641,26 @@ pub fn launch_rdp_embedded(
                         };
                         drop(sessions);
 
-                        if !session_exists {
-                            break; // Exit loop if session was deleted
-                        }
-
-                        if let Some(val) = hwnd_val {
+                        let check = hwnd_val;
+                        if let Some(hwnd_val) = check {
                             let app_clone4 = app_clone3.clone();
-                            let app_data_dir_clone4 = app_data_dir_clone3.clone();
                             let session_id_clone4 = session_id_clone3.clone();
+                            let app_data_dir_clone4 = app_data_dir_clone3.clone();
                             let _ = app_clone3.run_on_main_thread(move || {
                                 unsafe {
-                                    let hwnd = HWND(val as *mut std::ffi::c_void);
-                                    if IsWindow(hwnd).0 == 0 {
-                                        log_debug(&app_data_dir_clone4, "Window handle is no longer valid. Cleaning up session.");
-                                        let state = app_clone4.state::<RdpState>();
-                                        let _ = disconnect_rdp_embedded(&session_id_clone4, &state, &app_clone4);
-                                        return;
-                                    }
+                                let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
+                                if IsWindow(hwnd).0 == 0 {
+                                    log_debug(&app_data_dir_clone4, "Watchdog: window handle invalid, cleaning up.");
+                                    let state = app_clone4.state::<RdpState>();
+                                    let _ = disconnect_rdp_embedded(&session_id_clone4, &state, &app_clone4);
+                                }
                                 }
                             });
+                        } else {
+                            break;
                         }
                     }
-                    log_debug(&app_data_dir_clone3, "--- Background search/enforcer thread finished ---");
+                    log_debug(&app_data_dir_clone3, "--- RDP watchdog thread finished ---");
                 });
             });
         }
@@ -732,7 +697,7 @@ pub fn resize_rdp_embedded(
                 let flags = if physical_width == 0 || physical_height == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
-                    SWP_SHOWWINDOW | SWP_FRAMECHANGED
+                    SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOZORDER
                 };
 
                 let _ = SetWindowPos(

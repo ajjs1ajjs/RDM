@@ -47,6 +47,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const sid = sessionId;
 
     const lastSize = { width: 0, height: 0, dpr: 0 };
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleResize = () => {
       if (!containerRef.current) return;
@@ -62,14 +63,17 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       lastSize.height = height;
       lastSize.dpr = dpr;
 
-      invoke("resize_rdp_embedded", {
-        sessionId: sid,
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width,
-        height,
-        devicePixelRatio: dpr,
-      }).catch((err) => console.error("RDP resize error:", err));
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        invoke("resize_rdp_embedded", {
+          sessionId: sid,
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width,
+          height,
+          devicePixelRatio: dpr,
+        }).catch((err) => console.error("RDP resize error:", err));
+      }, 100);
     };
 
     const startRdp = async () => {
@@ -87,6 +91,12 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 
       if (!active || !containerRef.current) return;
 
+      // Fallback: if container is still too small, use 800x600 minimum
+      let finalWidth = Math.round(rect.width);
+      let finalHeight = Math.round(rect.height);
+      if (finalWidth < 100) finalWidth = 800;
+      if (finalHeight < 100) finalHeight = 600;
+
       try {
         await invoke("connect_rdp_embedded", {
           sessionId: sid,
@@ -96,8 +106,8 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           credentialId: credentialId || null,
           x: Math.round(rect.left),
           y: Math.round(rect.top),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
+          width: finalWidth,
+          height: finalHeight,
           devicePixelRatio: window.devicePixelRatio || 1.0,
         });
         // Reset lastSize so handleResize is guaranteed to run!
@@ -123,6 +133,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 
     return () => {
       active = false;
+      if (resizeTimer) clearTimeout(resizeTimer);
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
       invoke("disconnect_rdp_embedded", { sessionId: sid }).catch((err) =>

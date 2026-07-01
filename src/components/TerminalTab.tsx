@@ -144,14 +144,18 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       }
     });
 
-    // Handle terminal resize events
+    // Handle terminal resize events with debounce
+    let ptyResizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeSubscription = term.onResize((size) => {
       if (isConnected) {
-        invoke("resize_ssh_pty", {
-          sessionId,
-          cols: size.cols,
-          rows: size.rows,
-        }).catch((e) => console.error("PTY resize error:", e));
+        if (ptyResizeTimer) clearTimeout(ptyResizeTimer);
+        ptyResizeTimer = setTimeout(() => {
+          invoke("resize_ssh_pty", {
+            sessionId,
+            cols: size.cols,
+            rows: size.rows,
+          }).catch((e) => console.error("PTY resize error:", e));
+        }, 100);
       }
     });
 
@@ -169,6 +173,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     return () => {
       isDestroyed = true;
       window.removeEventListener("resize", handleResize);
+      if (ptyResizeTimer) clearTimeout(ptyResizeTimer);
       dataSubscription.dispose();
       resizeSubscription.dispose();
       term.dispose();
