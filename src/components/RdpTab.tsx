@@ -86,13 +86,19 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Maximize window first so RDP gets the right container size
-      try {
-        await getCurrentWindow().maximize();
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (e) {
-        console.warn("maximize failed:", e);
+      // Wait for window to actually be maximized before reading container rect
+      const appWindow = getCurrentWindow();
+      for (let i = 0; i < 30; i++) {
+        try {
+          await appWindow.maximize();
+          const isMax = await appWindow.isMaximized();
+          if (isMax) break;
+        } catch (e) {
+          // ignore
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       let rect = containerRef.current.getBoundingClientRect();
       let attempts = 0;
@@ -137,7 +143,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           }
           handleResize();
           retries++;
-          if (retries >= 20) {
+          if (retries >= 40) {
             if (postConnectRetryTimer) clearInterval(postConnectRetryTimer);
             postConnectRetryTimer = null;
           }
