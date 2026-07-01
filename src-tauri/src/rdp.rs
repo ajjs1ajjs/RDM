@@ -160,6 +160,7 @@ pub struct RECT {
 }
 
 const GWL_STYLE: i32 = -16;
+const GWL_EXSTYLE: i32 = -20;
 const WS_POPUP: i32 = 0x80000000u32 as i32;
 const WS_CAPTION: i32 = 0x00C00000;
 const WS_THICKFRAME: i32 = 0x00040000;
@@ -599,7 +600,9 @@ pub fn launch_rdp_embedded(
                     if !reparent_ok {
                         // Reparent failed — just set topmost so it stays above the main window
                         log_debug(&app_data_dir_clone, "Reparent failed, using HWND_TOPMOST overlay approach");
-                        let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style | 0x00000008); // WS_EX_TOPMOST equivalent via style
+                        // Set WS_EX_TOPMOST via GWL_EXSTYLE (not GWL_STYLE!)
+                        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                        let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | 0x00000008); // WS_EX_TOPMOST
                     }
                     
                     // Log client rect of target parent to check for offset
