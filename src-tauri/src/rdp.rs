@@ -20,6 +20,7 @@ pub struct RdpSession {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    pub dpr: f64,
 }
 
 pub struct RdpState {
@@ -513,6 +514,7 @@ pub fn launch_rdp_embedded(
                 y: physical_y,
                 width: physical_width,
                 height: physical_height,
+                dpr: device_pixel_ratio,
             },
         );
     }
@@ -566,11 +568,11 @@ pub fn launch_rdp_embedded(
                 
                 let state = app_clone2.state::<RdpState>();
                 let mut sessions = state.sessions.lock().unwrap();
-                let (current_x, current_y, current_width, current_height) = if let Some(session) = sessions.get_mut(&session_id_clone2) {
+                let (current_x, current_y, current_width, current_height, current_dpr) = if let Some(session) = sessions.get_mut(&session_id_clone2) {
                     session.hwnd = Some(SendHwnd(hwnd));
-                    (session.x, session.y, session.width, session.height)
+                    (session.x, session.y, session.width, session.height, session.dpr)
                 } else {
-                    (physical_x, physical_y, physical_width, physical_height)
+                    (physical_x, physical_y, physical_width, physical_height, device_pixel_ratio)
                 };
                 drop(sessions);
 
@@ -596,17 +598,25 @@ pub fn launch_rdp_embedded(
                     let _ = GetClientRect(target_parent, &mut client_rect);
                     log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
                     
-                    // Position RDP window: use DPR-scaled CSS coords for position,
-                    // but use parent client rect for size (always fills the container correctly)
-                    let phys_x = current_x;
-                    let phys_y = current_y;
-                    let parent_client_w = client_rect.right - current_x;
-                    let parent_client_h = client_rect.bottom - current_y;
+                    // Position RDP window: use hardcoded CSS offsets when frontend coords are unreliable
+                    // (on first launch, sidebar may not have rendered yet, so frontend sends x=0)
+                    let dpr = if current_dpr > 0.0 { current_dpr } else { 1.0 };
+                    let (phys_x, phys_y) = if current_x < 100 {
+                        // Frontend coords unreliable — use hardcoded CSS offsets for sidebar (280px) and header (74px)
+                        let fallback_x = (280.0 * dpr) as i32;
+                        let fallback_y = (74.0 * dpr) as i32;
+                        log_debug(&app_data_dir_clone, &format!("First launch: frontend coords unreliable (x={}), using hardcoded offsets: css=(280,74) -> phys=({},{})", current_x, fallback_x, fallback_y));
+                        (fallback_x, fallback_y)
+                    } else {
+                        (current_x, current_y)
+                    };
+                    let parent_client_w = client_rect.right - phys_x;
+                    let parent_client_h = client_rect.bottom - phys_y;
                     let phys_w = if parent_client_w > 100 { parent_client_w } else { current_width };
                     let phys_h = if parent_client_h > 100 { parent_client_h } else { current_height };
-                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: pos=({},{}), parent=({}x{}), phys=({}, {}, {}x{})", current_x, current_y, client_rect.right, client_rect.bottom, phys_x, phys_y, phys_w, phys_h));
+                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: pos=({},{}), parent=({}x{}), phys=({}, {}, {}x{})", phys_x, phys_y, client_rect.right, client_rect.bottom, phys_x, phys_y, phys_w, phys_h));
                     
-                    // Update session with coordinates
+                    // Update session with corrected coordinates
                     {
                         let state = app_clone2.state::<RdpState>();
                         let mut sessions = state.sessions.lock().unwrap();
@@ -615,6 +625,7 @@ pub fn launch_rdp_embedded(
                             session.y = phys_y;
                             session.width = phys_w;
                             session.height = phys_h;
+                            session.dpr = dpr;
                         }
                     }
                     
@@ -709,6 +720,7 @@ pub fn resize_rdp_embedded(
         session.y = y;
         session.width = width;
         session.height = height;
+        session.dpr = device_pixel_ratio;
         if let Some(hwnd) = session.hwnd {
             unsafe {
                 let flags = if phys_w == 0 || phys_h == 0 {
