@@ -574,9 +574,9 @@ pub fn launch_rdp_embedded(
                 unsafe {
                     set_dpi_hosting_behavior_mixed(&app_data_dir_clone);
 
-                    // Try to reparent to Chrome_WidgetWin_0 (may fail on some systems)
+                    // Try to reparent to main Tauri window (more reliable than Chrome_WidgetWin_0)
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
-                    let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
+                    let target_parent = parent_hwnd; // Use main window directly, not Chrome_WidgetWin_0
                     let prev_parent = SetParent(hwnd, target_parent);
                     let actual_after = GetParent(hwnd);
                     let err = GetLastError();
@@ -718,7 +718,7 @@ pub fn launch_rdp_embedded(
                                         log_debug(&app_data_dir_clone4, &format!("Watchdog: found new window {:?}, re-parenting...", new_data.hwnd));
                                         set_dpi_hosting_behavior_mixed(&app_data_dir_clone4);
                                         let parent_ref = HWND(parent_isize as *mut std::ffi::c_void);
-                                        let target_parent = get_webview_hwnd(parent_ref, &app_data_dir_clone4);
+                                        let target_parent = parent_ref; // Use main window directly
                                         let prev_parent = SetParent(new_data.hwnd, target_parent);
                                         let actual_after = GetParent(new_data.hwnd);
                                         let reparent_ok = !actual_after.0.is_null();
