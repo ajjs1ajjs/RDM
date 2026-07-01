@@ -440,6 +440,7 @@ pub fn launch_rdp_embedded(
          desktopwidth:i:{}\r\n\
          desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
+         dynamic resolution:i:1\r\n\
          winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
