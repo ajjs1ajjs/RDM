@@ -427,7 +427,6 @@ pub fn launch_rdp_embedded(
          desktopwidth:i:{}\r\n\
          desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
-         dynamic resolution:i:1\r\n\
          winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
@@ -602,7 +601,7 @@ pub fn launch_rdp_embedded(
                     let actual_parent = GetParent(hwnd);
                     log_debug(&app_data_dir_clone, &format!("SetParent called. Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
                     
-                    // Apply layout update and repaint
+                    // Apply layout update and repaint — no SWP_FRAMECHANGED to avoid mstsc recalculating chrome
                     let set_pos_res = SetWindowPos(
                         hwnd,
                         HWND(std::ptr::null_mut()),
@@ -610,7 +609,7 @@ pub fn launch_rdp_embedded(
                         current_y,
                         current_width,
                         current_height,
-                        SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+                        SWP_NOZORDER | SWP_SHOWWINDOW,
                     );
                     log_debug(&app_data_dir_clone, &format!("SetWindowPos called at coordinates ({}, {}), size: ({}x{}). Result: {}", current_x, current_y, current_width, current_height, set_pos_res.0));
                     
@@ -688,7 +687,7 @@ pub fn resize_rdp_embedded(
                 let flags = if width == 0 || height == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
-                    SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOZORDER
+                    SWP_SHOWWINDOW | SWP_NOZORDER
                 };
 
                 let _ = SetWindowPos(
