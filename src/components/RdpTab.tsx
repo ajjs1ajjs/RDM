@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface RdpTabProps {
   sessionId: string;
@@ -150,12 +151,30 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       resizeObserver.observe(containerRef.current);
     }
 
+    // Also react to native window move/scale changes (cross-monitor DPI switch)
+    let moveUnlisten: (() => void) | null = null;
+    let scaleUnlisten: (() => void) | null = null;
+    let resizeUnlisten: (() => void) | null = null;
+    const appWindow = getCurrentWindow();
+    appWindow.onMoved(() => {
+      setTimeout(() => handleResize(), 150);
+    }).then((fn) => { moveUnlisten = fn; });
+    appWindow.onScaleChanged(() => {
+      setTimeout(() => handleResize(), 150);
+    }).then((fn) => { scaleUnlisten = fn; });
+    appWindow.onResized(() => {
+      setTimeout(() => handleResize(), 150);
+    }).then((fn) => { resizeUnlisten = fn; });
+
     return () => {
       active = false;
       if (resizeTimer) clearTimeout(resizeTimer);
       if (postConnectRetryTimer) clearInterval(postConnectRetryTimer);
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
+      if (moveUnlisten) moveUnlisten();
+      if (scaleUnlisten) scaleUnlisten();
+      if (resizeUnlisten) resizeUnlisten();
       invoke("disconnect_rdp_embedded", { sessionId: sid }).catch((err) =>
         console.error("RDP disconnect error:", err)
       );
