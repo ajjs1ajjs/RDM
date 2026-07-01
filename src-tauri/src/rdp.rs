@@ -580,13 +580,8 @@ pub fn launch_rdp_embedded(
                 unsafe {
                     set_dpi_hosting_behavior_mixed(&app_data_dir_clone);
 
-                    // Clear styles and inject WS_CHILD (clear WS_THICKFRAME to avoid borders)
-                    let style = GetWindowLongW(hwnd, GWL_STYLE);
-                    let new_style = (style & !(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD;
-                    let set_style_res = SetWindowLongW(hwnd, GWL_STYLE, new_style);
-                    log_debug(&app_data_dir_clone, &format!("Style updated. Old style: 0x{:X}, New style: 0x{:X}, Result: {}", style, new_style, set_style_res));
-                    
                     // Reparent to Chrome_WidgetWin_0 (WebView2 child)
+                    // Do NOT change window style — mstsc detects style changes and exits
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
                     let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
                     let prev_parent = SetParent(hwnd, target_parent);
@@ -715,9 +710,6 @@ pub fn launch_rdp_embedded(
                                     if !new_data.hwnd.0.is_null() {
                                         log_debug(&app_data_dir_clone4, &format!("Watchdog: found new window {:?}, re-parenting...", new_data.hwnd));
                                         set_dpi_hosting_behavior_mixed(&app_data_dir_clone4);
-                                        let style = GetWindowLongW(new_data.hwnd, GWL_STYLE);
-                                        let new_style = (style & !(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD;
-                                        let _ = SetWindowLongW(new_data.hwnd, GWL_STYLE, new_style);
                                         let parent_ref = HWND(parent_isize as *mut std::ffi::c_void);
                                         let target_parent = get_webview_hwnd(parent_ref, &app_data_dir_clone4);
                                         let _ = SetParent(new_data.hwnd, target_parent);
