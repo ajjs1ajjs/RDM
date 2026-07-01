@@ -46,19 +46,21 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     let active = true;
     const sid = sessionId;
 
-    const lastSize = { width: 0, height: 0 };
+    const lastSize = { width: 0, height: 0, dpr: 0 };
 
     const handleResize = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const width = Math.round(rect.width);
       const height = Math.round(rect.height);
+      const dpr = window.devicePixelRatio || 1.0;
 
-      if (width === lastSize.width && height === lastSize.height) {
+      if (width === lastSize.width && height === lastSize.height && dpr === lastSize.dpr) {
         return;
       }
       lastSize.width = width;
       lastSize.height = height;
+      lastSize.dpr = dpr;
 
       invoke("resize_rdp_embedded", {
         sessionId: sid,
@@ -66,7 +68,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
         y: Math.round(rect.top),
         width,
         height,
-        devicePixelRatio: window.devicePixelRatio || 1.0,
+        devicePixelRatio: dpr,
       }).catch((err) => console.error("RDP resize error:", err));
     };
 
