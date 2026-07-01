@@ -716,10 +716,10 @@ pub fn resize_rdp_embedded(
         let phys_w = (width as f64 * device_pixel_ratio) as i32;
         let phys_h = (height as f64 * device_pixel_ratio) as i32;
         log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} -> phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, phys_x, phys_y, phys_w, phys_h));
-        session.x = x;
-        session.y = y;
-        session.width = width;
-        session.height = height;
+        session.x = phys_x;
+        session.y = phys_y;
+        session.width = phys_w;
+        session.height = phys_h;
         session.dpr = device_pixel_ratio;
         if let Some(hwnd) = session.hwnd {
             unsafe {
