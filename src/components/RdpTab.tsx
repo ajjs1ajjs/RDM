@@ -86,6 +86,14 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
+      // Maximize window first so RDP gets the right container size
+      try {
+        await getCurrentWindow().maximize();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (e) {
+        console.warn("maximize failed:", e);
+      }
+
       let rect = containerRef.current.getBoundingClientRect();
       let attempts = 0;
       while ((rect.width < 100 || rect.height < 100) && attempts < 20) {

@@ -146,16 +146,6 @@ extern "system" {
     fn GetClientRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
     fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
     fn UpdateWindow(hWnd: HWND) -> BOOL;
-    fn ShowWindow(hWnd: HWND, nCmdShow: i32) -> BOOL;
-}
-
-pub unsafe fn show_window_maximize(hwnd_ptr: *mut std::ffi::c_void) {
-    let _ = ShowWindow(HWND(hwnd_ptr), SW_MAXIMIZE);
-}
-
-pub unsafe fn get_parent_hwnd(hwnd_ptr: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
-    let parent = GetParent(HWND(hwnd_ptr));
-    parent.0
 }
 
 #[repr(C)]
@@ -183,41 +173,10 @@ const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_NOMOVE: u32 = 0x0002;
 const SWP_NOSIZE: u32 = 0x0001;
 const SWP_NOZORDER: u32 = 0x0004;
-const SW_MAXIMIZE: i32 = 3;
 
 struct EnumData {
     target_pid: u32,
     hwnd: HWND,
-}
-
-fn resize_all_children(parent_hwnd: HWND, width: i32, height: i32) {
-    struct ResizeData {
-        width: i32,
-        height: i32,
-    }
-    
-    unsafe extern "system" fn resize_child_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let data = &*(lparam.0 as *const ResizeData);
-        let _ = SetWindowPos(
-            hwnd,
-            HWND(std::ptr::null_mut()),
-            0,
-            0,
-            data.width,
-            data.height,
-            SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED,
-        );
-        BOOL(1)
-    }
-
-    let mut data = ResizeData { width, height };
-    unsafe {
-        let _ = EnumChildWindows(
-            parent_hwnd,
-            resize_child_callback,
-            LPARAM(&mut data as *mut _ as isize),
-        );
-    }
 }
 
 unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -384,12 +343,12 @@ pub fn launch_rdp_embedded(
         format!("{}:{}", host, port)
     };
 
-    // Frontend sends CSS pixel coordinates — use them directly (Chrome_WidgetWin_0 uses logical pixels)
-    let physical_x = x;
-    let physical_y = y;
-    let physical_width = width;
-    let physical_height = height;
-    log_debug(&app_data_dir, &format!("launch_rdp_embedded: css=({},{},{}x{}) dpr={} (using CSS coords directly)", x, y, width, height, device_pixel_ratio));
+    // Scale CSS coordinates to physical pixels for SetWindowPos
+    let physical_x = (x as f64 * device_pixel_ratio) as i32;
+    let physical_y = (y as f64 * device_pixel_ratio) as i32;
+    let physical_width = (width as f64 * device_pixel_ratio) as i32;
+    let physical_height = (height as f64 * device_pixel_ratio) as i32;
+    log_debug(&app_data_dir, &format!("launch_rdp_embedded: css=({},{},{}x{}) dpr={} -> phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, physical_x, physical_y, physical_width, physical_height));
 
     // Register credentials using cmdkey
     if let (Some(user), Some(pass)) = (username, password) {
@@ -627,14 +586,14 @@ pub fn launch_rdp_embedded(
                     let _ = GetClientRect(target_parent, &mut client_rect);
                     log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
                     
-                    // Use parent client rect size minus CSS offset for physical coordinates
+                    // Use session coordinates (already scaled by DPR in launch_rdp_embedded)
                     let phys_x = current_x;
                     let phys_y = current_y;
-                    let phys_w = client_rect.right - current_x;
-                    let phys_h = client_rect.bottom - current_y;
-                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: ({}, {}, {}x{})", phys_x, phys_y, phys_w, phys_h));
+                    let phys_w = current_width;
+                    let phys_h = current_height;
+                    log_debug(&app_data_dir_clone, &format!("Using session coordinates for size: ({}, {}, {}x{})", phys_x, phys_y, phys_w, phys_h));
                     
-                    // Update session with physical coordinates
+                    // Update session with coordinates
                     {
                         let state = app_clone2.state::<RdpState>();
                         let mut sessions = state.sessions.lock().unwrap();
@@ -666,35 +625,7 @@ pub fn launch_rdp_embedded(
                     // Force redraw
                     let _ = InvalidateRect(hwnd, std::ptr::null(), BOOL(1));
                     let _ = UpdateWindow(hwnd);
-                    
-                    // Recursively resize all nested children of the RDP window container
-                    resize_all_children(hwnd, current_width, current_height);
                 }
-
-                // Re-apply SetWindowPos after 1s — mstsc may resize itself after initialization
-                let app_clone_re = app_clone2.clone();
-                let session_id_re = session_id_clone2.clone();
-                let app_data_dir_re = app_data_dir_clone.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    let state = app_clone_re.state::<RdpState>();
-                    let sessions = state.sessions.lock().unwrap();
-                    if let Some(session) = sessions.get(&session_id_re) {
-                        if let Some(h) = session.hwnd {
-                            let hwnd_val = h.0.0 as isize;
-                            let (x, y, w, h2) = (session.x, session.y, session.width, session.height);
-                            drop(sessions);
-                            let _ = app_clone_re.run_on_main_thread(move || {
-                                unsafe {
-                                    let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
-                                    let _ = SetWindowPos(hwnd, HWND(std::ptr::null_mut()), x, y, w, h2, SWP_NOZORDER | SWP_SHOWWINDOW);
-                                    resize_all_children(hwnd, w, h2);
-                                    log_debug(&app_data_dir_re, &format!("Re-applied SetWindowPos after 1s: ({}, {}, {}x{})", x, y, w, h2));
-                                }
-                            });
-                        }
-                    }
-                });
 
                 // Spawn lightweight background watchdog (60s @ 500ms) - only checks window validity
                 let app_clone3 = app_clone2.clone();
@@ -755,38 +686,18 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        // Use CSS coordinates directly — Chrome_WidgetWin_0 uses logical pixels
-        let _phys_x = x;
-        let _phys_y = y;
-        let _phys_w = width;
-        let _phys_h = height;
-                log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} (using CSS coords directly)", x, y, width, height, device_pixel_ratio));
+        // Scale CSS logical coordinates to physical pixels for SetWindowPos
+        let phys_x = (x as f64 * device_pixel_ratio) as i32;
+        let phys_y = (y as f64 * device_pixel_ratio) as i32;
+        let phys_w = (width as f64 * device_pixel_ratio) as i32;
+        let phys_h = (height as f64 * device_pixel_ratio) as i32;
+        log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} -> phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, phys_x, phys_y, phys_w, phys_h));
         session.x = x;
         session.y = y;
         session.width = width;
         session.height = height;
         if let Some(hwnd) = session.hwnd {
             unsafe {
-                // Get parent client rect for accurate sizing
-                let parent = GetParent(hwnd.0);
-                let (phys_x, phys_y, phys_w, phys_h) = if !parent.0.is_null() {
-                    let mut parent_client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                    let _ = GetClientRect(parent, &mut parent_client);
-                    
-                    // Also get main window rect
-                    let main_window = GetParent(parent);
-                    let mut main_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                    if !main_window.0.is_null() {
-                        let _ = GetWindowRect(main_window, &mut main_rect);
-                    }
-                    
-                    log_debug(&app_data_dir, &format!("resize: parent client rect: {:?}, main window rect: {:?}", parent_client, main_rect));
-                    // Use parent client rect size minus CSS offset
-                    (x, y, parent_client.right - x, parent_client.bottom - y)
-                } else {
-                    (x, y, width, height)
-                };
-                
                 let flags = if phys_w == 0 || phys_h == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
@@ -805,10 +716,6 @@ pub fn resize_rdp_embedded(
                 
                 // Force redraw
                 let _ = InvalidateRect(hwnd.0, std::ptr::null(), BOOL(1));
-                
-                if phys_w > 0 && phys_h > 0 {
-                    resize_all_children(hwnd.0, phys_w, phys_h);
-                }
             }
         }
         Ok(())
