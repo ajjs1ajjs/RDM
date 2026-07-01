@@ -647,8 +647,19 @@ pub fn launch_rdp_embedded(
                     };
                     let parent_client_w = client_rect.right - phys_x;
                     let parent_client_h = client_rect.bottom - phys_y;
-                    let phys_w = if parent_client_w > 100 { parent_client_w } else { current_width };
-                    let phys_h = if parent_client_h > 100 { parent_client_h } else { current_height };
+                    let (phys_w, phys_h) = if reparent_ok {
+                        // For reparented: fill remaining space in parent
+                        let w = if parent_client_w > 100 { parent_client_w } else { current_width };
+                        let h = if parent_client_h > 100 { parent_client_h } else { current_height };
+                        (w, h)
+                    } else {
+                        // For overlay: use frontend-provided physical size directly
+                        if current_width > 100 && current_height > 100 {
+                            (current_width, current_height)
+                        } else {
+                            (parent_client_w.max(800), parent_client_h.max(600))
+                        }
+                    };
                     
                     // If reparent failed, convert to absolute screen coordinates
                     let (final_x, final_y) = if reparent_ok {
