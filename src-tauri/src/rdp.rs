@@ -416,9 +416,9 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Ensure minimum remote desktop resolution for usability with smart sizing
-    let desktop_w = if width < 800 { 800 } else { width };
-    let desktop_h = if height < 600 { 600 } else { height };
+    // Use exact physical dimensions for desktop resolution — smart sizing handles scaling
+    let desktop_w = if width > 0 { width } else { 800 };
+    let desktop_h = if height > 0 { height } else { 600 };
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
