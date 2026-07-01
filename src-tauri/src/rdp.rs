@@ -429,11 +429,11 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Set desktopwidth/desktopheight to match the initial window — without these
-    // mstsc defaults to 1024x768 and ignores SetWindowPos. Dynamic resolution
-    // will adapt when the window is later resized.
-    let desktop_w = if physical_width > 0 { physical_width } else { 1280 };
-    let desktop_h = if physical_height > 0 { physical_height } else { 720 };
+    // Fixed 1920x1080 (16:9) desktop resolution — smart sizing scales to fit any window.
+    // Don't use the initial window size because it may be small (1280x800 default)
+    // and the .rdp can't be rewritten after launch. 1920x1080 matches most monitors.
+    let desktop_w = 1920;
+    let desktop_h = 1080;
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
