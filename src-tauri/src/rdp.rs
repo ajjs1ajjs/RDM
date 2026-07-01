@@ -144,8 +144,18 @@ extern "system" {
     fn EnumChildWindows(hwndParent: HWND, lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
     fn GetClientRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
-    fn GetDpiForWindow(hwnd: HWND) -> u32;
-    fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> isize;
+    fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
+    fn UpdateWindow(hWnd: HWND) -> BOOL;
+    fn ShowWindow(hWnd: HWND, nCmdShow: i32) -> BOOL;
+}
+
+pub unsafe fn show_window_maximize(hwnd_ptr: *mut std::ffi::c_void) {
+    let _ = ShowWindow(HWND(hwnd_ptr), SW_MAXIMIZE);
+}
+
+pub unsafe fn get_parent_hwnd(hwnd_ptr: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
+    let parent = GetParent(HWND(hwnd_ptr));
+    parent.0
 }
 
 #[repr(C)]
@@ -155,41 +165,6 @@ pub struct RECT {
     pub top: i32,
     pub right: i32,
     pub bottom: i32,
-}
-
-const MONITOR_DEFAULTTONEAREST: u32 = 2;
-const MDT_EFFECTIVE_DPI: u32 = 0;
-
-fn get_window_scale_factor(parent_hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
-    unsafe {
-        // Query the monitor that actually contains the parent window.
-        // GetDpiForWindow can return stale DPI if the window was created on a
-        // different monitor; GetDpiForMonitor returns the monitor's real DPI.
-        let hmonitor = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
-        if hmonitor != 0 {
-            let shcore = GetModuleHandleA("shcore.dll\0".as_ptr());
-            if shcore != 0 {
-                let proc = GetProcAddress(shcore, "GetDpiForMonitor\0".as_ptr());
-                if !proc.is_null() {
-                    let func: unsafe extern "system" fn(isize, u32, *mut u32, *mut u32) -> i32 = std::mem::transmute(proc);
-                    let mut dpi_x: u32 = 0;
-                    let mut dpi_y: u32 = 0;
-                    let hr = func(hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
-                    if hr == 0 && dpi_x > 0 {
-                        let factor = dpi_x as f64 / 96.0;
-                        log_debug(app_data_dir, &format!("get_window_scale_factor: monitor={} dpi={} factor={}", hmonitor, dpi_x, factor));
-                        return if factor > 0.0 { factor } else { 1.0 };
-                    }
-                    log_debug(app_data_dir, &format!("GetDpiForMonitor failed, hr={}", hr));
-                }
-            }
-        }
-        // Fallback to per-window DPI if monitor query is unavailable
-        let dpi = GetDpiForWindow(parent_hwnd);
-        let factor = dpi as f64 / 96.0;
-        log_debug(app_data_dir, &format!("get_window_scale_factor (fallback): DPI={}, factor={}", dpi, factor));
-        if factor > 0.0 { factor } else { 1.0 }
-    }
 }
 
 const GWL_STYLE: i32 = -16;
@@ -208,6 +183,7 @@ const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_NOMOVE: u32 = 0x0002;
 const SWP_NOSIZE: u32 = 0x0001;
 const SWP_NOZORDER: u32 = 0x0004;
+const SW_MAXIMIZE: i32 = 3;
 
 struct EnumData {
     target_pid: u32,
@@ -408,13 +384,12 @@ pub fn launch_rdp_embedded(
         format!("{}:{}", host, port)
     };
 
-    // Frontend sends CSS pixel coordinates — we scale using real OS DPI from the parent window
-    let scale_factor = get_window_scale_factor(parent_hwnd, &app_data_dir);
-    let physical_x = (x as f64 * scale_factor) as i32;
-    let physical_y = (y as f64 * scale_factor) as i32;
-    let physical_width = (width as f64 * scale_factor) as i32;
-    let physical_height = (height as f64 * scale_factor) as i32;
-    log_debug(&app_data_dir, &format!("launch_rdp_embedded: css=({},{},{}x{}) dpr={} scale={} phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, scale_factor, physical_x, physical_y, physical_width, physical_height));
+    // Frontend sends CSS pixel coordinates — use them directly (Chrome_WidgetWin_0 uses logical pixels)
+    let physical_x = x;
+    let physical_y = y;
+    let physical_width = width;
+    let physical_height = height;
+    log_debug(&app_data_dir, &format!("launch_rdp_embedded: css=({},{},{}x{}) dpr={} (using CSS coords directly)", x, y, width, height, device_pixel_ratio));
 
     // Register credentials using cmdkey
     if let (Some(user), Some(pass)) = (username, password) {
@@ -639,7 +614,7 @@ pub fn launch_rdp_embedded(
                     let set_style_res = SetWindowLongW(hwnd, GWL_STYLE, new_style);
                     log_debug(&app_data_dir_clone, &format!("Style updated. Old style: 0x{:X}, New style: 0x{:X}, Result: {}", style, new_style, set_style_res));
                     
-                    // Reparent
+                    // Reparent to Chrome_WidgetWin_0 (WebView2 child)
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
                     let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
                     let prev_parent = SetParent(hwnd, target_parent);
@@ -652,17 +627,45 @@ pub fn launch_rdp_embedded(
                     let _ = GetClientRect(target_parent, &mut client_rect);
                     log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
                     
-                    // Apply layout update and repaint — no SWP_FRAMECHANGED to avoid mstsc recalculating chrome
+                    // Use parent client rect size minus CSS offset for physical coordinates
+                    let phys_x = current_x;
+                    let phys_y = current_y;
+                    let phys_w = client_rect.right - current_x;
+                    let phys_h = client_rect.bottom - current_y;
+                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: ({}, {}, {}x{})", phys_x, phys_y, phys_w, phys_h));
+                    
+                    // Update session with physical coordinates
+                    {
+                        let state = app_clone2.state::<RdpState>();
+                        let mut sessions = state.sessions.lock().unwrap();
+                        if let Some(session) = sessions.get_mut(&session_id_clone2) {
+                            session.x = phys_x;
+                            session.y = phys_y;
+                            session.width = phys_w;
+                            session.height = phys_h;
+                        }
+                    }
+                    
+                    // Apply layout update and repaint — use HWND_TOP and SWP_FRAMECHANGED to force recalculation
                     let set_pos_res = SetWindowPos(
                         hwnd,
-                        HWND(std::ptr::null_mut()),
-                        current_x,
-                        current_y,
-                        current_width,
-                        current_height,
-                        SWP_NOZORDER | SWP_SHOWWINDOW,
+                        HWND(0 as *mut _),  // HWND_TOP
+                        phys_x,
+                        phys_y,
+                        phys_w,
+                        phys_h,
+                        SWP_SHOWWINDOW | SWP_FRAMECHANGED,
                     );
-                    log_debug(&app_data_dir_clone, &format!("SetWindowPos called at coordinates ({}, {}), size: ({}x{}). Result: {}", current_x, current_y, current_width, current_height, set_pos_res.0));
+                    log_debug(&app_data_dir_clone, &format!("SetWindowPos called at coordinates ({}, {}), size: ({}x{}). Result: {}", phys_x, phys_y, phys_w, phys_h, set_pos_res.0));
+                    
+                    // Read back actual position/size
+                    let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    let _ = GetWindowRect(hwnd, &mut actual_rect);
+                    log_debug(&app_data_dir_clone, &format!("Actual window rect after SetWindowPos: {:?}", actual_rect));
+                    
+                    // Force redraw
+                    let _ = InvalidateRect(hwnd, std::ptr::null(), BOOL(1));
+                    let _ = UpdateWindow(hwnd);
                     
                     // Recursively resize all nested children of the RDP window container
                     resize_all_children(hwnd, current_width, current_height);
@@ -752,45 +755,56 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        // Get DPI from PARENT window (Chrome_WidgetWin_0), not the RDP window itself.
-        // mstsc is NOT per-monitor DPI aware, so GetDpiForWindow on it returns stale DPI.
-        // The parent WebView2 window IS per-monitor DPI aware.
-        let scale = if let Some(h) = session.hwnd {
-            let parent = unsafe { GetParent(h.0) };
-            if !parent.0.is_null() {
-                get_window_scale_factor(parent, &app_data_dir)
-            } else {
-                device_pixel_ratio
-            }
-        } else {
-            device_pixel_ratio
-        };
-        let phys_x = (x as f64 * scale) as i32;
-        let phys_y = (y as f64 * scale) as i32;
-        let phys_w = (width as f64 * scale) as i32;
-        let phys_h = (height as f64 * scale) as i32;
-        log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} scale={} phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, scale, phys_x, phys_y, phys_w, phys_h));
-        session.x = phys_x;
-        session.y = phys_y;
-        session.width = phys_w;
-        session.height = phys_h;
+        // Use CSS coordinates directly — Chrome_WidgetWin_0 uses logical pixels
+        let _phys_x = x;
+        let _phys_y = y;
+        let _phys_w = width;
+        let _phys_h = height;
+                log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} (using CSS coords directly)", x, y, width, height, device_pixel_ratio));
+        session.x = x;
+        session.y = y;
+        session.width = width;
+        session.height = height;
         if let Some(hwnd) = session.hwnd {
             unsafe {
+                // Get parent client rect for accurate sizing
+                let parent = GetParent(hwnd.0);
+                let (phys_x, phys_y, phys_w, phys_h) = if !parent.0.is_null() {
+                    let mut parent_client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    let _ = GetClientRect(parent, &mut parent_client);
+                    
+                    // Also get main window rect
+                    let main_window = GetParent(parent);
+                    let mut main_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    if !main_window.0.is_null() {
+                        let _ = GetWindowRect(main_window, &mut main_rect);
+                    }
+                    
+                    log_debug(&app_data_dir, &format!("resize: parent client rect: {:?}, main window rect: {:?}", parent_client, main_rect));
+                    // Use parent client rect size minus CSS offset
+                    (x, y, parent_client.right - x, parent_client.bottom - y)
+                } else {
+                    (x, y, width, height)
+                };
+                
                 let flags = if phys_w == 0 || phys_h == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
-                    SWP_SHOWWINDOW | SWP_NOZORDER
+                    SWP_SHOWWINDOW
                 };
 
                 let _ = SetWindowPos(
                     hwnd.0,
-                    HWND(std::ptr::null_mut()),
+                    HWND(0 as *mut _),  // HWND_TOP
                     phys_x,
                     phys_y,
                     phys_w,
                     phys_h,
                     flags,
                 );
+                
+                // Force redraw
+                let _ = InvalidateRect(hwnd.0, std::ptr::null(), BOOL(1));
                 
                 if phys_w > 0 && phys_h > 0 {
                     resize_all_children(hwnd.0, phys_w, phys_h);

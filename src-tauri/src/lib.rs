@@ -1535,9 +1535,24 @@ pub fn run() {
             let session_state = SessionState::new();
 
             // Maximize main window on startup
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.maximize();
-            }
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    // Get actual main window HWND (parent of webview)
+                    if let Ok(hwnd) = window.hwnd() {
+                        unsafe {
+                            // Get main window (parent of webview)
+                            let main_hwnd = rdp::get_parent_hwnd(hwnd.0);
+                            if !main_hwnd.is_null() {
+                                rdp::show_window_maximize(main_hwnd);
+                            } else {
+                                rdp::show_window_maximize(hwnd.0);
+                            }
+                        }
+                    }
+                }
+            });
 
             // Auto-unlock vault with default password if not already unlocked
             let is_setup = db::get_setting(&conn, "sentinel")?.is_some();
