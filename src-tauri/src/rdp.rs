@@ -390,21 +390,10 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Use monitor work area dimensions for desktop resolution (most reliable)
-    let (mon_w, mon_h) = unsafe {
-        use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST};
-        let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
-        let mut mi: MONITORINFO = std::mem::zeroed();
-        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-        if GetMonitorInfoW(hmon, &mut mi).as_bool() {
-            ((mi.rcWork.right - mi.rcWork.left) as i32, (mi.rcWork.bottom - mi.rcWork.top) as i32)
-        } else {
-            (1920, 1080)
-        }
-    };
-    let desktop_w = mon_w;
-    let desktop_h = mon_h;
-    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (monitor work area)", desktop_w, desktop_h));
+    // Use actual window size for desktop resolution to match smart sizing exactly
+    let desktop_w = physical_width;
+    let desktop_h = physical_height;
+    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (window size)", desktop_w, desktop_h));
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
@@ -631,8 +620,7 @@ pub fn launch_rdp_embedded(
                         let final_w = if current_width > 100 { current_width } else { mon_w - phys_x };
                         let final_h = if current_height > 100 { current_height } else { mon_h - phys_y };
                         log_debug(&app_data_dir_clone, &format!("Overlay positioning: final=({},{}), size=({}x{})", final_x, final_y, final_w, final_h));
-                        let _ = SetWindowPos(hwnd, HWND(0 as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
-                        let _ = BringWindowToTop(hwnd);
+                        let _ = SetWindowPos(hwnd, HWND(0 as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
                         let _ = SetForegroundWindow(hwnd);
                         let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(hwnd, &mut actual_rect);
@@ -827,7 +815,6 @@ pub fn resize_rdp_embedded(
                     let target_x = mon_left + phys_x;
                     let target_y = mon_top + phys_y;
                     let _ = SetWindowPos(hwnd.0, HWND(0 as *mut _), target_x, target_y, phys_w, phys_h, flags);
-                    let _ = BringWindowToTop(hwnd.0);
                     let _ = SetForegroundWindow(hwnd.0);
                 }
 
