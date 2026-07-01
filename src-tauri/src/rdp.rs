@@ -143,6 +143,7 @@ extern "system" {
     fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut u32) -> u32;
     fn EnumChildWindows(hwndParent: HWND, lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
+    fn GetDpiForWindow(hwnd: HWND) -> u32;
 }
 
 #[repr(C)]
@@ -152,6 +153,13 @@ pub struct RECT {
     pub top: i32,
     pub right: i32,
     pub bottom: i32,
+}
+
+fn get_window_scale_factor(hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    let factor = dpi as f64 / 96.0;
+    log_debug(app_data_dir, &format!("get_window_scale_factor: DPI={}, factor={}", dpi, factor));
+    if factor > 0.0 { factor } else { 1.0 }
 }
 
 const GWL_STYLE: i32 = -16;
@@ -370,8 +378,13 @@ pub fn launch_rdp_embedded(
         format!("{}:{}", host, port)
     };
 
-    // Coordinates arrive pre-scaled from frontend (physical pixels via rect.* * devicePixelRatio)
-    log_debug(&app_data_dir, &format!("launch_rdp_embedded: physical coords ({}, {}, {}x{}), dpr = {}", x, y, width, height, device_pixel_ratio));
+    // Frontend sends CSS pixel coordinates — we scale using real OS DPI from the parent window
+    let scale_factor = get_window_scale_factor(parent_hwnd, &app_data_dir);
+    let physical_x = (x as f64 * scale_factor) as i32;
+    let physical_y = (y as f64 * scale_factor) as i32;
+    let physical_width = (width as f64 * scale_factor) as i32;
+    let physical_height = (height as f64 * scale_factor) as i32;
+    log_debug(&app_data_dir, &format!("launch_rdp_embedded: css=({},{},{}x{}) dpr={} scale={} phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, scale_factor, physical_x, physical_y, physical_width, physical_height));
 
     // Register credentials using cmdkey
     if let (Some(user), Some(pass)) = (username, password) {
@@ -417,8 +430,8 @@ pub fn launch_rdp_embedded(
     };
 
     // Use exact physical dimensions for desktop resolution — smart sizing handles scaling
-    let desktop_w = if width > 0 { width } else { 800 };
-    let desktop_h = if height > 0 { height } else { 600 };
+    let desktop_w = if physical_width > 0 { physical_width } else { 800 };
+    let desktop_h = if physical_height > 0 { physical_height } else { 600 };
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
@@ -519,10 +532,10 @@ pub fn launch_rdp_embedded(
                 rdp_file_path,
                 target_host: host.to_string(),
                 server_id,
-                x,
-                y,
-                width,
-                height,
+                x: physical_x,
+                y: physical_y,
+                width: physical_width,
+                height: physical_height,
             },
         );
     }
@@ -580,7 +593,7 @@ pub fn launch_rdp_embedded(
                     session.hwnd = Some(SendHwnd(hwnd));
                     (session.x, session.y, session.width, session.height)
                 } else {
-                    (x, y, width, height)
+                    (physical_x, physical_y, physical_width, physical_height)
                 };
                 drop(sessions);
 
@@ -676,15 +689,20 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        // Coordinates arrive pre-scaled from frontend (physical pixels)
-        log_debug(&app_data_dir, &format!("resize_rdp_embedded: Session {} resized to ({}, {}, {}x{}), dpr = {}", session_id, x, y, width, height, device_pixel_ratio));
-        session.x = x;
-        session.y = y;
-        session.width = width;
-        session.height = height;
+        // Compute scale factor from actual window DPI, with frontend dpr as fallback
+        let scale = session.hwnd.map_or(device_pixel_ratio, |h| get_window_scale_factor(h.0, &app_data_dir));
+        let phys_x = (x as f64 * scale) as i32;
+        let phys_y = (y as f64 * scale) as i32;
+        let phys_w = (width as f64 * scale) as i32;
+        let phys_h = (height as f64 * scale) as i32;
+        log_debug(&app_data_dir, &format!("resize_rdp_embedded: css=({},{},{}x{}) dpr={} scale={} phys=({},{},{}x{})", x, y, width, height, device_pixel_ratio, scale, phys_x, phys_y, phys_w, phys_h));
+        session.x = phys_x;
+        session.y = phys_y;
+        session.width = phys_w;
+        session.height = phys_h;
         if let Some(hwnd) = session.hwnd {
             unsafe {
-                let flags = if width == 0 || height == 0 {
+                let flags = if phys_w == 0 || phys_h == 0 {
                     SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER
                 } else {
                     SWP_SHOWWINDOW | SWP_NOZORDER
@@ -693,15 +711,15 @@ pub fn resize_rdp_embedded(
                 let _ = SetWindowPos(
                     hwnd.0,
                     HWND(std::ptr::null_mut()),
-                    x,
-                    y,
-                    width,
-                    height,
+                    phys_x,
+                    phys_y,
+                    phys_w,
+                    phys_h,
                     flags,
                 );
                 
-                if width > 0 && height > 0 {
-                    resize_all_children(hwnd.0, width, height);
+                if phys_w > 0 && phys_h > 0 {
+                    resize_all_children(hwnd.0, phys_w, phys_h);
                 }
             }
         }

@@ -51,17 +51,13 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     let postConnectRetryTimer: ReturnType<typeof setInterval> | null = null;
 
     const doResizeIpc = (rect: DOMRect, dpr: number) => {
-      const px = Math.round(rect.left * dpr);
-      const py = Math.round(rect.top * dpr);
-      const pw = Math.round(rect.width * dpr);
-      const ph = Math.round(rect.height * dpr);
-      console.log(`[RDP resize] css=(${Math.round(rect.left)},${Math.round(rect.top)} ${Math.round(rect.width)}x${Math.round(rect.height)}) dpr=${dpr} phys=(${px},${py} ${pw}x${ph})`);
+      console.log(`[RDP resize] css=(${Math.round(rect.left)},${Math.round(rect.top)} ${Math.round(rect.width)}x${Math.round(rect.height)}) dpr=${dpr}`);
       invoke("resize_rdp_embedded", {
         sessionId: sid,
-        x: px,
-        y: py,
-        width: pw,
-        height: ph,
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
         devicePixelRatio: dpr,
       }).catch((err) => console.error("RDP resize error:", err));
     };
@@ -113,10 +109,10 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           host,
           port,
           credentialId: credentialId || null,
-          x: Math.round(rect.left * dpr),
-          y: Math.round(rect.top * dpr),
-          width: Math.round(finalWidth * dpr),
-          height: Math.round(finalHeight * dpr),
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: finalWidth,
+          height: finalHeight,
           devicePixelRatio: dpr,
         });
 
