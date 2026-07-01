@@ -409,33 +409,21 @@ pub fn launch_rdp_embedded(
     let rdp_content = format!(
         "full address:s:{}\r\n\
          {}\
-          screen mode id:i:2\r\n\
-          desktopwidth:i:{}\r\n\
+         screen mode id:i:2\r\n\
+         desktopwidth:i:{}\r\n\
          desktopheight:i:{}\r\n\
-          session bpp:i:32\r\n\
-          smart sizing:i:{}\r\n\
-          dynamic resolution:i:1\r\n\
-          networkautodetect:i:1\r\n\
-          bandwidthautodetect:i:1\r\n\
-          connection type:i:2\r\n\
-          winposstr:s:0,1,{},{},{},{}\r\n\
+         smart sizing:i:{}\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
          redirectprinters:i:{}\r\n\
          audiomode:i:{}\r\n\
          redirectsmartcards:i:{}\r\n\
-         enablewebauthn:i:{}\r\n\
-         authentication level:i:0\r\n\
-          displayconnectionbar:i:1\r\n",
+         enablewebauthn:i:{}\r\n",
          connection_string,
          user_line,
          desktop_w,
          desktop_h,
          smart_sizing_val,
-         mon_left + physical_x,
-         mon_top + physical_y,
-         mon_left + physical_x + physical_width,
-         mon_top + physical_y + physical_height,
          redirect_clipboard,
         redirect_drives,
         redirect_printers,
@@ -443,7 +431,6 @@ pub fn launch_rdp_embedded(
          redirect_smartcards,
          redirect_webauthn
     );
-    log_debug(&app_data_dir, &format!("RDP winposstr: ({},{})-({}x{}) on monitor at ({},{})", mon_left + physical_x, mon_top + physical_y, physical_width, physical_height, mon_left, mon_top));
 
     // MUST write RDP file as UTF-16 LE with BOM for mstsc to accept it on all systems
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF) // UTF-16 LE BOM
