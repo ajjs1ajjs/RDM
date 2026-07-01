@@ -90,6 +90,7 @@ unsafe extern "system" fn enum_child_callback(hwnd: HWND, lparam: LPARAM) -> BOO
     true.into() // Continue enumeration to log all children
 }
 
+#[allow(dead_code)]
 unsafe fn get_webview_hwnd(parent_hwnd: HWND, app_data_dir: &std::path::Path) -> HWND {
     log_debug(app_data_dir, &format!("get_webview_hwnd: Starting search under parent HWND {:?}", parent_hwnd));
     let mut finder = WebViewFinder {
@@ -170,6 +171,14 @@ extern "system" {
     fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> isize;
     fn LoadLibraryA(lpLibFileName: *const u8) -> isize;
     fn GetWindowRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
+    fn ScreenToClient(hWnd: HWND, lpPoint: *mut POINT) -> BOOL;
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct POINT {
+    pub x: i32,
+    pub y: i32,
 }
 
 #[repr(C)]
@@ -623,11 +632,11 @@ pub fn launch_rdp_embedded(
                     
                     // Reparent
                     let parent_hwnd = HWND(parent_hwnd_isize as *mut std::ffi::c_void);
-                    let target_parent = get_webview_hwnd(parent_hwnd, &app_data_dir_clone);
+                    let target_parent = parent_hwnd;
                     let prev_parent = SetParent(hwnd, target_parent);
                     let err = GetLastError();
                     let actual_parent = GetParent(hwnd);
-                    log_debug(&app_data_dir_clone, &format!("SetParent called. Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
+                    log_debug(&app_data_dir_clone, &format!("SetParent called (direct parent). Target Parent: {:?}, Previous Parent: {:?}, Actual Parent after call: {:?}, GetLastError: {}", target_parent, prev_parent, actual_parent, err));
                     
                     // Apply layout update and repaint
                     let set_pos_res = SetWindowPos(
@@ -687,11 +696,11 @@ pub fn launch_rdp_embedded(
                                     let _ = GetWindowRect(hwnd, &mut rect);
                                     
                                     let parent = GetParent(hwnd);
-                                    let mut parent_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                                    let _ = GetWindowRect(parent, &mut parent_rect);
+                                    let mut pt = POINT { x: rect.left, y: rect.top };
+                                    let _ = ScreenToClient(parent, &mut pt);
                                     
-                                    let current_x = rect.left - parent_rect.left;
-                                    let current_y = rect.top - parent_rect.top;
+                                    let current_x = pt.x;
+                                    let current_y = pt.y;
                                     let current_w = rect.right - rect.left;
                                     let current_h = rect.bottom - rect.top;
                                     
