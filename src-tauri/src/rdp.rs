@@ -393,12 +393,21 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Use the actual physical container dimensions for desktop resolution.
-    // We now wait for maximize before reading the rect, so dimensions are accurate.
-    // Fallback to 1920x1080 if the computed size seems too small.
-    let desktop_w = if physical_width > 800 { physical_width } else { 1920 };
-    let desktop_h = if physical_height > 600 { physical_height } else { 1080 };
-    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (container phys: {}x{})", desktop_w, desktop_h, physical_width, physical_height));
+    // Use monitor work area dimensions for desktop resolution (most reliable)
+    let (mon_w, mon_h) = unsafe {
+        use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+        let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut mi: MONITORINFO = std::mem::zeroed();
+        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(hmon, &mut mi).as_bool() {
+            ((mi.rcWork.right - mi.rcWork.left) as i32, (mi.rcWork.bottom - mi.rcWork.top) as i32)
+        } else {
+            (1920, 1080)
+        }
+    };
+    let desktop_w = mon_w;
+    let desktop_h = mon_h;
+    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (monitor work area)", desktop_w, desktop_h));
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
