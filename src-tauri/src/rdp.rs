@@ -390,10 +390,21 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Use actual window size for desktop resolution to match smart sizing exactly
-    let desktop_w = physical_width;
-    let desktop_h = physical_height;
-    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (window size)", desktop_w, desktop_h));
+    // Use monitor work area for desktop resolution (standard values that RDP server supports)
+    let (mon_w, mon_h) = unsafe {
+        use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+        let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut mi: MONITORINFO = std::mem::zeroed();
+        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(hmon, &mut mi).as_bool() {
+            ((mi.rcWork.right - mi.rcWork.left) as i32, (mi.rcWork.bottom - mi.rcWork.top) as i32)
+        } else {
+            (1920, 1080)
+        }
+    };
+    let desktop_w = mon_w;
+    let desktop_h = mon_h;
+    log_debug(&app_data_dir, &format!("RDP desktop resolution: {}x{} (monitor work area)", desktop_w, desktop_h));
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
@@ -411,7 +422,7 @@ pub fn launch_rdp_embedded(
          redirectsmartcards:i:{}\r\n\
          enablewebauthn:i:{}\r\n\
          authentication level:i:0\r\n\
-         displayconnectionbar:i:0\r\n",
+         displayconnectionbar:i:1\r\n",
          connection_string,
          user_line,
          desktop_w,
@@ -541,8 +552,8 @@ pub fn launch_rdp_embedded(
         }
 
         if !found_hwnd.0.is_null() {
-            // Wait 500ms for mstsc to finish initializing its window
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            // Wait 3s for mstsc to initialize its RDP connection before repositioning
+            std::thread::sleep(std::time::Duration::from_millis(3000));
 
             let found_hwnd_val = found_hwnd.0 as isize;
             let app_clone2 = app_clone.clone();
@@ -551,7 +562,7 @@ pub fn launch_rdp_embedded(
             let _ = app_clone.run_on_main_thread(move || {
                 let hwnd = HWND(found_hwnd_val as *mut std::ffi::c_void);
                 log_debug(&app_data_dir_clone, &format!("Window found: {:?}. Starting reparenting...", hwnd));
-                
+
                 let state = app_clone2.state::<RdpState>();
                 let mut sessions = state.sessions.lock().unwrap();
                 let (current_x, current_y, current_width, current_height, current_dpr) = if let Some(session) = sessions.get_mut(&session_id_clone2) {
@@ -621,10 +632,21 @@ pub fn launch_rdp_embedded(
                         let final_h = if current_height > 100 { current_height } else { mon_h - phys_y };
                         log_debug(&app_data_dir_clone, &format!("Overlay positioning: final=({},{}), size=({}x{})", final_x, final_y, final_w, final_h));
                         let _ = SetWindowPos(hwnd, HWND(0 as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
-                        let _ = SetForegroundWindow(hwnd);
                         let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(hwnd, &mut actual_rect);
                         log_debug(&app_data_dir_clone, &format!("Actual window rect after SetWindowPos: {:?}", actual_rect));
+                        // Compensate for any Y offset applied by window manager
+                        let y_delta = final_y - actual_rect.top;
+                        let x_delta = final_x - actual_rect.left;
+                        if y_delta != 0 || x_delta != 0 {
+                            let corrected_x = final_x + x_delta;
+                            let corrected_y = final_y + y_delta;
+                            log_debug(&app_data_dir_clone, &format!("Compensating for offset: delta=({},{}), corrected=({},{})", x_delta, y_delta, corrected_x, corrected_y));
+                            let _ = SetWindowPos(hwnd, HWND(0 as *mut _), corrected_x, corrected_y, final_w, final_h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                            let _ = GetWindowRect(hwnd, &mut actual_rect);
+                            log_debug(&app_data_dir_clone, &format!("Corrected window rect: {:?}", actual_rect));
+                        }
+                        let _ = SetForegroundWindow(hwnd);
                     }
                     
                     // Update session with corrected coordinates
