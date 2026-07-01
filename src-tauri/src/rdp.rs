@@ -282,7 +282,6 @@ pub fn launch_rdp_embedded(
     let port = if port == 0 { 3389 } else { port };
     let host_addr = format!("{}:{}", host, port);
 
-    let domain = String::new();
     let username_str = username.unwrap_or("").to_string();
     let password_str = password.unwrap_or("").to_string();
 
@@ -322,6 +321,10 @@ pub fn launch_rdp_embedded(
             }
         };
 
+        // Set handshake read/write timeouts of 10 seconds to prevent hanging forever
+        let _ = tcp.set_read_timeout(Some(Duration::from_secs(10)));
+        let _ = tcp.set_write_timeout(Some(Duration::from_secs(10)));
+
         let socket_control = match tcp.try_clone() {
             Ok(s) => s,
             Err(e) => {
@@ -331,10 +334,23 @@ pub fn launch_rdp_embedded(
             }
         };
 
+        // Parse domain from username if present (e.g. "DOMAIN\user")
+        let mut domain_str = String::new();
+        let mut username_clean = username_str.clone();
+        if let Some(pos) = username_clean.find('\\') {
+            domain_str = username_clean[..pos].to_string();
+            username_clean = username_clean[pos + 1..].to_string();
+        }
+
+        // Disable NLA if username is empty, allowing fallback to remote login screen
+        let use_nla = !username_clean.is_empty();
+        log_debug(&app_data_dir, &format!("RDP client options: domain='{}', username='{}', use_nla={}", domain_str, username_clean, use_nla));
+
         let mut connector = Connector::new()
             .screen(width as u16, height as u16)
-            .credentials(domain, username_str, password_str)
-            .check_certificate(false);
+            .credentials(domain_str, username_clean, password_str)
+            .check_certificate(false)
+            .use_nla(use_nla);
 
         let mut client = match connector.connect(tcp) {
             Ok(c) => c,
