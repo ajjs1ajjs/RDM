@@ -515,13 +515,6 @@ pub fn launch_rdp_embedded(
 
     std::thread::spawn(move || {
         let state = app_clone.state::<RdpState>();
-
-        // Maximize the main window from Rust side before searching for mstsc
-        if let Some(window) = app_clone.get_webview_window("main") {
-            let _ = window.maximize();
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
-
         let mut found_hwnd = HWND(std::ptr::null_mut());
 
         // Loop for up to 60 seconds (600 * 100ms)
