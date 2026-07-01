@@ -110,6 +110,7 @@ unsafe fn get_webview_hwnd(parent_hwnd: HWND, app_data_dir: &std::path::Path) ->
     }
 }
 
+#[allow(dead_code)]
 unsafe fn get_real_monitor_scale_factor(hwnd: HWND, app_data_dir: &std::path::Path) -> f64 {
     let hmonitor = MonitorFromWindow(hwnd, 2); // MONITOR_DEFAULTTONEAREST
     let mut dpi_x = 0u32;
@@ -396,14 +397,7 @@ pub fn launch_rdp_embedded(
         format!("{}:{}", host, port)
     };
 
-    let scale_factor = unsafe {
-        let monitor_scale = get_real_monitor_scale_factor(parent_hwnd, &app_data_dir);
-        if monitor_scale > 1.0 {
-            monitor_scale
-        } else {
-            device_pixel_ratio
-        }
-    };
+    let scale_factor = device_pixel_ratio;
     log_debug(&app_data_dir, &format!("launch_rdp_embedded: scale_factor resolved as {} (devicePixelRatio was {})", scale_factor, device_pixel_ratio));
     
     let physical_x = (x as f64 * scale_factor) as i32;
@@ -748,19 +742,7 @@ pub fn resize_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(session) = sessions.get_mut(session_id) {
-        let scale_factor = unsafe {
-            if let Some(hwnd) = session.hwnd {
-                let parent = GetParent(hwnd.0);
-                let monitor_scale = get_real_monitor_scale_factor(parent, &app_data_dir);
-                if monitor_scale > 1.0 {
-                    monitor_scale
-                } else {
-                    device_pixel_ratio
-                }
-            } else {
-                device_pixel_ratio
-            }
-        };
+        let scale_factor = device_pixel_ratio;
         log_debug(&app_data_dir, &format!("resize_rdp_embedded: Session {} resized to ({}, {}, {}x{}), scale_factor = {}", session_id, x, y, width, height, scale_factor));
         let physical_x = (x as f64 * scale_factor) as i32;
         let physical_y = (y as f64 * scale_factor) as i32;
