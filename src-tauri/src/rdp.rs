@@ -409,11 +409,15 @@ pub fn launch_rdp_embedded(
     let rdp_content = format!(
         "full address:s:{}\r\n\
          {}\
-         screen mode id:i:1\r\n\
-         desktopwidth:i:{}\r\n\
+          screen mode id:i:2\r\n\
+          desktopwidth:i:{}\r\n\
          desktopheight:i:{}\r\n\
-         smart sizing:i:{}\r\n\
-         dynamic resolution:i:1\r\n\
+          session bpp:i:32\r\n\
+          smart sizing:i:{}\r\n\
+          dynamic resolution:i:1\r\n\
+          networkautodetect:i:1\r\n\
+          bandwidthautodetect:i:1\r\n\
+          connection type:i:2\r\n\
           winposstr:s:0,1,{},{},{},{}\r\n\
          redirectclipboard:i:{}\r\n\
          redirectdrives:i:{}\r\n\
