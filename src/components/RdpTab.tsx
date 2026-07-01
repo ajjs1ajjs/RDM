@@ -86,17 +86,11 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Wait for window to actually be maximized before reading container rect
-      const appWindow = getCurrentWindow();
-      for (let i = 0; i < 30; i++) {
-        try {
-          await appWindow.maximize();
-          const isMax = await appWindow.isMaximized();
-          if (isMax) break;
-        } catch (e) {
-          // ignore
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      // Try to maximize, but don't block on it — Rust will size via parent client rect
+      try {
+        await getCurrentWindow().maximize();
+      } catch (e) {
+        // ignore
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
 

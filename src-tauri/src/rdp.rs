@@ -587,12 +587,15 @@ pub fn launch_rdp_embedded(
                     let _ = GetClientRect(target_parent, &mut client_rect);
                     log_debug(&app_data_dir_clone, &format!("Target parent client rect: {:?}", client_rect));
                     
-                    // Use session coordinates (already scaled by DPR in launch_rdp_embedded)
+                    // Position RDP window: use DPR-scaled CSS coords for position,
+                    // but use parent client rect for size (always fills the container correctly)
                     let phys_x = current_x;
                     let phys_y = current_y;
-                    let phys_w = current_width;
-                    let phys_h = current_height;
-                    log_debug(&app_data_dir_clone, &format!("Using session coordinates for size: ({}, {}, {}x{})", phys_x, phys_y, phys_w, phys_h));
+                    let parent_client_w = client_rect.right - current_x;
+                    let parent_client_h = client_rect.bottom - current_y;
+                    let phys_w = if parent_client_w > 100 { parent_client_w } else { current_width };
+                    let phys_h = if parent_client_h > 100 { parent_client_h } else { current_height };
+                    log_debug(&app_data_dir_clone, &format!("Using parent client rect for size: pos=({},{}), parent=({}x{}), phys=({}, {}, {}x{})", current_x, current_y, client_rect.right, client_rect.bottom, phys_x, phys_y, phys_w, phys_h));
                     
                     // Update session with coordinates
                     {
