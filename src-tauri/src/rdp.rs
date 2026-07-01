@@ -429,16 +429,13 @@ pub fn launch_rdp_embedded(
         _ => 0,
     };
 
-    // Use exact physical dimensions for desktop resolution — smart sizing handles scaling
-    let desktop_w = if physical_width > 0 { physical_width } else { 800 };
-    let desktop_h = if physical_height > 0 { physical_height } else { 600 };
-
+    // Don't set desktopwidth/desktopheight — let mstsc + dynamic resolution
+    // adapt to whatever window size we set via SetWindowPos. Fixed desktop
+    // dimensions cause black bars when the window changes size/monitor.
     let rdp_content = format!(
         "full address:s:{}\r\n\
          {}\
          screen mode id:i:1\r\n\
-         desktopwidth:i:{}\r\n\
-         desktopheight:i:{}\r\n\
          smart sizing:i:{}\r\n\
          dynamic resolution:i:1\r\n\
          winposstr:s:0,1,-32000,-32000,-31000,-30000\r\n\
@@ -450,12 +447,10 @@ pub fn launch_rdp_embedded(
          enablewebauthn:i:{}\r\n\
          authentication level:i:0\r\n\
          displayconnectionbar:i:0\r\n",
-        connection_string,
-        user_line,
-        desktop_w,
-        desktop_h,
-        smart_sizing_val,
-        redirect_clipboard,
+         connection_string,
+         user_line,
+         smart_sizing_val,
+         redirect_clipboard,
         redirect_drives,
         redirect_printers,
         audio_val,
