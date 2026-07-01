@@ -768,11 +768,6 @@ fn connect_rdp_embedded(
     _rdp_state: State<'_, rdp::RdpState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    // Maximize window NOW on main thread before any RDP work
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.maximize();
-    }
-
     let mut decrypted_password = None;
     let mut username = None;
     let mut rdp_clipboard = true;
@@ -845,9 +840,12 @@ fn connect_rdp_embedded(
         }
     }
 
-    // Get parent HWND from main window
+    // Get parent HWND from main window AND maximize via Win32 API directly
     let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
     let parent_hwnd = windows::Win32::Foundation::HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
+    unsafe {
+        let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(parent_hwnd, windows::Win32::UI::WindowsAndMessaging::SW_MAXIMIZE);
+    }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
     let res = if rdp_fullscreen || rdp_multimon {
@@ -1538,15 +1536,6 @@ pub fn run() {
             let app_dir = app.path().app_data_dir().unwrap();
             let conn = db::init_db(app_dir)?;
             let session_state = SessionState::new();
-
-            // Backup: maximize window on startup after a short delay
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(1500));
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.maximize();
-                }
-            });
 
             // Auto-unlock vault with default password if not already unlocked
             let is_setup = db::get_setting(&conn, "sentinel")?.is_some();
