@@ -21,8 +21,6 @@ pub struct RdpSession {
     pub width: i32,
     pub height: i32,
     pub dpr: f64,
-    pub parent_offset_x: i32,
-    pub parent_offset_y: i32,
     pub reparented: bool,
 }
 
@@ -134,8 +132,6 @@ extern "system" {
     fn SetParent(hWndChild: HWND, hWndNewParent: HWND) -> HWND;
     fn GetClassNameW(hWnd: HWND, lpClassName: *mut u16, nMaxCount: i32) -> i32;
     fn EnumWindows(lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL, lParam: LPARAM) -> BOOL;
-    fn GetWindowLongW(hWnd: HWND, nIndex: i32) -> i32;
-    fn SetWindowLongW(hWnd: HWND, nIndex: i32, dwNewLong: i32) -> i32;
     fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: bool, dwProcessId: u32) -> isize;
     fn TerminateProcess(hProcess: isize, uExitCode: u32) -> BOOL;
     fn CloseHandle(hObject: isize) -> BOOL;
@@ -161,13 +157,6 @@ pub struct RECT {
     pub right: i32,
     pub bottom: i32,
 }
-
-const GWL_STYLE: i32 = -16;
-const GWL_EXSTYLE: i32 = -20;
-const WS_POPUP: i32 = 0x80000000u32 as i32;
-const WS_CAPTION: i32 = 0x00C00000;
-const WS_THICKFRAME: i32 = 0x00040000;
-const WS_CHILD: i32 = 0x40000000;
 
 const WM_CLOSE: u32 = 0x0010;
 const PROCESS_TERMINATE: u32 = 0x0001;
@@ -520,8 +509,6 @@ pub fn launch_rdp_embedded(
                 width: physical_width,
                 height: physical_height,
                 dpr: device_pixel_ratio,
-                parent_offset_x: 0,
-                parent_offset_y: 0,
                 reparented: false,
             },
         );
@@ -642,10 +629,7 @@ pub fn launch_rdp_embedded(
                         let final_w = if current_width > 100 { current_width } else { mon_w - phys_x };
                         let final_h = if current_height > 100 { current_height } else { mon_h - phys_y };
                         log_debug(&app_data_dir_clone, &format!("Overlay positioning: final=({},{}), size=({}x{})", final_x, final_y, final_w, final_h));
-                        // Set WS_EX_TOPMOST so window stays above main window
-                        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-                        let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | 0x00000008);
-                        let _ = SetWindowPos(hwnd, HWND(-1isize as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+                        let _ = SetWindowPos(hwnd, HWND(-1isize as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
                         let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(hwnd, &mut actual_rect);
                         log_debug(&app_data_dir_clone, &format!("Actual window rect after SetWindowPos: {:?}", actual_rect));
