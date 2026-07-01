@@ -640,7 +640,7 @@ pub fn launch_rdp_embedded(
                         let final_w = if current_width > 100 { current_width } else { mon_w - phys_x };
                         let final_h = if current_height > 100 { current_height } else { mon_h - phys_y };
                         log_debug(&app_data_dir_clone, &format!("Overlay positioning: final=({},{}), size=({}x{})", final_x, final_y, final_w, final_h));
-                        let _ = SetWindowPos(hwnd, HWND(0 as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
+                        let _ = SetWindowPos(hwnd, HWND(-1isize as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
                         let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(hwnd, &mut actual_rect);
                         log_debug(&app_data_dir_clone, &format!("Actual window rect after SetWindowPos: {:?}", actual_rect));
@@ -651,7 +651,7 @@ pub fn launch_rdp_embedded(
                             let corrected_x = final_x + x_delta;
                             let corrected_y = final_y + y_delta;
                             log_debug(&app_data_dir_clone, &format!("Compensating for offset: delta=({},{}), corrected=({},{})", x_delta, y_delta, corrected_x, corrected_y));
-                            let _ = SetWindowPos(hwnd, HWND(0 as *mut _), corrected_x, corrected_y, final_w, final_h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                            let _ = SetWindowPos(hwnd, HWND(-1isize as *mut _), corrected_x, corrected_y, final_w, final_h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
                             let _ = GetWindowRect(hwnd, &mut actual_rect);
                             log_debug(&app_data_dir_clone, &format!("Corrected window rect: {:?}", actual_rect));
                         }
@@ -845,8 +845,7 @@ pub fn resize_rdp_embedded(
                     };
                     let target_x = mon_left + phys_x;
                     let target_y = mon_top + phys_y;
-                    let _ = SetWindowPos(hwnd.0, HWND(0 as *mut _), target_x, target_y, phys_w, phys_h, flags);
-                    let _ = SetForegroundWindow(hwnd.0);
+                    let _ = SetWindowPos(hwnd.0, HWND(-1isize as *mut _), target_x, target_y, phys_w, phys_h, flags);
                 }
 
                 let _ = InvalidateRect(hwnd.0, std::ptr::null(), BOOL(1));
