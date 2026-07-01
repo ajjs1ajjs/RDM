@@ -147,6 +147,7 @@ extern "system" {
     fn GetClientRect(hWnd: HWND, lpRect: *mut RECT) -> BOOL;
     fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
     fn UpdateWindow(hWnd: HWND) -> BOOL;
+    fn GetExitCodeProcess(hProcess: isize, lpExitCode: *mut u32) -> BOOL;
 }
 
 #[repr(C)]
@@ -651,42 +652,105 @@ pub fn launch_rdp_embedded(
                     let _ = UpdateWindow(hwnd);
                 }
 
-                // Spawn lightweight background watchdog (60s @ 500ms) - only checks window validity
+                // Spawn background watchdog — checks if mstsc window is still alive
+                // Initial delay 5s to let mstsc stabilize, then check every 3s for up to 120s
                 let app_clone3 = app_clone2.clone();
                 let session_id_clone3 = session_id_clone2.clone();
                 let app_data_dir_clone3 = app_data_dir_clone.clone();
+                let pid_for_watchdog = pid;
+                let parent_hwnd_isize_wd = parent_hwnd_isize;
                 std::thread::spawn(move || {
                     let state = app_clone3.state::<RdpState>();
-                    // Run for 60 seconds (120 * 500ms) to catch early window failures
-                    for _ in 0..120 {
-                        std::thread::sleep(std::time::Duration::from_millis(500));
 
-                        let sessions = state.sessions.lock().unwrap();
-                        let hwnd_val = if let Some(session) = sessions.get(&session_id_clone3) {
-                            session.hwnd.map(|h| h.0.0 as isize)
-                        } else {
-                            None
+                    // Initial delay — let mstsc fully initialize and stabilize
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+
+                    for _ in 0..40 {
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+
+                        // Check if session still exists
+                        let hwnd_val = {
+                            let sessions = state.sessions.lock().unwrap();
+                            if let Some(session) = sessions.get(&session_id_clone3) {
+                                session.hwnd.map(|h| h.0.0 as isize)
+                            } else {
+                                None
+                            }
                         };
-                        drop(sessions);
 
-                        let check = hwnd_val;
-                        if let Some(hwnd_val) = check {
-                            let app_clone4 = app_clone3.clone();
-                            let session_id_clone4 = session_id_clone3.clone();
-                            let app_data_dir_clone4 = app_data_dir_clone3.clone();
-                            let _ = app_clone3.run_on_main_thread(move || {
-                                unsafe {
-                                let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
-                                if IsWindow(hwnd).0 == 0 {
-                                    log_debug(&app_data_dir_clone4, "Watchdog: window handle invalid, cleaning up.");
-                                    let state = app_clone4.state::<RdpState>();
-                                    let _ = disconnect_rdp_embedded(&session_id_clone4, &state, &app_clone4);
-                                }
-                                }
-                            });
-                        } else {
-                            break;
+                        if hwnd_val.is_none() {
+                            break; // Session removed (e.g. by user disconnect)
                         }
+
+                        let hwnd_val = hwnd_val.unwrap();
+                        let app_clone4 = app_clone3.clone();
+                        let session_id_clone4 = session_id_clone3.clone();
+                        let app_data_dir_clone4 = app_data_dir_clone3.clone();
+                        let pid_check = pid_for_watchdog;
+                        let parent_isize = parent_hwnd_isize_wd;
+                        let _ = app_clone3.run_on_main_thread(move || {
+                            unsafe {
+                            let hwnd = HWND(hwnd_val as *mut std::ffi::c_void);
+                            let is_valid = IsWindow(hwnd).0 != 0;
+
+                            if !is_valid {
+                                // Window handle invalid — check if process is still alive
+                                let h_proc = OpenProcess(0x1000, false, pid_check); // PROCESS_QUERY_LIMITED_INFORMATION
+                                let process_alive = if h_proc != 0 {
+                                    let mut exit_code = 0u32;
+                                    let ok = GetExitCodeProcess(h_proc, &mut exit_code as *mut u32);
+                                    let _ = CloseHandle(h_proc);
+                                    ok.0 != 0 && exit_code == 259 // STILL_ACTIVE
+                                } else {
+                                    false
+                                };
+
+                                if process_alive {
+                                    log_debug(&app_data_dir_clone4, &format!("Watchdog: window handle invalid but process still alive (PID={}), attempting re-find...", pid_check));
+                                    let mut new_data = EnumData {
+                                        target_pid: pid_check,
+                                        hwnd: HWND(std::ptr::null_mut()),
+                                    };
+                                    let _ = EnumWindows(enum_windows_callback, LPARAM(&mut new_data as *mut _ as isize));
+                                    if !new_data.hwnd.0.is_null() {
+                                        log_debug(&app_data_dir_clone4, &format!("Watchdog: found new window {:?}, re-parenting...", new_data.hwnd));
+                                        set_dpi_hosting_behavior_mixed(&app_data_dir_clone4);
+                                        let style = GetWindowLongW(new_data.hwnd, GWL_STYLE);
+                                        let new_style = (style & !(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD;
+                                        let _ = SetWindowLongW(new_data.hwnd, GWL_STYLE, new_style);
+                                        let parent_ref = HWND(parent_isize as *mut std::ffi::c_void);
+                                        let target_parent = get_webview_hwnd(parent_ref, &app_data_dir_clone4);
+                                        let _ = SetParent(new_data.hwnd, target_parent);
+                                        let (sx, sy, sw, sh) = {
+                                            let state2 = app_clone4.state::<RdpState>();
+                                            let sessions2 = state2.sessions.lock().unwrap();
+                                            if let Some(s) = sessions2.get(&session_id_clone4) {
+                                                (s.x, s.y, s.width, s.height)
+                                            } else {
+                                                (280, 74, 1640, 934)
+                                            }
+                                        };
+                                        let _ = SetWindowPos(new_data.hwnd, HWND(0 as *mut _), sx, sy, sw, sh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+                                        let _ = InvalidateRect(new_data.hwnd, std::ptr::null(), BOOL(1));
+                                        {
+                                            let mut state2 = app_clone4.state::<RdpState>();
+                                            let mut sessions2 = state2.sessions.lock().unwrap();
+                                            if let Some(s) = sessions2.get_mut(&session_id_clone4) {
+                                                s.hwnd = Some(SendHwnd(new_data.hwnd));
+                                            }
+                                        }
+                                        log_debug(&app_data_dir_clone4, &format!("Watchdog: re-parented successfully to {:?}", target_parent));
+                                    } else {
+                                        log_debug(&app_data_dir_clone4, "Watchdog: process alive but no window found, will retry...");
+                                    }
+                                } else {
+                                    log_debug(&app_data_dir_clone4, "Watchdog: window handle invalid and process exited, cleaning up.");
+                                    let state2 = app_clone4.state::<RdpState>();
+                                    let _ = disconnect_rdp_embedded(&session_id_clone4, &state2, &app_clone4);
+                                }
+                            }
+                            }
+                        });
                     }
                     log_debug(&app_data_dir_clone3, "--- RDP watchdog thread finished ---");
                 });
