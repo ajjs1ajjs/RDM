@@ -21,6 +21,9 @@ pub struct RdpSession {
     pub width: i32,
     pub height: i32,
     pub dpr: f64,
+    pub parent_offset_x: i32,
+    pub parent_offset_y: i32,
+    pub reparented: bool,
 }
 
 pub struct RdpState {
@@ -517,6 +520,9 @@ pub fn launch_rdp_embedded(
                 width: physical_width,
                 height: physical_height,
                 dpr: device_pixel_ratio,
+                parent_offset_x: 0,
+                parent_offset_y: 0,
+                reparented: false,
             },
         );
     }
@@ -662,6 +668,9 @@ pub fn launch_rdp_embedded(
                             session.width = phys_w;
                             session.height = phys_h;
                             session.dpr = dpr;
+                            session.parent_offset_x = if reparent_ok { 0 } else { parent_screen_x };
+                            session.parent_offset_y = if reparent_ok { 0 } else { parent_screen_y };
+                            session.reparented = reparent_ok;
                         }
                     }
                     
@@ -754,23 +763,40 @@ pub fn launch_rdp_embedded(
                                         set_dpi_hosting_behavior_mixed(&app_data_dir_clone4);
                                         let parent_ref = HWND(parent_isize as *mut std::ffi::c_void);
                                         let target_parent = get_webview_hwnd(parent_ref, &app_data_dir_clone4);
-                                        let _ = SetParent(new_data.hwnd, target_parent);
-                                        let (sx, sy, sw, sh) = {
+                                        let prev_parent = SetParent(new_data.hwnd, target_parent);
+                                        let actual_after = GetParent(new_data.hwnd);
+                                        let reparent_ok = !actual_after.0.is_null();
+                                        log_debug(&app_data_dir_clone4, &format!("Watchdog: SetParent result: prev={:?}, actual={:?}, ok={}", prev_parent, actual_after, reparent_ok));
+                                        let (sx, sy, sw, sh, offset_x, offset_y, was_reparented) = {
                                             let state2 = app_clone4.state::<RdpState>();
                                             let sessions2 = state2.sessions.lock().unwrap();
                                             if let Some(s) = sessions2.get(&session_id_clone4) {
-                                                (s.x, s.y, s.width, s.height)
+                                                (s.x, s.y, s.width, s.height, s.parent_offset_x, s.parent_offset_y, s.reparented)
                                             } else {
-                                                (280, 74, 1640, 934)
+                                                (280, 74, 1640, 934, 0, 0, false)
                                             }
                                         };
-                                        let _ = SetWindowPos(new_data.hwnd, HWND(0 as *mut _), sx, sy, sw, sh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+                                        // For overlay mode, add parent offset to convert viewport-relative -> screen-absolute
+                                        let (pos_x, pos_y) = if reparent_ok {
+                                            (sx, sy)
+                                        } else {
+                                            (sx + offset_x, sy + offset_y)
+                                        };
+                                        let z_order = if reparent_ok { HWND(0 as *mut _) } else { HWND(-1isize as *mut _) };
+                                        let _ = SetWindowPos(new_data.hwnd, z_order, pos_x, pos_y, sw, sh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
                                         let _ = InvalidateRect(new_data.hwnd, std::ptr::null(), BOOL(1));
                                         {
                                             let mut state2 = app_clone4.state::<RdpState>();
                                             let mut sessions2 = state2.sessions.lock().unwrap();
                                             if let Some(s) = sessions2.get_mut(&session_id_clone4) {
                                                 s.hwnd = Some(SendHwnd(new_data.hwnd));
+                                                if !reparent_ok && offset_x == 0 && offset_y == 0 {
+                                                    // Set offset for overlay mode if not already set
+                                                    let mut parent_screen_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                                                    let _ = GetWindowRect(target_parent, &mut parent_screen_rect);
+                                                    s.parent_offset_x = parent_screen_rect.left;
+                                                    s.parent_offset_y = parent_screen_rect.top;
+                                                }
                                             }
                                         }
                                         log_debug(&app_data_dir_clone4, &format!("Watchdog: re-parented successfully to {:?}", target_parent));
@@ -827,11 +853,19 @@ pub fn resize_rdp_embedded(
                     SWP_SHOWWINDOW
                 };
 
+                // For overlay mode (not reparented), add parent screen offset to make absolute screen coords
+                let offset_x = session.parent_offset_x;
+                let offset_y = session.parent_offset_y;
+                let target_x = phys_x + offset_x;
+                let target_y = phys_y + offset_y;
+
+                let z_order = if session.reparented { HWND(0 as *mut _) } else { HWND(-1isize as *mut _) }; // HWND_TOP or HWND_TOPMOST
+
                 let _ = SetWindowPos(
                     hwnd.0,
-                    HWND(0 as *mut _),  // HWND_TOP
-                    phys_x,
-                    phys_y,
+                    z_order,
+                    target_x,
+                    target_y,
                     phys_w,
                     phys_h,
                     flags,
