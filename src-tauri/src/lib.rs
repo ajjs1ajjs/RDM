@@ -844,13 +844,25 @@ fn connect_rdp_embedded(
     let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
     let parent_hwnd = windows::Win32::Foundation::HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
     unsafe {
-        let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(parent_hwnd, windows::Win32::UI::WindowsAndMessaging::SW_MAXIMIZE);
-        // Wait until the window is actually maximized before proceeding
-        for _ in 0..50 {
-            if windows::Win32::UI::WindowsAndMessaging::IsZoomed(parent_hwnd).as_bool() {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+        // Set window to fill monitor work area (explicit, more reliable than maximize)
+        use windows::Win32::Graphics::Gdi::{
+            MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST
+        };
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, SWP_NOZORDER
+        };
+        let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut mi: MONITORINFO = std::mem::zeroed();
+        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(hmon, &mut mi).as_bool() {
+            let w = mi.rcWork.right - mi.rcWork.left;
+            let h = mi.rcWork.bottom - mi.rcWork.top;
+            let _ = SetWindowPos(
+                parent_hwnd,
+                windows::Win32::Foundation::HWND(std::ptr::null_mut()),
+                mi.rcWork.left, mi.rcWork.top, w, h,
+                SWP_NOZORDER | windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+            );
         }
     }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;

@@ -86,15 +86,17 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Wait until container is wide enough (> 1200px CSS = maximized on any modern monitor)
+      // Rust resizes the window to monitor work area before launching mstsc
       let rect = containerRef.current.getBoundingClientRect();
-      for (let i = 0; i < 50; i++) {
-        if (rect.width > 1200) break;
-        try { await getCurrentWindow().maximize(); } catch (e) { /* ignore */ }
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      let attempts = 0;
+      while ((rect.width < 100 || rect.height < 100) && attempts < 20) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
         if (!active || !containerRef.current) return;
         rect = containerRef.current.getBoundingClientRect();
+        attempts++;
       }
+
+      if (!active || !containerRef.current) return;
 
       let finalWidth = Math.round(rect.width);
       let finalHeight = Math.round(rect.height);
