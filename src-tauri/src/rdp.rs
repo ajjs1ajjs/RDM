@@ -147,6 +147,8 @@ extern "system" {
     fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
     fn UpdateWindow(hWnd: HWND) -> BOOL;
     fn GetExitCodeProcess(hProcess: isize, lpExitCode: *mut u32) -> BOOL;
+    fn BringWindowToTop(hWnd: HWND) -> BOOL;
+    fn SetForegroundWindow(hWnd: HWND) -> BOOL;
 }
 
 #[repr(C)]
@@ -629,7 +631,9 @@ pub fn launch_rdp_embedded(
                         let final_w = if current_width > 100 { current_width } else { mon_w - phys_x };
                         let final_h = if current_height > 100 { current_height } else { mon_h - phys_y };
                         log_debug(&app_data_dir_clone, &format!("Overlay positioning: final=({},{}), size=({}x{})", final_x, final_y, final_w, final_h));
-                        let _ = SetWindowPos(hwnd, HWND(-1isize as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW);
+                        let _ = SetWindowPos(hwnd, HWND(0 as *mut _), final_x, final_y, final_w, final_h, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                        let _ = BringWindowToTop(hwnd);
+                        let _ = SetForegroundWindow(hwnd);
                         let mut actual_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
                         let _ = GetWindowRect(hwnd, &mut actual_rect);
                         log_debug(&app_data_dir_clone, &format!("Actual window rect after SetWindowPos: {:?}", actual_rect));
@@ -822,7 +826,9 @@ pub fn resize_rdp_embedded(
                     };
                     let target_x = mon_left + phys_x;
                     let target_y = mon_top + phys_y;
-                    let _ = SetWindowPos(hwnd.0, HWND(-1isize as *mut _), target_x, target_y, phys_w, phys_h, flags);
+                    let _ = SetWindowPos(hwnd.0, HWND(0 as *mut _), target_x, target_y, phys_w, phys_h, flags);
+                    let _ = BringWindowToTop(hwnd.0);
+                    let _ = SetForegroundWindow(hwnd.0);
                 }
 
                 let _ = InvalidateRect(hwnd.0, std::ptr::null(), BOOL(1));
