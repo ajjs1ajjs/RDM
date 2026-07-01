@@ -86,13 +86,16 @@ export const RdpTab: React.FC<RdpTabProps> = ({
     const startRdp = async () => {
       if (!containerRef.current) return;
 
-      // Try to maximize, but don't block on it — Rust will size via parent client rect
-      try {
-        await getCurrentWindow().maximize();
-      } catch (e) {
-        // ignore
+      // Keep trying to maximize until container is wide enough (> 1200 CSS px)
+      const appWindow = getCurrentWindow();
+      for (let i = 0; i < 40; i++) {
+        try {
+          await appWindow.maximize();
+        } catch (e) { /* ignore */ }
+        const r = containerRef.current.getBoundingClientRect();
+        if (r.width > 1200) break;
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-      await new Promise((resolve) => setTimeout(resolve, 300));
 
       let rect = containerRef.current.getBoundingClientRect();
       let attempts = 0;
