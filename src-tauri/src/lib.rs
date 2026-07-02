@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use rand::{thread_rng, RngCore};
-use serde::Deserialize;
+
 
 // State definitions
 pub struct DbState {
@@ -32,26 +32,26 @@ impl SessionState {
 // Commands implementation
 #[tauri::command]
 fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let sentinel = db::get_setting(&conn, "sentinel")?;
     Ok(sentinel.is_some())
 }
 
 #[tauri::command]
 fn get_setting(key: String, db: State<'_, DbState>) -> Result<Option<String>, String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::get_setting(&conn, &key)
 }
 
 #[tauri::command]
 fn set_setting(key: String, value: String, db: State<'_, DbState>) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::set_setting(&conn, &key, &value)
 }
 
 #[tauri::command]
 fn is_vault_unlocked(state: State<'_, SessionState>) -> Result<bool, String> {
-    let kek = state.kek.lock().unwrap();
+    let kek = state.kek.lock().map_err(|e| e.to_string())?;
     Ok(kek.is_some())
 }
 
@@ -84,7 +84,7 @@ fn setup_master_password_impl(
     db::set_setting(conn, "sentinel", &sentinel_json)?;
 
     // Store KEK in session state
-    let mut session_kek = session_kek_mutex.lock().unwrap();
+    let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
     *session_kek = Some(kek);
 
     Ok(())
@@ -113,7 +113,7 @@ fn unlock_vault_impl(
     match crypto::decrypt_secret(&kek, &encrypted_sentinel) {
         Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
             // Save KEK in session state
-            let mut session_kek = session_kek_mutex.lock().unwrap();
+            let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
             *session_kek = Some(kek);
             Ok(true)
         }
@@ -127,7 +127,7 @@ fn setup_master_password(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     setup_master_password_impl(&conn, &state.kek, &password)
 }
 
@@ -136,14 +136,39 @@ fn unlock_vault(
     password: String,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
+    app: AppHandle,
 ) -> Result<bool, String> {
-    let conn = db.conn.lock().unwrap();
-    unlock_vault_impl(&conn, &state.kek, &password)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let success = unlock_vault_impl(&conn, &state.kek, &password)?;
+    if success {
+        if password != "default_rdm_key" {
+            drop(conn); // Drop connection locks to safely re-encrypt in re_encrypt_database
+            
+            let app_dir = app.path().app_data_dir().unwrap();
+            let db_path = app_dir.join("rdm.db");
+            
+            let old_kek = state.kek.lock().map_err(|e| e.to_string())?.ok_or_else(|| "KEK missing".to_string())?;
+            
+            let mut local_salt = [0u8; 16];
+            thread_rng().fill_bytes(&mut local_salt);
+            let local_salt_hex = hex::encode(local_salt);
+            let local_kek = crypto::derive_key("default_rdm_key", &local_salt)?;
+            
+            if let Err(e) = re_encrypt_database(&db_path, &old_kek, &local_kek, &local_salt_hex) {
+                println!("Failed to auto-re-encrypt database to default key: {}", e);
+            } else {
+                let mut kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+                *kek_guard = Some(local_kek);
+                println!("Successfully auto-re-encrypted database to default_rdm_key!");
+            }
+        }
+    }
+    Ok(success)
 }
 
 #[tauri::command]
 fn lock_vault(state: State<'_, SessionState>) -> Result<(), String> {
-    let mut session_kek = state.kek.lock().unwrap();
+    let mut session_kek = state.kek.lock().map_err(|e| e.to_string())?;
     if let Some(mut key) = session_kek.take() {
         // Zero out the key in memory
         key.iter_mut().for_each(|x| *x = 0);
@@ -158,12 +183,12 @@ fn get_credentials(
     db: State<'_, DbState>,
 ) -> Result<Vec<db::Credential>, String> {
     // Require vault to be unlocked
-    let kek = state.kek.lock().unwrap();
+    let kek = state.kek.lock().map_err(|e| e.to_string())?;
     if kek.is_none() {
         return Err("Vault is locked".to_string());
     }
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::get_credentials(&conn)
 }
 
@@ -176,7 +201,7 @@ fn add_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let kek_guard = state.kek.lock().unwrap();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
 
     let encrypted = crypto::encrypt_secret(&kek, &secret)?;
@@ -193,7 +218,7 @@ fn add_credential(
         updated_at: String::new(),
     };
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::add_credential(&conn, &cred)
 }
 
@@ -207,10 +232,10 @@ fn update_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let kek_guard = state.kek.lock().unwrap();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let encrypted_json = if let Some(sec_val) = secret {
         let encrypted = crypto::encrypt_secret(&kek, &sec_val)?;
@@ -243,12 +268,12 @@ fn delete_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let kek = state.kek.lock().unwrap();
+    let kek = state.kek.lock().map_err(|e| e.to_string())?;
     if kek.is_none() {
         return Err("Vault is locked".to_string());
     }
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::delete_credential(&conn, &id)
 }
 
@@ -258,10 +283,10 @@ fn decrypt_credential_secret(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let kek_guard = state.kek.lock().unwrap();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let list = db::get_credentials(&conn)?;
     let cred = list.iter().find(|c| c.id == id)
         .ok_or_else(|| "Credential not found".to_string())?;
@@ -279,10 +304,10 @@ fn decrypt_server_password(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let kek_guard = state.kek.lock().unwrap();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let list = db::get_servers(&conn)?;
     let srv = list.iter().find(|s| s.id == id)
         .ok_or_else(|| "Server not found".to_string())?;
@@ -300,7 +325,7 @@ fn decrypt_server_password(
 // Servers commands
 #[tauri::command]
 fn get_servers(db: State<'_, DbState>) -> Result<Vec<db::Server>, String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::get_servers(&conn)
 }
 
@@ -334,7 +359,7 @@ fn add_server(
 
     if let Some(ref pass_val) = password {
         if !pass_val.is_empty() {
-            let kek_guard = state.kek.lock().unwrap();
+            let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
             let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
             let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
             let encrypted_json = serde_json::to_string(&encrypted)
@@ -370,7 +395,7 @@ fn add_server(
         rdp_multimon,
     };
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::add_server(&conn, &srv)
 }
 
@@ -401,7 +426,7 @@ fn update_server(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut encrypted_password = None;
 
     if let Some(ref pass_val) = password {
@@ -412,7 +437,7 @@ fn update_server(
                     .ok_or_else(|| "Server not found".to_string())?;
                 encrypted_password = existing.encrypted_password.clone();
             } else {
-                let kek_guard = state.kek.lock().unwrap();
+                let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
                 let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
                 let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
                 let encrypted_json = serde_json::to_string(&encrypted)
@@ -454,7 +479,7 @@ fn update_server(
 
 #[tauri::command]
 fn delete_server(id: String, db: State<'_, DbState>) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::delete_server(&conn, &id)
 }
 
@@ -464,7 +489,7 @@ fn get_connection_history(
     server_id: String,
     db: State<'_, DbState>,
 ) -> Result<Vec<db::ConnectionHistory>, String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::get_history(&conn, &server_id)
 }
 
@@ -475,7 +500,7 @@ fn add_connection_history(
     log: String,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let hist = db::ConnectionHistory {
         id: Uuid::new_v4().to_string(),
         server_id,
@@ -501,77 +526,12 @@ fn connect_ssh(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let mut decrypted_password = None;
-    let mut decrypted_key = None;
-    let mut passphrase = None;
-    let mut final_username = username;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+    let kek = kek_guard.as_ref().ok_or_else(|| "Vault is locked".to_string())?;
 
-    let conn = db.conn.lock().unwrap();
-
-    // Check if server has manual credentials first
-    if let Some(ref srv_id) = server_id {
-        let list = db::get_servers(&conn)?;
-        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
-            if let Some(ref manual_user) = srv.username {
-                if !manual_user.is_empty() {
-                    final_username = manual_user.clone();
-                }
-            }
-            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
-                if !encrypted_pass_json.is_empty() {
-                    let kek_guard = state.kek.lock().unwrap();
-                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
-                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
-                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
-                    decrypted_password = Some(decrypted);
-                }
-            }
-        }
-    }
-
-    // Fallback to linked credential if manual password was not found
-    if decrypted_password.is_none() {
-        if let Some(cred_id) = credential_id {
-            let kek_guard = state.kek.lock().unwrap();
-            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
-
-            let list = db::get_credentials(&conn)?;
-            let cred = list.iter().find(|c| c.id == cred_id)
-                .ok_or_else(|| "Credential not found".to_string())?;
-
-            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
-
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password/key again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль/ключ заново.)".to_string())?;
-            
-            if cred.r#type == "password" {
-                decrypted_password = Some(decrypted);
-            } else if cred.r#type == "ssh_key" {
-                if decrypted.starts_with('{') {
-                    #[derive(Deserialize)]
-                    struct KeyDetails {
-                        key: String,
-                        passphrase: Option<String>,
-                    }
-                    if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
-                        decrypted_key = Some(details.key);
-                        passphrase = details.passphrase;
-                    } else {
-                        decrypted_key = Some(decrypted);
-                    }
-                } else {
-                    decrypted_key = Some(decrypted);
-                }
-            }
-        }
-    }
-
-    let password_ref = decrypted_password.as_deref();
-    let key_ref = decrypted_key.as_deref();
-    let passphrase_ref = passphrase.as_deref();
+    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, &username)?;
+    let final_username = auth.username.unwrap_or(username);
 
     let res = ssh::connect_ssh(
         app,
@@ -579,9 +539,9 @@ fn connect_ssh(
         &host,
         port,
         &final_username,
-        password_ref,
-        key_ref,
-        passphrase_ref,
+        auth.password.as_deref(),
+        auth.private_key.as_deref(),
+        auth.passphrase.as_deref(),
         cols,
         rows,
         server_id.clone(),
@@ -643,8 +603,10 @@ fn connect_rdp(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let mut decrypted_password = None;
-    let mut username = None;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+    let kek = kek_guard.as_ref().ok_or_else(|| "Vault is locked".to_string())?;
+
     let mut rdp_multimon = false;
     let mut rdp_clipboard = true;
     let mut rdp_drives = false;
@@ -653,8 +615,6 @@ fn connect_rdp(
     let mut rdp_audio = 0;
     let mut rdp_smartcards = false;
     let mut rdp_webauthn = false;
-
-    let conn = db.conn.lock().unwrap();
 
     // Check if server has manual credentials first
     if let Some(ref srv_id) = server_id {
@@ -668,50 +628,10 @@ fn connect_rdp(
             rdp_audio = srv.rdp_audio.unwrap_or(0) as u32;
             rdp_smartcards = srv.rdp_smartcards.unwrap_or(0) != 0;
             rdp_webauthn = srv.rdp_webauthn.unwrap_or(0) != 0;
-
-            if let Some(ref manual_user) = srv.username {
-                if !manual_user.is_empty() {
-                    username = Some(manual_user.clone());
-                }
-            }
-            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
-                if !encrypted_pass_json.is_empty() {
-                    let kek_guard = state.kek.lock().unwrap();
-                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
-                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
-                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені passwords не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
-                    decrypted_password = Some(decrypted);
-                }
-            }
         }
     }
 
-    // Fallback to linked credential if password was not found from manual config
-    if decrypted_password.is_none() {
-        if let Some(cred_id) = credential_id {
-            let kek_guard = state.kek.lock().unwrap();
-            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
-
-            let list = db::get_credentials(&conn)?;
-            let cred = list.iter().find(|c| c.id == cred_id)
-                .ok_or_else(|| "Credential not found".to_string())?;
-
-            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
-
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())?;
-
-            if username.is_none() {
-                username = Some(cred.username.clone());
-            }
-            if cred.r#type == "password" {
-                decrypted_password = Some(decrypted);
-            }
-        }
-    }
+    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
 
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
@@ -719,8 +639,8 @@ fn connect_rdp(
         &host,
         port,
         fullscreen,
-        username.as_deref(),
-        decrypted_password.as_deref(),
+        auth.username.as_deref(),
+        auth.password.as_deref(),
         app_data_dir,
         server_id.clone(),
         rdp_clipboard,
@@ -766,8 +686,10 @@ fn connect_rdp_embedded(
     _rdp_state: State<'_, rdp::RdpState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let mut decrypted_password = None;
-    let mut username = None;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+    let kek = kek_guard.as_ref().ok_or_else(|| "Vault is locked".to_string())?;
+
     let mut rdp_clipboard = true;
     let mut rdp_drives = false;
     let mut rdp_printers = false;
@@ -778,9 +700,6 @@ fn connect_rdp_embedded(
     let mut rdp_fullscreen = false;
     let mut rdp_multimon = false;
 
-    let conn = db.conn.lock().unwrap();
-
-    // Check if server has manual credentials first
     if let Some(ref srv_id) = server_id {
         let list = db::get_servers(&conn)?;
         if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
@@ -793,50 +712,10 @@ fn connect_rdp_embedded(
             rdp_webauthn = srv.rdp_webauthn.unwrap_or(0) != 0;
             rdp_fullscreen = srv.rdp_fullscreen.unwrap_or(0) != 0;
             rdp_multimon = srv.rdp_multimon.unwrap_or(0) != 0;
-
-            if let Some(ref manual_user) = srv.username {
-                if !manual_user.is_empty() {
-                    username = Some(manual_user.clone());
-                }
-            }
-            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
-                if !encrypted_pass_json.is_empty() {
-                    let kek_guard = state.kek.lock().unwrap();
-                    let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot decrypt manual password.".to_string())?;
-                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
-                        .map_err(|e| format!("Failed to parse manual password: {}", e))?;
-                    let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())?;
-                    decrypted_password = Some(decrypted);
-                }
-            }
         }
     }
 
-    // Fallback to linked vault credential if password was not found from manual config
-    if decrypted_password.is_none() {
-        if let Some(cred_id) = credential_id {
-            let kek_guard = state.kek.lock().unwrap();
-            let kek = kek_guard.ok_or_else(|| "Vault is locked. Cannot retrieve credentials.".to_string())?;
-
-            let list = db::get_credentials(&conn)?;
-            let cred = list.iter().find(|c| c.id == cred_id)
-                .ok_or_else(|| "Credential not found".to_string())?;
-
-            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
-
-            let decrypted = crypto::decrypt_secret(&kek, &encrypted)
-                .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())?;
-
-            if username.is_none() {
-                username = Some(cred.username.clone());
-            }
-            if cred.r#type == "password" {
-                decrypted_password = Some(decrypted);
-            }
-        }
-    }
+    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
 
     // Get parent HWND from main window AND maximize via Win32 API directly
     let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
@@ -847,9 +726,8 @@ fn connect_rdp_embedded(
             MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST
         };
         use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowPos, SWP_NOZORDER, GetWindowRect, SWP_SHOWWINDOW
+            SetWindowPos, SWP_NOZORDER, SWP_SHOWWINDOW
         };
-        use windows::Win32::Foundation::RECT;
         let hmon = MonitorFromWindow(parent_hwnd, MONITOR_DEFAULTTONEAREST);
         let mut mi: MONITORINFO = std::mem::zeroed();
         mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
@@ -862,18 +740,8 @@ fn connect_rdp_embedded(
                 mi.rcWork.left, mi.rcWork.top, target_w, target_h,
                 SWP_NOZORDER | SWP_SHOWWINDOW,
             );
-            // Wait until the window actually reaches the target size
-            for _ in 0..100 {
-                let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                if GetWindowRect(parent_hwnd, &mut r).is_ok() {
-                    let w = r.right - r.left;
-                    let h = r.bottom - r.top;
-                    if w >= target_w - 10 && h >= target_h - 10 {
-                        break;
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
+            // Brief pause to let window resize settle (no busy-wait)
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
     }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -884,8 +752,8 @@ fn connect_rdp_embedded(
             &host,
             port,
             rdp_fullscreen, // fullscreen parameter
-            username.as_deref(),
-            decrypted_password.as_deref(),
+            auth.username.as_deref(),
+            auth.password.as_deref(),
             app_data_dir,
             server_id.clone(),
             rdp_clipboard,
@@ -902,8 +770,8 @@ fn connect_rdp_embedded(
             session_id,
             &host,
             port,
-            username.as_deref(),
-            decrypted_password.as_deref(),
+            auth.username.as_deref(),
+            auth.password.as_deref(),
             parent_hwnd,
             width,
             height,
@@ -1101,14 +969,14 @@ fn export_database_backup(
     let db_path = app_dir.join("rdm.db");
 
     // Lock local connection
-    let _conn_guard = db.conn.lock().unwrap();
+    let _conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Copy to destination
     std::fs::copy(&db_path, &destination_path)
         .map_err(|e| format!("Failed to export database: {}", e))?;
 
     // Derive KEKs
-    let local_kek = state.kek.lock().unwrap().ok_or_else(|| "Vault is locked".to_string())?;
+    let local_kek = state.kek.lock().map_err(|e| e.to_string())?.ok_or_else(|| "Vault is locked".to_string())?;
 
     let mut export_salt = [0u8; 16];
     thread_rng().fill_bytes(&mut export_salt);
@@ -1201,7 +1069,7 @@ fn import_database_backup(
     )?;
 
     // 3. Swap active connection to point to the imported file
-    let mut conn_guard = db.conn.lock().unwrap();
+    let mut conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
     
     // Open in-memory temporary database to release locks on rdm.db
     let temp_conn = rusqlite::Connection::open_in_memory().unwrap();
@@ -1221,7 +1089,7 @@ fn import_database_backup(
     *conn_guard = new_conn;
 
     // Save new KEK in session state
-    let mut session_kek = state.kek.lock().unwrap();
+    let mut session_kek = state.kek.lock().map_err(|e| e.to_string())?;
     *session_kek = Some(local_kek);
 
     Ok(())
@@ -1233,10 +1101,10 @@ fn import_devolutions_csv(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<u32, String> {
-    let kek_guard = state.kek.lock().unwrap();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked. Unlock vault to import passwords.".to_string())?;
 
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Detect delimiter dynamically (handles comma, semicolon, tab)
     let mut delimiter = b',';
@@ -1444,6 +1312,89 @@ fn select_and_import_backup(
 }
 
 // SFTP Commands
+struct ResolvedAuth {
+    username: Option<String>,
+    password: Option<String>,
+    private_key: Option<String>,
+    passphrase: Option<String>,
+}
+
+fn resolve_auth(
+    conn: &rusqlite::Connection,
+    kek: &[u8; 32],
+    server_id: &Option<String>,
+    credential_id: &Option<String>,
+    app_username: &str,
+) -> Result<ResolvedAuth, String> {
+    let mut final_username = app_username.to_string();
+    let mut decrypted_password: Option<String> = None;
+    let mut decrypted_key: Option<String> = None;
+    let mut passphrase: Option<String> = None;
+
+    if let Some(ref srv_id) = server_id {
+        let list = db::get_servers(conn)?;
+        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+            if let Some(ref manual_user) = srv.username {
+                if !manual_user.is_empty() {
+                    final_username = manual_user.clone();
+                }
+            }
+            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
+                if !encrypted_pass_json.is_empty() {
+                    let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
+                        .map_err(|e| e.to_string())?;
+                    decrypted_password = Some(crypto::decrypt_secret(kek, &encrypted)
+                        .map_err(|_| "Decryption error - password may need to be re-entered")?);
+                }
+            }
+        }
+    }
+
+    if decrypted_password.is_none() {
+        if let Some(cred_id) = credential_id {
+            let list = db::get_credentials(conn)?;
+            let cred = list.iter().find(|c| c.id == *cred_id)
+                .ok_or_else(|| "Credential not found".to_string())?;
+
+            if final_username == *app_username {
+                final_username = cred.username.clone();
+            }
+
+            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
+                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+
+            let decrypted = crypto::decrypt_secret(kek, &encrypted)
+                .map_err(|_| "Decryption error - credential may need to be re-entered")?;
+
+            match cred.r#type.as_str() {
+                "password" => { decrypted_password = Some(decrypted); }
+                "ssh_key" => {
+                    if decrypted.starts_with('{') {
+                        #[derive(serde::Deserialize)]
+                        struct KeyDetails { key: String, passphrase: Option<String> }
+                        if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
+                            decrypted_key = Some(details.key);
+                            passphrase = details.passphrase;
+                        } else {
+                            decrypted_key = Some(decrypted);
+                        }
+                    } else {
+                        decrypted_key = Some(decrypted);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(ResolvedAuth {
+        username: if final_username == *app_username { None } else { Some(final_username) },
+        password: decrypted_password,
+        private_key: decrypted_key,
+        passphrase,
+    })
+}
+
 fn get_ssh_creds(
     server_id: &Option<String>,
     credential_id: &Option<String>,
@@ -1451,7 +1402,7 @@ fn get_ssh_creds(
     state: &State<'_, SessionState>,
     db: &State<'_, DbState>,
 ) -> Result<(String, Option<String>, Option<String>), String> {
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut decrypted_password = None;
     let mut decrypted_key = None;
     let mut final_username = app_username.to_string();
@@ -1464,7 +1415,7 @@ fn get_ssh_creds(
             }
             if let Some(ref encrypted_pass_json) = srv.encrypted_password {
                 if !encrypted_pass_json.is_empty() {
-                    let kek_guard = state.kek.lock().unwrap();
+                    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
                     let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
                     let encrypted: crypto::EncryptedData = serde_json::from_str(encrypted_pass_json)
                         .map_err(|e| e.to_string())?;
@@ -1476,7 +1427,7 @@ fn get_ssh_creds(
 
     if decrypted_password.is_none() {
         if let Some(cred_id) = credential_id {
-            let kek_guard = state.kek.lock().unwrap();
+            let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
             let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
             let list = db::get_credentials(&conn)?;
             let cred = list.iter().find(|c| c.id == *cred_id).ok_or("Credential not found")?;
@@ -1516,12 +1467,18 @@ fn sftp_ls(
     let (final_user, pwd, key) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
     let app_data = app.path().app_data_dir().unwrap();
     
-    // We use ssh to run `ls -la --full-time <path>`
-    let args = vec![
+    // Validate path - reject shell metacharacters
+    if path.contains([';', '|', '`', '$', '>', '<', '&', '\n', '\r']) {
+        return Err("Invalid characters in path".to_string());
+    }
+    // We use ssh to run ls -la (path as separate argument, not shell-interpolated)
+    let mut args = vec![
         "-p".to_string(), port.to_string(),
         format!("{}@{}", final_user, host),
-        format!("ls -la {}", path),
+        "ls".to_string(), "-la".to_string(),
     ];
+    // Append path as separate arg to prevent injection
+    args.push(path.clone());
     
     sftp::run_ssh_command_sync(app_data, "ssh", &args, pwd.as_deref(), key.as_deref())
 }
@@ -1586,9 +1543,9 @@ pub fn run() {
             let conn = db::init_db(app_dir)?;
             let session_state = SessionState::new();
 
-            // Auto-unlock vault with default password if not already unlocked
-            let is_setup = db::get_setting(&conn, "sentinel")?.is_some();
-            if !is_setup {
+            // Auto-unlock or initialize vault with default key: "default_rdm_key"
+            let sentinel = db::get_setting(&conn, "sentinel").unwrap_or(None);
+            if sentinel.is_none() {
                 let _ = setup_master_password_impl(&conn, &session_state.kek, "default_rdm_key");
             } else {
                 let _ = unlock_vault_impl(&conn, &session_state.kek, "default_rdm_key");

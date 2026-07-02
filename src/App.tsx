@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { Server, Credential, ActiveTab } from "./types";
+import { useVault } from "./hooks/useVault";
+import { useServers } from "./hooks/useServers";
+import { useCredentials } from "./hooks/useCredentials";
+import { useConnectionTabs } from "./hooks/useConnectionTabs";
+import { useServerForm } from "./hooks/useServerForm";
+import { useCredForm } from "./hooks/useCredForm";
+import { useFolderModal } from "./hooks/useFolderModal";
 import { MasterPassword } from "./components/MasterPassword";
 import { Sidebar } from "./components/Sidebar";
 import { ServerTable } from "./components/ServerTable";
@@ -10,120 +15,45 @@ import { TerminalTab } from "./components/TerminalTab";
 import { RdpTab } from "./components/RdpTab";
 import { SftpTab } from "./components/SftpTab";
 import { CommandPalette } from "./components/CommandPalette";
-import { KeyRound, Key, Plus, Terminal, X } from "lucide-react";
+import { Terminal, X } from "lucide-react";
 import "./App.css";
 
 function App() {
-  const [unlocked, setUnlocked] = useState<boolean>(false);
-  const [servers, setServers] = useState<Server[]>([]);
-  const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [selectedServer, setSelectedServer] = useState<Server | null>(null);
+  const vault = useVault();
+  const serversCtrl = useServers();
+  const credentialsCtrl = useCredentials();
+  const tabs = useConnectionTabs(vault.unlocked);
 
-  // Filter/Sidebar States
-  const [activeTabType, setActiveTabType] = useState<string>("dashboard"); // dashboard, credentials, settings, ssh
-  const [activeTabs, setActiveTabs] = useState<ActiveTab[]>([]);
-  const [currentTabId, setCurrentTabId] = useState<string>("dashboard");
-  
-  const [selectedFolder, setSelectedFolder] = useState<string>("");
-  const [selectedTag, setSelectedTag] = useState<string>("");
-  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(() => {
-    return localStorage.getItem("rdm_favoritesOnly") === "true";
-  });
-  const [autoLockMinutes, setAutoLockMinutes] = useState<number>(() => {
-    return parseInt(localStorage.getItem("rdm_autoLockMinutes") || "0", 10);
-  });
+  const serverForm = useServerForm(
+    serversCtrl.selectedFolder,
+    serversCtrl.loadServers,
+    serversCtrl.setSelectedServer,
+  );
+  const credForm = useCredForm(credentialsCtrl.loadCredentials);
 
-  useEffect(() => {
-    localStorage.setItem("rdm_favoritesOnly", favoritesOnly.toString());
-  }, [favoritesOnly]);
+  const folderModal = useFolderModal(
+    serversCtrl.servers,
+    serversCtrl.customFolders,
+    serversCtrl.saveCustomFolders,
+    serversCtrl.handleRenameFolder,
+    serversCtrl.handleDeleteFolder,
+  );
 
-  useEffect(() => {
-    localStorage.setItem("rdm_autoLockMinutes", autoLockMinutes.toString());
-    
-    if (autoLockMinutes === 0 || !unlocked) return;
-
-    let timeoutId: number;
-
-    const resetTimer = () => {
-      window.clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(() => {
-        setUnlocked(false);
-        invoke("lock_vault").catch(console.error);
-      }, autoLockMinutes * 60 * 1000);
-    };
-
-    resetTimer();
-
-    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
-    events.forEach((name) => document.addEventListener(name, resetTimer, true));
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      events.forEach((name) => document.removeEventListener(name, resetTimer, true));
-    };
-  }, [autoLockMinutes, unlocked]);
-
-  // Command Palette
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState<boolean>(false);
 
-  // Modals
-  const [serverModalOpen, setServerModalOpen] = useState<boolean>(false);
-  const [editingServer, setEditingServer] = useState<Server | null>(null);
-
-  const [credModalOpen, setCredModalOpen] = useState<boolean>(false);
-  const [editingCred, setEditingCred] = useState<Credential | null>(null);
-
-  // Custom Folders and Folder Modal States
-  const [customFolders, setCustomFolders] = useState<string[]>([]);
-  const [folderModalOpen, setFolderModalOpen] = useState<boolean>(false);
-  const [folderModalMode, setFolderModalMode] = useState<'create' | 'rename' | 'delete'>('create');
-  const [folderModalParent, setFolderModalParent] = useState<string>('');
-  const [folderModalPath, setFolderModalPath] = useState<string>('');
-  const [folderModalName, setFolderModalName] = useState<string>('');
-
-  // Form States
-  const [srvName, setSrvName] = useState("");
-  const [srvHost, setSrvHost] = useState("");
-  const [srvIp, setSrvIp] = useState("");
-  const [srvPort, setSrvPort] = useState(22);
-  const [srvProto, setSrvProto] = useState<'ssh' | 'rdp'>("ssh");
-  const [srvOs, setSrvOs] = useState<'linux' | 'windows'>("linux");
-  const [srvFolder, setSrvFolder] = useState("");
-  const [srvTags, setSrvTags] = useState("");
-  const [srvDesc, setSrvDesc] = useState("");
-  const [srvCredId, setSrvCredId] = useState("");
-  const [srvUsername, setSrvUsername] = useState("");
-  const [srvPassword, setSrvPassword] = useState("");
-  const [rdpClipboard, setRdpClipboard] = useState<boolean>(true);
-  const [rdpDrives, setRdpDrives] = useState<boolean>(false);
-  const [rdpPrinters, setRdpPrinters] = useState<boolean>(false);
-  const [rdpSmartSizing, setRdpSmartSizing] = useState<boolean>(true);
-  const [rdpAudio, setRdpAudio] = useState<number>(0);
-  const [rdpSmartcards, setRdpSmartcards] = useState<boolean>(false);
-  const [rdpWebauthn, setRdpWebauthn] = useState<boolean>(false);
-  const [rdpFullscreen, setRdpFullscreen] = useState<boolean>(false);
-  const [rdpMultimon, setRdpMultimon] = useState<boolean>(false);
-
-  const [credName, setCredName] = useState("");
-  const [credType, setCredType] = useState<'password' | 'ssh_key'>("password");
-  const [credUser, setCredUser] = useState("");
-  const [credSecret, setCredSecret] = useState("");
-
   useEffect(() => {
-    checkUnlockStatus();
-    loadServers();
-    loadFavorites();
-    loadCustomFolders();
+    vault.checkUnlockStatus();
+    serversCtrl.loadServers();
+    serversCtrl.loadFavorites();
+    serversCtrl.loadCustomFolders();
   }, []);
 
   useEffect(() => {
-    if (unlocked) {
-      loadCredentials();
+    if (vault.unlocked) {
+      credentialsCtrl.loadCredentials();
     }
-  }, [unlocked]);
+  }, [vault.unlocked]);
 
-  // Keyboard shortcut listener for Command Palette (Ctrl+P / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "k")) {
@@ -135,481 +65,9 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const checkUnlockStatus = async () => {
-    try {
-      const active = await invoke<boolean>("is_vault_unlocked");
-      setUnlocked(active);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const loadServers = async () => {
-    try {
-      const list = await invoke<Server[]>("get_servers");
-      setServers(list);
-    } catch (e) {
-      console.error("Failed to load servers", e);
-    }
-  };
-
-  const loadCredentials = async () => {
-    try {
-      const list = await invoke<Credential[]>("get_credentials");
-      setCredentials(list);
-    } catch (e) {
-      console.error("Failed to load credentials", e);
-    }
-  };
-
-  const loadFavorites = async () => {
-    try {
-      const favsJson = await invoke<string | null>("get_setting", { key: "favorites" });
-      if (favsJson) {
-        setFavorites(JSON.parse(favsJson));
-      }
-    } catch (e) {
-      console.error("Failed to load favorites setting", e);
-    }
-  };
-
-  const loadCustomFolders = async () => {
-    try {
-      const foldersJson = await invoke<string | null>("get_setting", { key: "custom_folders" });
-      if (foldersJson) {
-        setCustomFolders(JSON.parse(foldersJson));
-      }
-    } catch (e) {
-      console.error("Failed to load custom folders setting", e);
-    }
-  };
-
-  const saveCustomFolders = async (folders: string[]) => {
-    setCustomFolders(folders);
-    try {
-      await invoke("set_setting", { key: "custom_folders", value: JSON.stringify(folders) });
-    } catch (e) {
-      console.error("Failed to save custom folders setting", e);
-    }
-  };
-
-  const handleRenameFolder = async (oldPath: string, newPath: string) => {
-    if (!newPath || oldPath === newPath) return;
-
-    try {
-      // 1. Update the servers in the database
-      const serversToUpdate = servers.filter(s => 
-        s.folder_path === oldPath || s.folder_path.startsWith(oldPath + "/")
-      );
-
-      for (const s of serversToUpdate) {
-        let updatedFolderPath = newPath;
-        if (s.folder_path.startsWith(oldPath + "/")) {
-          updatedFolderPath = newPath + s.folder_path.substring(oldPath.length);
-        }
-
-        await invoke("update_server", {
-          id: s.id,
-          name: s.name,
-          hostname: s.hostname,
-          ip: s.ip,
-          port: s.port,
-          protocol: s.protocol,
-          os: s.os,
-          folderPath: updatedFolderPath,
-          tags: s.tags,
-          description: s.description,
-          credentialId: s.credential_id || null,
-          username: s.username || null,
-          password: "__UNCHANGED__",
-          rdpClipboard: s.rdp_clipboard,
-          rdpDrives: s.rdp_drives,
-          rdpPrinters: s.rdp_printers,
-          rdpSmartSizing: s.rdp_smart_sizing,
-          rdpAudio: s.rdp_audio,
-          rdpSmartcards: s.rdp_smartcards,
-          rdpWebauthn: s.rdp_webauthn,
-          rdpFullscreen: s.rdp_fullscreen,
-          rdpMultimon: s.rdp_multimon,
-        });
-      }
-
-      // 2. Update custom folders
-      const updatedCustomFolders = customFolders.map(path => {
-        if (path === oldPath) {
-          return newPath;
-        } else if (path.startsWith(oldPath + "/")) {
-          return newPath + path.substring(oldPath.length);
-        }
-        return path;
-      });
-
-      await saveCustomFolders(updatedCustomFolders);
-
-      // 3. Reload servers
-      await loadServers();
-
-      // Clear or update selectedFolder if it was modified
-      if (selectedFolder === oldPath) {
-        setSelectedFolder(newPath);
-      } else if (selectedFolder.startsWith(oldPath + "/")) {
-        setSelectedFolder(newPath + selectedFolder.substring(oldPath.length));
-      }
-    } catch (e) {
-      console.error("Failed to rename folder", e);
-      alert("Error renaming folder: " + e);
-    }
-  };
-
-  const handleDeleteFolder = async (folderPath: string) => {
-    try {
-      // 1. Delete servers that match or are under folderPath
-      const serversToDelete = servers.filter(s => 
-        s.folder_path === folderPath || s.folder_path.startsWith(folderPath + "/")
-      );
-
-      for (const s of serversToDelete) {
-        await invoke("delete_server", { id: s.id });
-      }
-
-      // 2. Remove from custom folders
-      const updatedCustomFolders = customFolders.filter(path => 
-        path !== folderPath && !path.startsWith(folderPath + "/")
-      );
-
-      await saveCustomFolders(updatedCustomFolders);
-
-      // 3. Reload servers
-      await loadServers();
-
-      // Reset selectedFolder if it was deleted
-      if (selectedFolder === folderPath || selectedFolder.startsWith(folderPath + "/")) {
-        setSelectedFolder("");
-      }
-    } catch (e) {
-      console.error("Failed to delete folder", e);
-      alert("Error deleting folder: " + e);
-    }
-  };
-
-  const toggleFavorite = async (id: string) => {
-    const isFav = favorites.includes(id);
-    const newFavs = isFav ? favorites.filter((fid) => fid !== id) : [...favorites, id];
-    setFavorites(newFavs);
-    try {
-      await invoke("set_setting", { key: "favorites", value: JSON.stringify(newFavs) });
-    } catch (e) {
-      console.error("Failed to save favorites", e);
-    }
-  };
-
-  const handleUnlock = () => {
-    setUnlocked(true);
-  };
-
-  useEffect(() => {
-    let unlistenRdp: (() => void) | null = null;
-    let unlistenSsh: (() => void) | null = null;
-
-    const setupListeners = async () => {
-      console.log("Setting up connection closed event listeners...");
-      unlistenRdp = await listen<string>("rdp-closed", (event) => {
-        const closedTabId = event.payload;
-        console.log("RDP session closed event received for tab ID:", closedTabId);
-        setActiveTabs((prev) => prev.filter((t) => t.id !== closedTabId));
-      });
-
-      unlistenSsh = await listen<string>("ssh-closed", (event) => {
-        const closedTabId = event.payload;
-        console.log("SSH session closed event received for tab ID:", closedTabId);
-        setActiveTabs((prev) => prev.filter((t) => t.id !== closedTabId));
-      });
-    };
-
-    if (unlocked) {
-      setupListeners();
-    }
-
-    return () => {
-      console.log("Cleaning up connection closed event listeners...");
-      if (unlistenRdp) unlistenRdp();
-      if (unlistenSsh) unlistenSsh();
-    };
-  }, [unlocked]);
-
-
-
-  // Connection Handler
-  const handleConnect = (srv: Server) => {
-    if (srv.protocol === "rdp") {
-      // Open embedded RDP tab
-      const tabId = `rdp-${srv.id}-${Date.now()}`;
-      const newTab: ActiveTab = {
-        id: tabId,
-        title: srv.name,
-        type: "rdp",
-        serverId: srv.id,
-        hostname: srv.hostname || srv.ip,
-      };
-
-      setActiveTabs((prev) => [...prev, newTab]);
-      setCurrentTabId(tabId);
-      setActiveTabType("rdp");
-    } else {
-      // Open SSH Terminal tab
-      const tabId = `ssh-${srv.id}-${Date.now()}`;
-      const newTab: ActiveTab = {
-        id: tabId,
-        title: srv.name,
-        type: "ssh",
-        serverId: srv.id,
-        hostname: srv.hostname || srv.ip,
-      };
-
-      setActiveTabs((prev) => [...prev, newTab]);
-      setCurrentTabId(tabId);
-      setActiveTabType("ssh");
-    }
-  };
-
-  const handleQuickConnect = (input: string, protocol: string) => {
-    // Parse host:port format
-    let host = input.trim();
-    let port = protocol === "rdp" ? 3389 : 22;
-    const colonIdx = host.lastIndexOf(":");
-    if (colonIdx > 0) {
-      const portStr = host.substring(colonIdx + 1);
-      const parsedPort = parseInt(portStr, 10);
-      if (!isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
-        port = parsedPort;
-        host = host.substring(0, colonIdx);
-      }
-    }
-
-    const tabId = `${protocol}-quick-${Date.now()}`;
-    const newTab: ActiveTab = {
-      id: tabId,
-      title: `${host}:${port}`,
-      type: protocol as ActiveTab["type"],
-      hostname: host,
-    };
-
-    setActiveTabs((prev) => [...prev, newTab]);
-    setCurrentTabId(tabId);
-    setActiveTabType(protocol);
-  };
-
-  // Tab switcher
-  const handleSelectTab = (tab: ActiveTab | string) => {
-    if (typeof tab === "string") {
-      setCurrentTabId(tab);
-      setActiveTabType(tab);
-    } else {
-      setCurrentTabId(tab.id);
-      setActiveTabType(tab.type);
-    }
-  };
-
-  const handleConnectSFTP = (server: Server) => {
-    const tabId = `sftp-${server.id}-${Date.now()}`;
-    setActiveTabs([
-      ...activeTabs,
-      { id: tabId, type: "sftp", serverId: server.id, hostname: server.hostname || server.ip, title: server.name },
-    ]);
-    setCurrentTabId(tabId);
-    setActiveTabType("sftp");
-  };
-
-  const handleCloseTab = (tabId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const remaining = activeTabs.filter((t) => t.id !== tabId);
-    setActiveTabs(remaining);
-    
-    if (currentTabId === tabId) {
-      setCurrentTabId("dashboard");
-      setActiveTabType("dashboard");
-    }
-  };
-
-  // Server CRUD functions
-  const openServerForm = (srv: Server | null = null) => {
-    setEditingServer(srv);
-    if (srv) {
-      setSrvName(srv.name);
-      setSrvHost(srv.hostname);
-      setSrvIp(srv.ip);
-      setSrvPort(srv.port);
-      setSrvProto(srv.protocol);
-      setSrvOs(srv.os);
-      setSrvFolder(srv.folder_path);
-      setSrvTags(srv.tags);
-      setSrvDesc(srv.description);
-      setSrvCredId(srv.credential_id || "");
-      setSrvUsername(srv.username || "");
-      setSrvPassword(srv.encrypted_password ? "__UNCHANGED__" : "");
-      setRdpClipboard(srv.rdp_clipboard !== undefined ? srv.rdp_clipboard !== 0 : true);
-      setRdpDrives(srv.rdp_drives !== undefined ? srv.rdp_drives !== 0 : false);
-      setRdpPrinters(srv.rdp_printers !== undefined ? srv.rdp_printers !== 0 : false);
-      setRdpSmartSizing(srv.rdp_smart_sizing !== undefined ? srv.rdp_smart_sizing !== 0 : true);
-      setRdpAudio(srv.rdp_audio !== undefined ? srv.rdp_audio : 0);
-      setRdpSmartcards(srv.rdp_smartcards !== undefined ? srv.rdp_smartcards !== 0 : false);
-      setRdpWebauthn(srv.rdp_webauthn !== undefined ? srv.rdp_webauthn !== 0 : false);
-      setRdpFullscreen(srv.rdp_fullscreen !== undefined ? srv.rdp_fullscreen !== 0 : false);
-      setRdpMultimon(srv.rdp_multimon !== undefined ? srv.rdp_multimon !== 0 : false);
-    } else {
-      setSrvName("");
-      setSrvHost("");
-      setSrvIp("");
-      setSrvPort(22);
-      setSrvProto("ssh");
-      setSrvOs("linux");
-      setSrvFolder(selectedFolder);
-      setSrvTags("");
-      setSrvDesc("");
-      setSrvCredId("");
-      setSrvUsername("");
-      setSrvPassword("");
-      setRdpClipboard(true);
-      setRdpDrives(false);
-      setRdpPrinters(false);
-      setRdpSmartSizing(true);
-      setRdpAudio(0);
-      setRdpSmartcards(false);
-      setRdpWebauthn(false);
-      setRdpFullscreen(false);
-      setRdpMultimon(false);
-    }
-    setServerModalOpen(true);
-  };
-
-  const saveServer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingServer) {
-        await invoke("update_server", {
-          id: editingServer.id,
-          name: srvName,
-          hostname: srvHost,
-          ip: srvIp,
-          port: srvPort,
-          protocol: srvProto,
-          os: srvOs,
-          folderPath: srvFolder,
-          tags: srvTags,
-          description: srvDesc,
-          credentialId: srvCredId || null,
-          username: srvUsername || null,
-          password: srvPassword || null,
-          rdpClipboard: rdpClipboard ? 1 : 0,
-          rdpDrives: rdpDrives ? 1 : 0,
-          rdpPrinters: rdpPrinters ? 1 : 0,
-          rdpSmartSizing: rdpSmartSizing ? 1 : 0,
-          rdpAudio: rdpAudio,
-          rdpSmartcards: rdpSmartcards ? 1 : 0,
-          rdpWebauthn: rdpWebauthn ? 1 : 0,
-          rdpFullscreen: rdpFullscreen ? 1 : 0,
-          rdpMultimon: rdpMultimon ? 1 : 0,
-        });
-      } else {
-        await invoke("add_server", {
-          name: srvName,
-          hostname: srvHost,
-          ip: srvIp,
-          port: srvPort,
-          protocol: srvProto,
-          os: srvOs,
-          folderPath: srvFolder,
-          tags: srvTags,
-          description: srvDesc,
-          credentialId: srvCredId || null,
-          username: srvUsername || null,
-          password: srvPassword || null,
-          rdpClipboard: rdpClipboard ? 1 : 0,
-          rdpDrives: rdpDrives ? 1 : 0,
-          rdpPrinters: rdpPrinters ? 1 : 0,
-          rdpSmartSizing: rdpSmartSizing ? 1 : 0,
-          rdpAudio: rdpAudio,
-          rdpSmartcards: rdpSmartcards ? 1 : 0,
-          rdpWebauthn: rdpWebauthn ? 1 : 0,
-          rdpFullscreen: rdpFullscreen ? 1 : 0,
-          rdpMultimon: rdpMultimon ? 1 : 0,
-        });
-      }
-      setServerModalOpen(false);
-      loadServers();
-      setSelectedServer(null);
-    } catch (e: any) {
-      alert(`Failed to save server: ${e}`);
-    }
-  };
-
-  const deleteServer = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this server configuration?")) return;
-    try {
-      await invoke("delete_server", { id });
-      loadServers();
-      setSelectedServer(null);
-    } catch (e: any) {
-      alert(`Failed to delete server: ${e}`);
-    }
-  };
-
-  // Credential CRUD functions
-  const openCredForm = (cred: Credential | null = null) => {
-    setEditingCred(cred);
-    if (cred) {
-      setCredName(cred.name);
-      setCredType(cred.type);
-      setCredUser(cred.username);
-      setCredSecret(""); // Decrypted is only fetched on reveal/copy, we leave field blank to preserve unless updated
-    } else {
-      setCredName("");
-      setCredType("password");
-      setCredUser("");
-      setCredSecret("");
-    }
-    setCredModalOpen(true);
-  };
-
-  const saveCredential = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingCred) {
-        await invoke("update_credential", {
-          id: editingCred.id,
-          name: credName,
-          credType: credType,
-          username: credUser,
-          secret: credSecret || null,
-        });
-      } else {
-        await invoke("add_credential", {
-          name: credName,
-          credType: credType,
-          username: credUser,
-          secret: credSecret,
-        });
-      }
-      setCredModalOpen(false);
-      loadCredentials();
-    } catch (e: any) {
-      alert(`Failed to save credential: ${e}`);
-    }
-  };
-
-  const deleteCredential = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this credential? Any linked servers will lose their auto-connection credentials.")) return;
-    try {
-      await invoke("delete_credential", { id });
-      loadCredentials();
-    } catch (e: any) {
-      alert(`Failed to delete credential: ${e}`);
-    }
-  };
-
   const handleExportBackup = async () => {
     const password = prompt("Enter a password to encrypt this database backup (Введіть пароль для шифрування резервної копії):");
-    if (password === null) return; // User cancelled
+    if (password === null) return;
     if (!password) {
       alert("Password cannot be empty (Пароль не може бути порожнім)");
       return;
@@ -627,7 +85,7 @@ function App() {
   const handleImportBackup = async () => {
     if (!confirm("Warning: Restoring will overwrite all current servers and credentials. Continue? (Увага: Відновлення перезапише всі поточні сервери та облікові дані. Продовжити?)")) return;
     const password = prompt("Enter the password used to encrypt this backup (Введіть пароль, який використовувався для шифрування):");
-    if (password === null) return; // User cancelled
+    if (password === null) return;
     if (!password) {
       alert("Password cannot be empty (Пароль не може бути порожнім)");
       return;
@@ -635,9 +93,9 @@ function App() {
     try {
       const res = await invoke<string>("select_and_import_backup", { password });
       alert(`Database restored successfully from: ${res}`);
-      loadServers();
-      loadCredentials();
-      setSelectedServer(null);
+      serversCtrl.loadServers();
+      credentialsCtrl.loadCredentials();
+      serversCtrl.setSelectedServer(null);
     } catch (e: any) {
       if (e !== "Import cancelled") {
         alert(`Restore failed: ${e}`);
@@ -661,15 +119,14 @@ function App() {
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = async (evt) => {
         const content = evt.target?.result as string;
         try {
           const count = await invoke<number>("import_devolutions_csv", { csvContent: content });
           alert(`Imported ${count} connections successfully!`);
-          loadServers();
-          loadCredentials();
+          serversCtrl.loadServers();
+          credentialsCtrl.loadCredentials();
         } catch (err: any) {
           alert(`Import failed: ${err}`);
         }
@@ -679,46 +136,43 @@ function App() {
     input.click();
   };
 
-  // Render workspace content based on state
   const renderTabContent = () => {
-    const displayedServers = favoritesOnly
-      ? servers.filter((s) => favorites.includes(s.id))
-      : servers;
+    const displayedServers = serversCtrl.favoritesOnly
+      ? serversCtrl.servers.filter((s) => serversCtrl.favorites.includes(s.id))
+      : serversCtrl.servers;
 
     return (
       <>
-        {/* Dashboard */}
-        <div style={{ display: activeTabType === "dashboard" ? "block" : "none", width: "100%", height: "100%" }}>
+        <div style={{ display: tabs.activeTabType === "dashboard" ? "block" : "none", width: "100%", height: "100%" }}>
           <div className="content-grid">
             <main className="center-pane">
               <ServerTable
                 servers={displayedServers}
-                selectedFolder={selectedFolder}
-                selectedTag={selectedTag}
-                favorites={favorites}
-                selectedServer={selectedServer}
-                onSelectServer={setSelectedServer}
-                onConnect={handleConnect}
-                onEdit={openServerForm}
-                onDelete={deleteServer}
-                onAddServer={() => openServerForm(null)}
+                selectedFolder={serversCtrl.selectedFolder}
+                selectedTag={serversCtrl.selectedTag}
+                favorites={serversCtrl.favorites}
+                selectedServer={serversCtrl.selectedServer}
+                onSelectServer={serversCtrl.setSelectedServer}
+                onConnect={tabs.handleConnect}
+                onEdit={serverForm.openServerForm}
+                onDelete={serverForm.deleteServer}
+                onAddServer={() => serverForm.openServerForm(null)}
                 onImportCSV={handleImportCSV}
-                onToggleFavorite={toggleFavorite}
-                onConnectSFTP={handleConnectSFTP}
-                onQuickConnect={handleQuickConnect}
+                onToggleFavorite={serversCtrl.toggleFavorite}
+                onConnectSFTP={tabs.handleConnectSFTP}
+                onQuickConnect={tabs.handleQuickConnect}
               />
             </main>
             <DetailsPanel
-              server={selectedServer}
-              credentials={credentials}
-              onConnect={handleConnect}
-              onEdit={openServerForm}
+              server={serversCtrl.selectedServer}
+              credentials={credentialsCtrl.credentials}
+              onConnect={tabs.handleConnect}
+              onEdit={serverForm.openServerForm}
             />
           </div>
         </div>
 
-        {/* Credentials */}
-        <div style={{ display: activeTabType === "credentials" ? "flex" : "none", flexDirection: "column", gap: "20px", width: "100%", height: "100%", padding: "20px", overflowY: "auto" }} className="content-grid">
+        <div style={{ display: tabs.activeTabType === "credentials" ? "flex" : "none", flexDirection: "column", gap: "20px", width: "100%", height: "100%", padding: "20px", overflowY: "auto" }} className="content-grid">
           <div className="header-row">
             <div>
               <h2 style={{ fontSize: "1.3rem" }}>Vault Credentials</h2>
@@ -726,14 +180,12 @@ function App() {
                 Secure accounts used to authenticate with remote targets.
               </p>
             </div>
-            <button className="btn btn-primary" onClick={() => openCredForm(null)}>
-              <Plus size={16} />
+            <button className="btn btn-primary" onClick={() => credForm.openCredForm(null)}>
               <span>Add Credential</span>
             </button>
           </div>
-
           <div className="glass-card" style={{ padding: 0 }}>
-            {credentials.length === 0 ? (
+            {credentialsCtrl.credentials.length === 0 ? (
               <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                 No credentials stored in the Vault. Click "Add Credential" to create one.
               </div>
@@ -748,24 +200,15 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {credentials.map((c) => (
+                  {credentialsCtrl.credentials.map((c) => (
                     <tr key={c.id}>
                       <td style={{ fontWeight: 600, color: "#fff" }}>{c.name}</td>
-                      <td style={{ textTransform: "capitalize" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          {c.type === "ssh_key" ? <KeyRound size={14} /> : <Key size={14} />}
-                          {c.type.replace("_", " ")}
-                        </span>
-                      </td>
+                      <td style={{ textTransform: "capitalize" }}>{c.type.replace("_", " ")}</td>
                       <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>{c.username}</td>
                       <td>
                         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                          <button className="btn btn-secondary" style={{ padding: "6px 10px" }} onClick={() => openCredForm(c)}>
-                            Edit
-                          </button>
-                          <button className="btn btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteCredential(c.id)}>
-                            Delete
-                          </button>
+                          <button className="btn btn-secondary" style={{ padding: "6px 10px" }} onClick={() => credForm.openCredForm(c)}>Edit</button>
+                          <button className="btn btn-danger" style={{ padding: "6px 10px" }} onClick={() => credForm.deleteCredential(c.id)}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -776,11 +219,9 @@ function App() {
           </div>
         </div>
 
-        {/* Settings */}
-        <div style={{ display: activeTabType === "settings" ? "block" : "none", width: "100%", height: "100%", overflowY: "auto", padding: "20px" }}>
+        <div style={{ display: tabs.activeTabType === "settings" ? "block" : "none", width: "100%", height: "100%", overflowY: "auto", padding: "20px" }}>
           <div style={{ padding: "30px", maxWidth: "600px", margin: "0 auto" }} className="glass-card">
             <h2 style={{ marginBottom: "20px" }}>Application Settings</h2>
-            
             <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Security</h3>
@@ -788,12 +229,9 @@ function App() {
                   Automatically lock the Vault after a period of inactivity.
                 </p>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <select 
-                    className="input-field" 
-                    style={{ width: "200px" }}
-                    value={autoLockMinutes}
-                    onChange={(e) => setAutoLockMinutes(parseInt(e.target.value, 10))}
-                  >
+                  <select className="input-field" style={{ width: "200px" }}
+                    value={vault.autoLockMinutes}
+                    onChange={(e) => vault.setAutoLockMinutes(parseInt(e.target.value, 10))}>
                     <option value={0}>Never</option>
                     <option value={1}>1 minute</option>
                     <option value={5}>5 minutes</option>
@@ -803,36 +241,25 @@ function App() {
                   </select>
                 </div>
               </div>
-
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Backup & Restore</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
                   Export a copy of the database, or restore from a previous backup file.
                 </p>
                 <div style={{ display: "flex", gap: "10px" }}>
-                  <button className="btn btn-secondary" onClick={handleExportBackup}>
-                    Export Backup
-                  </button>
-                  <button className="btn btn-secondary" onClick={handleImportBackup}>
-                    Restore Backup
-                  </button>
+                  <button className="btn btn-secondary" onClick={handleExportBackup}>Export Backup</button>
+                  <button className="btn btn-secondary" onClick={handleImportBackup}>Restore Backup</button>
                 </div>
               </div>
-
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Bypass RDP Warnings / Обхід попереджень RDP</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
-                  Reverts Windows RDP connection prompts to legacy behavior to allow checking "Don't ask me again" for resources (like Clipboard). Requires administrator privileges.
-                  <br />
-                  <span style={{ fontSize: "0.8rem", color: "var(--accent-purple)", display: "block", marginTop: "5px" }}>
-                    (Налаштовує систему для вимкнення постійних попереджень безпеки RDP і дозволяє обрати "Більше не запитувати" для ресурсів. Потребує прав адміністратора.)
-                  </span>
+                  Reverts Windows RDP connection prompts to legacy behavior.
                 </p>
                 <button className="btn btn-primary" onClick={handleBypassWarnings}>
                   Suppress Warnings / Вимкнути попередження
                 </button>
               </div>
-
               <div>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>About</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
@@ -845,346 +272,251 @@ function App() {
           </div>
         </div>
 
-        {/* Active Session Tabs */}
-        {activeTabs.map((tab) => {
-          const isCurrent = tab.id === currentTabId;
-          const server = servers.find((s) => s.id === tab.serverId);
-          
+        {tabs.activeTabs.map((tab) => {
+          const isCurrent = tab.id === tabs.currentTabId;
+          const server = serversCtrl.servers.find((s) => s.id === tab.serverId);
           if (tab.type === "ssh") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "block" : "none", width: "100%", height: "100%", overflow: "hidden" }}>
-                <TerminalTab
-                  sessionId={tab.id}
-                  host={tab.hostname || "127.0.0.1"}
+              <div key={tab.id} style={{ display: isCurrent ? "block" : "none", width: "100%", height: "100%", overflow: "hidden" }} hidden={!isCurrent}>
+                {isCurrent && <TerminalTab sessionId={tab.id} host={tab.hostname || "127.0.0.1"}
                   port={server?.port || 22}
-                  username={server ? (server.username || credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
-                  credentialId={server?.credential_id}
-                  serverId={server?.id}
-                />
+                  username={server ? (server.username || credentialsCtrl.credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
+                  credentialId={server?.credential_id} serverId={server?.id} />}
               </div>
             );
           }
-          
           if (tab.type === "rdp") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
-                <RdpTab
-                  sessionId={tab.id}
-                  serverId={tab.serverId || ""}
-                  host={tab.hostname || "127.0.0.1"}
-                  port={server?.port || 3389}
-                  credentialId={server?.credential_id}
-                />
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }} hidden={!isCurrent}>
+                {isCurrent && <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
+                  host={tab.hostname || "127.0.0.1"} port={server?.port || 3389}
+                  credentialId={server?.credential_id} />}
               </div>
             );
           }
-          
           if (tab.type === "sftp") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }}>
-                <SftpTab
-                  sessionId={tab.id}
-                  serverId={tab.serverId || ""}
-                  host={tab.hostname || "127.0.0.1"}
-                  port={server?.port || 22}
-                  username={server ? (server.username || credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
-                  credentialId={server?.credential_id}
-                />
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }} hidden={!isCurrent}>
+                {isCurrent && <SftpTab sessionId={tab.id} serverId={tab.serverId || ""}
+                  host={tab.hostname || "127.0.0.1"} port={server?.port || 22}
+                  username={server ? (server.username || credentialsCtrl.credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
+                  credentialId={server?.credential_id} />}
               </div>
             );
           }
-          
           return null;
         })}
       </>
     );
   };
 
-  // If vault is locked, force user to unlock it
-  if (!unlocked) {
-    return <MasterPassword onUnlock={handleUnlock} />;
+  if (!vault.unlocked) {
+    return <MasterPassword onUnlock={vault.handleUnlock} />;
   }
 
   return (
     <div className="app-container">
-      {/* Dynamic Sidebar */}
       <Sidebar
-        servers={servers}
-        customFolders={customFolders}
-        activeTabType={activeTabType}
-        selectedFolder={selectedFolder}
-        selectedTag={selectedTag}
-        favoritesOnly={favoritesOnly}
+        servers={serversCtrl.servers}
+        customFolders={serversCtrl.customFolders}
+        activeTabType={tabs.activeTabType}
+        selectedFolder={serversCtrl.selectedFolder}
+        selectedTag={serversCtrl.selectedTag}
+        favoritesOnly={serversCtrl.favoritesOnly}
         onSelectFolder={(folder) => {
-          setSelectedFolder(folder);
-          setSelectedTag("");
-          setFavoritesOnly(false);
-          setSelectedServer(null);
+          serversCtrl.setSelectedFolder(folder);
+          serversCtrl.setSelectedTag("");
+          serversCtrl.setFavoritesOnly(false);
+          serversCtrl.setSelectedServer(null);
         }}
         onSelectTag={(tag) => {
-          setSelectedTag(tag);
-          setSelectedFolder("");
-          setFavoritesOnly(false);
-          setSelectedServer(null);
+          serversCtrl.setSelectedTag(tag);
+          serversCtrl.setSelectedFolder("");
+          serversCtrl.setFavoritesOnly(false);
+          serversCtrl.setSelectedServer(null);
         }}
         onToggleFavorites={() => {
-          setFavoritesOnly(true);
-          setSelectedFolder("");
-          setSelectedTag("");
-          setSelectedServer(null);
+          serversCtrl.setFavoritesOnly(true);
+          serversCtrl.setSelectedFolder("");
+          serversCtrl.setSelectedTag("");
+          serversCtrl.setSelectedServer(null);
         }}
         onCreateFolder={(parentFolder) => {
-          setFolderModalMode('create');
-          setFolderModalParent(parentFolder);
-          setFolderModalName('');
-          setFolderModalOpen(true);
+          folderModal.setFolderModalMode('create');
+          folderModal.setFolderModalParent(parentFolder);
+          folderModal.setFolderModalName('');
+          folderModal.setFolderModalOpen(true);
         }}
         onRenameFolder={(folderPath) => {
-          setFolderModalMode('rename');
-          setFolderModalPath(folderPath);
+          folderModal.setFolderModalMode('rename');
+          folderModal.setFolderModalPath(folderPath);
           const parts = folderPath.split('/');
-          setFolderModalName(parts[parts.length - 1] || '');
-          setFolderModalOpen(true);
+          folderModal.setFolderModalName(parts[parts.length - 1] || '');
+          folderModal.setFolderModalOpen(true);
         }}
         onDeleteFolder={(folderPath) => {
-          setFolderModalMode('delete');
-          setFolderModalPath(folderPath);
-          setFolderModalOpen(true);
+          folderModal.setFolderModalMode('delete');
+          folderModal.setFolderModalPath(folderPath);
+          folderModal.setFolderModalOpen(true);
         }}
         onNavigateTo={(type) => {
           if (type !== 'dashboard') {
-            setSelectedServer(null);
+            serversCtrl.setSelectedServer(null);
           }
-          setActiveTabType(type);
-          setCurrentTabId(type);
+          tabs.setActiveTabType(type);
+          tabs.setCurrentTabId(type);
         }}
       />
 
       <div className="main-workspace">
-        {/* Connection Tabs */}
         <div className="tabs-bar">
-          <div
-            className={`tab ${currentTabId === "dashboard" ? "active" : ""}`}
-            onClick={() => handleSelectTab("dashboard")}
-          >
+          <div className={`tab ${tabs.currentTabId === "dashboard" ? "active" : ""}`}
+            onClick={() => tabs.handleSelectTab("dashboard")}>
             <span>Connections Directory</span>
           </div>
-
-          {activeTabs.map((tab) => (
-            <div
-              key={tab.id}
-              className={`tab ${currentTabId === tab.id ? "active" : ""}`}
-              onClick={() => handleSelectTab(tab)}
-            >
+          {tabs.activeTabs.map((tab) => (
+            <div key={tab.id} className={`tab ${tabs.currentTabId === tab.id ? "active" : ""}`}
+              onClick={() => tabs.handleSelectTab(tab)}>
               <Terminal size={14} style={{ color: "var(--accent-purple)" }} />
               <span>{tab.title}</span>
-              <X size={12} className="tab-close" onClick={(e) => handleCloseTab(tab.id, e)} />
+              <X size={12} className="tab-close" onClick={(e) => tabs.handleCloseTab(tab.id, e)} />
             </div>
           ))}
-
-          {activeTabType === "credentials" && (
-            <div className="tab active">
-              <span>Credentials Vault</span>
-            </div>
-          )}
-
-          {activeTabType === "settings" && (
-            <div className="tab active">
-              <span>Settings</span>
-            </div>
-          )}
+          {tabs.activeTabType === "credentials" && <div className="tab active"><span>Credentials Vault</span></div>}
+          {tabs.activeTabType === "settings" && <div className="tab active"><span>Settings</span></div>}
         </div>
 
-        {/* Dynamic Workspace Panels */}
-        <div className="tab-content" onClick={() => {
-          // Check if clicking on server rows
-        }}>
+        <div className="tab-content">
           {renderTabContent()}
         </div>
       </div>
 
-      {/* Fuzzy search Command Palette */}
       <CommandPalette
-        servers={servers}
+        servers={serversCtrl.servers}
         isOpen={cmdPaletteOpen}
         onClose={() => setCmdPaletteOpen(false)}
-        onSelectServer={handleConnect}
+        onSelectServer={tabs.handleConnect}
       />
 
-      {/* Server CRUD Modal */}
-      {serverModalOpen && (
+      {serverForm.serverModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box glass-card">
             <div className="header-row" style={{ marginBottom: "15px" }}>
-              <h3>{editingServer ? "Edit Server Configuration" : "New Server Connection"}</h3>
-              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => setServerModalOpen(false)}>
+              <h3>{serverForm.editingServer ? "Edit Server Configuration" : "New Server Connection"}</h3>
+              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => serverForm.setServerModalOpen(false)}>
                 <X size={16} />
               </button>
             </div>
-
-            <form onSubmit={saveServer} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <form onSubmit={serverForm.saveServer} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div className="input-group">
                 <label className="input-label">Connection Name</label>
-                <input type="text" className="text-input" value={srvName} onChange={(e) => setSrvName(e.target.value)} required placeholder="e.g. Production Web DB" />
+                <input type="text" className="text-input" value={serverForm.srvName} onChange={(e) => serverForm.setSrvName(e.target.value)} required placeholder="e.g. Production Web DB" />
               </div>
-
               <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Hostname / Domain</label>
-                  <input type="text" className="text-input" value={srvHost} onChange={(e) => setSrvHost(e.target.value)} placeholder="db.prod.local" />
+                  <input type="text" className="text-input" value={serverForm.srvHost} onChange={(e) => serverForm.setSrvHost(e.target.value)} placeholder="db.prod.local" />
                 </div>
                 <div className="input-group">
                   <label className="input-label">IP Address</label>
-                  <input type="text" className="text-input" value={srvIp} onChange={(e) => setSrvIp(e.target.value)} placeholder="10.0.1.45" />
+                  <input type="text" className="text-input" value={serverForm.srvIp} onChange={(e) => serverForm.setSrvIp(e.target.value)} placeholder="10.0.1.45" />
                 </div>
               </div>
-
               <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Port</label>
-                  <input type="number" className="text-input" value={srvPort} onChange={(e) => setSrvPort(parseInt(e.target.value))} required />
+                  <input type="number" className="text-input" value={serverForm.srvPort} onChange={(e) => serverForm.setSrvPort(parseInt(e.target.value))} required />
                 </div>
                 <div className="input-group">
                   <label className="input-label">Protocol</label>
-                  <select className="text-input" style={{ backgroundColor: "#000" }} value={srvProto} onChange={(e) => {
+                  <select className="text-input" style={{ backgroundColor: "#000" }} value={serverForm.srvProto} onChange={(e) => {
                     const val = e.target.value as 'ssh' | 'rdp';
-                    setSrvProto(val);
-                    setSrvPort(val === 'ssh' ? 22 : 3389);
+                    serverForm.setSrvProto(val);
+                    serverForm.setSrvPort(val === 'ssh' ? 22 : 3389);
                   }}>
                     <option value="ssh">SSH</option>
                     <option value="rdp">RDP</option>
                   </select>
                 </div>
               </div>
-
               <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Target OS</label>
-                  <select className="text-input" style={{ backgroundColor: "#000" }} value={srvOs} onChange={(e) => setSrvOs(e.target.value as 'linux' | 'windows')}>
+                  <select className="text-input" style={{ backgroundColor: "#000" }} value={serverForm.srvOs} onChange={(e) => serverForm.setSrvOs(e.target.value as 'linux' | 'windows')}>
                     <option value="linux">Linux</option>
                     <option value="windows">Windows</option>
                   </select>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Directory Folder</label>
-                  <input
-                    type="text"
-                    list="existing-folders"
-                    className="text-input"
-                    value={srvFolder}
-                    onChange={(e) => setSrvFolder(e.target.value)}
-                    placeholder="Production/Linux"
-                  />
+                  <input type="text" list="existing-folders" className="text-input" value={serverForm.srvFolder} onChange={(e) => serverForm.setSrvFolder(e.target.value)} placeholder="Production/Linux" />
                   <datalist id="existing-folders">
                     {Array.from(new Set([
-                      ...servers.map((s) => s.folder_path),
-                      ...customFolders
+                      ...serversCtrl.servers.map((s) => s.folder_path),
+                      ...serversCtrl.customFolders
                     ].filter(Boolean))).sort().map((folder) => (
                       <option key={folder} value={folder} />
                     ))}
                   </datalist>
                 </div>
               </div>
-
               <div className="input-group">
                 <label className="input-label">Smart Tags (comma separated)</label>
-                <input type="text" className="text-input" value={srvTags} onChange={(e) => setSrvTags(e.target.value)} placeholder="prod, db, postgres" />
+                <input type="text" className="text-input" value={serverForm.srvTags} onChange={(e) => serverForm.setSrvTags(e.target.value)} placeholder="prod, db, postgres" />
               </div>
-
               <div className="input-group">
                 <label className="input-label">Linked Vault Credential</label>
-                <select className="text-input" style={{ backgroundColor: "#000" }} value={srvCredId} onChange={(e) => setSrvCredId(e.target.value)}>
+                <select className="text-input" style={{ backgroundColor: "#000" }} value={serverForm.srvCredId} onChange={(e) => serverForm.setSrvCredId(e.target.value)}>
                   <option value="">-- No Authentication Credential --</option>
-                  {credentials.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.username})
-                    </option>
+                  {credentialsCtrl.credentials.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.username})</option>
                   ))}
                 </select>
               </div>
-
-              {!srvCredId && (
+              {!serverForm.srvCredId && (
                 <div className="form-grid-2" style={{ gap: "10px" }}>
                   <div className="input-group">
                     <label className="input-label">Custom Username (Manual)</label>
-                    <input
-                      type="text"
-                      className="text-input"
-                      value={srvUsername}
-                      onChange={(e) => setSrvUsername(e.target.value)}
-                      placeholder="e.g. root / Administrator"
-                    />
+                    <input type="text" className="text-input" value={serverForm.srvUsername} onChange={(e) => serverForm.setSrvUsername(e.target.value)} placeholder="e.g. root / Administrator" />
                   </div>
                   <div className="input-group">
                     <label className="input-label">Custom Password (Manual)</label>
-                    <input
-                      type="password"
-                      className="text-input"
-                      value={srvPassword}
-                      onChange={(e) => setSrvPassword(e.target.value)}
-                      placeholder={srvPassword === "__UNCHANGED__" ? "•••••••• (Unchanged)" : "Enter password"}
-                    />
+                    <input type="password" className="text-input" value={serverForm.srvPassword} onChange={(e) => serverForm.setSrvPassword(e.target.value)} placeholder={serverForm.srvPassword === "__UNCHANGED__" ? "•••••••• (Unchanged)" : "Enter password"} />
                   </div>
                 </div>
               )}
-
-              {srvProto === 'rdp' && (
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                  padding: "12px",
-                  backgroundColor: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "6px",
-                  marginTop: "5px",
-                  marginBottom: "5px"
-                }}>
+              {serverForm.srvProto === 'rdp' && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "12px", backgroundColor: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-color)", borderRadius: "6px", marginTop: "5px", marginBottom: "5px" }}>
                   <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--accent-purple)" }}>RDP Connection Settings (Devolutions style)</span>
-                  
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpClipboard} onChange={(e) => setRdpClipboard(e.target.checked)} />
-                      Redirect Clipboard
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpSmartSizing} onChange={(e) => setRdpSmartSizing(e.target.checked)} />
-                      Smart Sizing
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpDrives} onChange={(e) => setRdpDrives(e.target.checked)} />
-                      Redirect Drives
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpPrinters} onChange={(e) => setRdpPrinters(e.target.checked)} />
-                      Redirect Printers
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpSmartcards} onChange={(e) => setRdpSmartcards(e.target.checked)} />
-                      Redirect Smart Cards
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpWebauthn} onChange={(e) => setRdpWebauthn(e.target.checked)} />
-                      WebAuthn (Windows Hello)
+                      <input type="checkbox" checked={serverForm.rdpClipboard} onChange={(e) => serverForm.setRdpClipboard(e.target.checked)} /> Redirect Clipboard
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpFullscreen} onChange={(e) => setRdpFullscreen(e.target.checked)} />
-                      Fullscreen Mode (Native Window)
+                      <input type="checkbox" checked={serverForm.rdpSmartSizing} onChange={(e) => serverForm.setRdpSmartSizing(e.target.checked)} /> Smart Sizing
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
-                      <input type="checkbox" checked={rdpMultimon} onChange={(e) => setRdpMultimon(e.target.checked)} />
-                      Use Multiple Monitors (Multi-mon)
+                      <input type="checkbox" checked={serverForm.rdpDrives} onChange={(e) => serverForm.setRdpDrives(e.target.checked)} /> Redirect Drives
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serverForm.rdpPrinters} onChange={(e) => serverForm.setRdpPrinters(e.target.checked)} /> Redirect Printers
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serverForm.rdpSmartcards} onChange={(e) => serverForm.setRdpSmartcards(e.target.checked)} /> Redirect Smart Cards
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serverForm.rdpWebauthn} onChange={(e) => serverForm.setRdpWebauthn(e.target.checked)} /> WebAuthn (Windows Hello)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serverForm.rdpFullscreen} onChange={(e) => serverForm.setRdpFullscreen(e.target.checked)} /> Fullscreen Mode (Native Window)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serverForm.rdpMultimon} onChange={(e) => serverForm.setRdpMultimon(e.target.checked)} /> Use Multiple Monitors (Multi-mon)
                     </label>
                   </div>
-
                   <div className="input-group" style={{ marginTop: "5px" }}>
                     <label className="input-label" style={{ fontSize: "0.8rem" }}>Audio Redirection</label>
-                    <select className="text-input" style={{ backgroundColor: "#000", padding: "4px 8px" }} value={rdpAudio} onChange={(e) => setRdpAudio(parseInt(e.target.value))}>
+                    <select className="text-input" style={{ backgroundColor: "#000", padding: "4px 8px" }} value={serverForm.rdpAudio} onChange={(e) => serverForm.setRdpAudio(parseInt(e.target.value))}>
                       <option value={0}>Play on this computer (Local)</option>
                       <option value={1}>Play on remote computer</option>
                       <option value={2}>Do not play (Mute)</option>
@@ -1192,14 +524,12 @@ function App() {
                   </div>
                 </div>
               )}
-
               <div className="input-group">
                 <label className="input-label">Notes / Description</label>
-                <textarea className="text-input" value={srvDesc} onChange={(e) => setSrvDesc(e.target.value)} rows={2} placeholder="Optional server summary details..." style={{ resize: "none" }} />
+                <textarea className="text-input" value={serverForm.srvDesc} onChange={(e) => serverForm.setSrvDesc(e.target.value)} rows={2} placeholder="Optional server summary details..." style={{ resize: "none" }} />
               </div>
-
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setServerModalOpen(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => serverForm.setServerModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save Connection</button>
               </div>
             </form>
@@ -1207,178 +537,87 @@ function App() {
         </div>
       )}
 
-      {/* Credential CRUD Modal */}
-      {credModalOpen && (
+      {credForm.credModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box glass-card">
             <div className="header-row" style={{ marginBottom: "15px" }}>
-              <h3>{editingCred ? "Edit Vault Credential" : "New Secure Credential"}</h3>
-              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => setCredModalOpen(false)}>
+              <h3>{credForm.editingCred ? "Edit Vault Credential" : "New Secure Credential"}</h3>
+              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => credForm.setCredModalOpen(false)}>
                 <X size={16} />
               </button>
             </div>
-
-            <form onSubmit={saveCredential} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <form onSubmit={credForm.saveCredential} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div className="input-group">
                 <label className="input-label">Credential Name</label>
-                <input type="text" className="text-input" value={credName} onChange={(e) => setCredName(e.target.value)} required placeholder="e.g. AWS Prod admin" />
+                <input type="text" className="text-input" value={credForm.credName} onChange={(e) => credForm.setCredName(e.target.value)} required placeholder="e.g. AWS Prod admin" />
               </div>
-
               <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Auth Type</label>
-                  <select className="text-input" style={{ backgroundColor: "#000" }} value={credType} onChange={(e) => setCredType(e.target.value as 'password' | 'ssh_key')}>
+                  <select className="text-input" style={{ backgroundColor: "#000" }} value={credForm.credType} onChange={(e) => credForm.setCredType(e.target.value as 'password' | 'ssh_key')}>
                     <option value="password">Password</option>
                     <option value="ssh_key">SSH Private Key</option>
                   </select>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Username</label>
-                  <input type="text" className="text-input" value={credUser} onChange={(e) => setCredUser(e.target.value)} required placeholder="ubuntu / Administrator" />
+                  <input type="text" className="text-input" value={credForm.credUser} onChange={(e) => credForm.setCredUser(e.target.value)} required placeholder="ubuntu / Administrator" />
                 </div>
               </div>
-
               <div className="input-group">
-                <label className="input-label">
-                  {credType === "ssh_key" ? "SSH Private Key Content" : "Password Secret"}
-                </label>
-                {credType === "ssh_key" ? (
-                  <textarea
-                    className="text-input"
-                    value={credSecret}
-                    onChange={(e) => setCredSecret(e.target.value)}
-                    rows={6}
-                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
-                    required={!editingCred} // Not required if editing (preserves existing secret unless updated)
-                    style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", resize: "none" }}
-                  />
+                <label className="input-label">{credForm.credType === "ssh_key" ? "SSH Private Key Content" : "Password Secret"}</label>
+                {credForm.credType === "ssh_key" ? (
+                  <textarea className="text-input" value={credForm.credSecret} onChange={(e) => credForm.setCredSecret(e.target.value)} rows={6} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." required={!credForm.editingCred} style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", resize: "none" }} />
                 ) : (
-                  <input
-                    type="password"
-                    className="text-input"
-                    value={credSecret}
-                    onChange={(e) => setCredSecret(e.target.value)}
-                    placeholder={editingCred ? "•••••••••••• (Leave blank to keep current)" : "••••••••••••"}
-                    required={!editingCred}
-                  />
+                  <input type="password" className="text-input" value={credForm.credSecret} onChange={(e) => credForm.setCredSecret(e.target.value)} placeholder={credForm.editingCred ? "•••••••••••• (Leave blank to keep current)" : "••••••••••••"} required={!credForm.editingCred} />
                 )}
               </div>
-
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setCredModalOpen(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => credForm.setCredModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save Securely</button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Folder CRUD Modal */}
-      {folderModalOpen && (
+
+      {folderModal.folderModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box glass-card" style={{ maxWidth: "450px" }}>
             <div className="header-row" style={{ marginBottom: "15px" }}>
               <h3>
-                {folderModalMode === 'create' && "Create New Folder"}
-                {folderModalMode === 'rename' && "Rename Folder"}
-                {folderModalMode === 'delete' && "Delete Folder"}
+                {folderModal.folderModalMode === 'create' && "Create New Folder"}
+                {folderModal.folderModalMode === 'rename' && "Rename Folder"}
+                {folderModal.folderModalMode === 'delete' && "Delete Folder"}
               </h3>
-              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => setFolderModalOpen(false)}>
+              <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => folderModal.setFolderModalOpen(false)}>
                 <X size={16} />
               </button>
             </div>
 
-            {folderModalMode === 'delete' ? (
+            {folderModal.folderModalMode === 'delete' ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.4" }}>
-                  Are you sure you want to delete the folder <strong style={{ color: "var(--accent-warn)" }}>{folderModalPath}</strong>?
+                  Are you sure you want to delete the folder <strong style={{ color: "var(--accent-warn)" }}>{folderModal.folderModalPath}</strong>?
                   <br />
                   <span style={{ color: "var(--accent-warn)", fontWeight: "bold" }}>Warning:</span> This will permanently delete the folder and <strong style={{ color: "var(--text-primary)" }}>ALL servers</strong> inside it.
                 </p>
                 <div className="form-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setFolderModalOpen(false)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ backgroundColor: "var(--accent-warn)", border: "none" }}
-                    onClick={async () => {
-                      await handleDeleteFolder(folderModalPath);
-                      setFolderModalOpen(false);
-                    }}
-                  >
-                    Delete Folder & Servers
-                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => folderModal.setFolderModalOpen(false)}>Cancel</button>
+                  <button type="button" className="btn btn-primary" style={{ backgroundColor: "var(--accent-warn)", border: "none" }} onClick={folderModal.handleDeleteSubmit}>Delete Folder & Servers</button>
                 </div>
               </div>
             ) : (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (folderModalMode === 'create') {
-                    const newPath = folderModalParent
-                      ? `${folderModalParent}/${folderModalName.trim()}`
-                      : folderModalName.trim();
-                    
-                    if (!folderModalName.trim()) return;
-
-                    if (customFolders.includes(newPath) || servers.some(s => s.folder_path === newPath || s.folder_path.startsWith(newPath + "/"))) {
-                      alert("Folder already exists!");
-                      return;
-                    }
-
-                    await saveCustomFolders([...customFolders, newPath]);
-                  } else {
-                    // Rename mode
-                    const parts = folderModalPath.split('/');
-                    parts[parts.length - 1] = folderModalName.trim();
-                    const newPath = parts.join('/');
-
-                    if (!folderModalName.trim()) return;
-
-                    if (folderModalPath !== newPath) {
-                      if (customFolders.includes(newPath) || servers.some(s => s.folder_path === newPath || s.folder_path.startsWith(newPath + "/"))) {
-                        alert("A folder with that name already exists in this location!");
-                        return;
-                      }
-                      await handleRenameFolder(folderModalPath, newPath);
-                    }
-                  }
-                  setFolderModalOpen(false);
-                }}
-                style={{ display: "flex", flexDirection: "column", gap: "12px" }}
-              >
-                {folderModalMode === 'create' && (
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    Creating under: <strong>{folderModalParent || "Root"}</strong>
-                  </div>
-                )}
-                {folderModalMode === 'rename' && (
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    Renaming: <strong>{folderModalPath}</strong>
-                  </div>
-                )}
-
+              <form onSubmit={folderModal.folderModalMode === 'create' ? folderModal.handleCreateFolder : folderModal.handleRenameSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {folderModal.folderModalMode === 'create' && <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Creating under: <strong>{folderModal.folderModalParent || "Root"}</strong></div>}
+                {folderModal.folderModalMode === 'rename' && <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Renaming: <strong>{folderModal.folderModalPath}</strong></div>}
                 <div className="input-group">
                   <label className="input-label">Folder Name</label>
-                  <input
-                    type="text"
-                    className="text-input"
-                    value={folderModalName}
-                    onChange={(e) => setFolderModalName(e.target.value)}
-                    required
-                    placeholder="e.g. Production"
-                    autoFocus
-                  />
+                  <input type="text" className="text-input" value={folderModal.folderModalName} onChange={(e) => folderModal.setFolderModalName(e.target.value)} required placeholder="e.g. Production" autoFocus />
                 </div>
-
                 <div className="form-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setFolderModalOpen(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    {folderModalMode === 'create' ? "Create Folder" : "Rename Folder"}
-                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => folderModal.setFolderModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">{folderModal.folderModalMode === 'create' ? "Create Folder" : "Rename Folder"}</button>
                 </div>
               </form>
             )}

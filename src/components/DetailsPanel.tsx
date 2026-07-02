@@ -113,11 +113,8 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
 
       // Auto-clear clipboard after 15 seconds
       timerRef.current = window.setTimeout(async () => {
-        const currentClipboard = await navigator.clipboard.readText();
-        if (currentClipboard === plain) {
-          await navigator.clipboard.writeText("");
-          setCopyingPassword(false);
-        }
+        await navigator.clipboard.writeText("").catch(() => {});
+        setCopyingPassword(false);
         timerRef.current = null;
       }, 15000);
     } catch (err) {

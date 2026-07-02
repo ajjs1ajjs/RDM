@@ -1,6 +1,14 @@
 # Logs
 logs
 *.log
+cargo_check.*
+
+# Build output
+BUILD/
+dist-portable/
+
+# AI editor
+.claude/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

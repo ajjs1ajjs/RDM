@@ -3,7 +3,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use rand::{thread_rng, RngCore};
+use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,7 +28,7 @@ pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<EncryptedData, 
         .map_err(|e| format!("Cipher initialization error: {}", e))?;
     
     let mut nonce_bytes = [0u8; 12]; // 12-byte nonce for AES-GCM
-    thread_rng().fill_bytes(&mut nonce_bytes);
+    OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher

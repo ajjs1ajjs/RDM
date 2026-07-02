@@ -43,6 +43,7 @@ export const MasterPassword: React.FC<MasterPasswordProps> = ({ onUnlock }) => {
     setError("");
     try {
       await invoke("setup_master_password", { password });
+      setPassword("");
       onUnlock();
     } catch (err: any) {
       setError(err.toString());
@@ -60,6 +61,7 @@ export const MasterPassword: React.FC<MasterPasswordProps> = ({ onUnlock }) => {
     try {
       const success = await invoke<boolean>("unlock_vault", { password });
       if (success) {
+        setPassword("");
         onUnlock();
       } else {
         setError("Invalid master password");

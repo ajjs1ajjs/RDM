@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Server } from "../types";
 import { Plus, Search, Play, Edit3, Trash2, Monitor, Terminal, Star, HardDrive } from "lucide-react";
 
@@ -37,9 +37,7 @@ export const ServerTable: React.FC<ServerTableProps> = ({
 }) => {
   const [search, setSearch] = useState<string>("");
 
-  // Filter servers
-  const filteredServers = servers.filter((s) => {
-    // 1. Search term match
+  const filteredServers = useMemo(() => servers.filter((s) => {
     const term = search.toLowerCase();
     const matchesSearch =
       !search ||
@@ -50,10 +48,8 @@ export const ServerTable: React.FC<ServerTableProps> = ({
       s.protocol.toLowerCase().includes(term) ||
       s.os.toLowerCase().includes(term);
 
-    // 2. Folder match
     const matchesFolder = !selectedFolder || s.folder_path === selectedFolder || s.folder_path.startsWith(selectedFolder + "/");
 
-    // 3. Tag match
     const matchesTag =
       !selectedTag ||
       s.tags
@@ -62,7 +58,7 @@ export const ServerTable: React.FC<ServerTableProps> = ({
         .includes(selectedTag.toLowerCase());
 
     return matchesSearch && matchesFolder && matchesTag;
-  });
+  }), [servers, search, selectedFolder, selectedTag]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>

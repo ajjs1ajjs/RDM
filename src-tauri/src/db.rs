@@ -52,6 +52,12 @@ pub struct ConnectionHistory {
 }
 
 fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, rusqlite::Error> {
+    // Validate table name against whitelist to prevent SQL injection
+    if table != "servers" {
+        return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid table name")
+        )));
+    }
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {

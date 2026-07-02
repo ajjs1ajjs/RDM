@@ -10,7 +10,14 @@ pub struct TempKeyGuard {
 impl Drop for TempKeyGuard {
     fn drop(&mut self) {
         if let Some(ref path) = self.path {
-            let _ = std::fs::remove_file(path);
+            if path.exists() {
+                // Overwrite with zeros before deletion
+                if let Ok(mut f) = std::fs::File::create(path) {
+                    use std::io::Write;
+                    let _ = f.write_all(&[0u8; 4096]);
+                }
+                let _ = std::fs::remove_file(path);
+            }
         }
     }
 }
@@ -22,15 +29,19 @@ pub fn run_ssh_command_sync(
     password: Option<&str>,
     private_key: Option<&str>,
 ) -> Result<String, String> {
+    // Clean up any stale temp keys from previous crashes
+    let keys_dir = app_data_dir.join("temp_keys");
+    let _ = std::fs::remove_dir_all(&keys_dir);
     let mut _key_guard = None;
     let mut actual_args = vec![];
     
     // We add common ssh options to prevent hanging on prompts
     if cmd_name == "ssh" || cmd_name == "scp" {
+        let known_hosts = app_data_dir.join("known_hosts");
         actual_args.push("-o".to_string());
-        actual_args.push("StrictHostKeyChecking=no".to_string());
+        actual_args.push("StrictHostKeyChecking=accept-new".to_string());
         actual_args.push("-o".to_string());
-        actual_args.push("UserKnownHostsFile=/dev/null".to_string());
+        actual_args.push(format!("UserKnownHostsFile={}", known_hosts.display()));
         actual_args.push("-o".to_string());
         actual_args.push("BatchMode=no".to_string());
     }

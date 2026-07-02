@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Server } from "../types";
 import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Terminal, Tag, ChevronDown, ChevronRight, Star, Plus, Edit2, Trash2 } from "lucide-react";
 
@@ -95,20 +95,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return root;
   };
 
-  const folderTree = buildFolderTree(servers, customFolders);
+  const folderTree = useMemo(() => buildFolderTree(servers, customFolders), [servers, customFolders]);
 
-  // 2. Extract all unique tags
-  const extractTags = (serversList: Server[]): string[] => {
+  const tags = useMemo(() => {
     const tagsSet = new Set<string>();
-    serversList.forEach((s) => {
+    servers.forEach((s) => {
       if (s.tags) {
         s.tags.split(",").map(t => t.trim()).filter(Boolean).forEach(t => tagsSet.add(t));
       }
     });
     return Array.from(tagsSet).sort();
-  };
-
-  const tags = extractTags(servers);
+  }, [servers]);
 
   const toggleFolder = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();

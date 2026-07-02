@@ -16,7 +16,14 @@ pub struct TempKeyGuard {
 impl Drop for TempKeyGuard {
     fn drop(&mut self) {
         if let Some(ref path) = self.path {
-            let _ = std::fs::remove_file(path);
+            if path.exists() {
+                // Overwrite with zeros before deletion to prevent forensic recovery
+                if let Ok(mut f) = std::fs::File::create(path) {
+                    use std::io::Write;
+                    let _ = f.write_all(&[0u8; 4096]);
+                }
+                let _ = std::fs::remove_file(path);
+            }
         }
     }
 }
@@ -67,11 +74,19 @@ pub fn connect_ssh(
         return Err("Username and hostname cannot contain spaces".to_string());
     }
 
+    // Clean up any stale temp keys from previous crashes
+    if let Ok(app_dir) = app.path().app_data_dir() {
+        let keys_dir = app_dir.join("temp_keys");
+        let _ = std::fs::remove_dir_all(&keys_dir);
+    }
+
     let mut key_guard = None;
     let mut temp_key_path = None;
+    let app_data_dir = app.path().app_data_dir().unwrap();
+    let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
-        "-o".to_string(), "StrictHostKeyChecking=no".to_string(),
-        "-o".to_string(), "UserKnownHostsFile=/dev/null".to_string(),
+        "-o".to_string(), "StrictHostKeyChecking=accept-new".to_string(),
+        "-o".to_string(), format!("UserKnownHostsFile={}", known_hosts.display()),
         "-p".to_string(), port.to_string(),
     ];
 
@@ -164,8 +179,9 @@ pub fn connect_ssh(
                         if let Some(ref pass) = password_clone {
                             if !password_sent && (lower.contains("password:") || lower.contains("password for")) {
                                 thread::sleep(Duration::from_millis(150)); // Wait for ssh to stabilize prompt
-                                let mut wr = writer_clone.lock().unwrap();
-                                let _ = write!(wr, "{}\r", pass);
+                                if let Ok(mut wr) = writer_clone.lock() {
+                                    let _ = write!(wr, "{}\r", pass);
+                                }
                                 password_sent = true;
                                 output_accumulated.clear();
                             }
@@ -174,8 +190,9 @@ pub fn connect_ssh(
                         if let Some(ref phrase) = passphrase_clone {
                             if !passphrase_sent && (lower.contains("passphrase") || lower.contains("enter passphrase")) {
                                 thread::sleep(Duration::from_millis(150));
-                                let mut wr = writer_clone.lock().unwrap();
-                                let _ = write!(wr, "{}\r", phrase);
+                                if let Ok(mut wr) = writer_clone.lock() {
+                                    let _ = write!(wr, "{}\r", phrase);
+                                }
                                 passphrase_sent = true;
                                 output_accumulated.clear();
                             }
@@ -202,27 +219,29 @@ pub fn connect_ssh(
 
         if let Some(ref srv_id) = server_id_clone {
             if let Some(db_state) = app_clone.try_state::<crate::DbState>() {
-                let conn = db_state.conn.lock().unwrap();
-                let hist = crate::db::ConnectionHistory {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    server_id: srv_id.clone(),
-                    timestamp: String::new(),
-                    status: "disconnected".to_string(),
-                    log: "SSH connection closed".to_string(),
-                };
-                let _ = crate::db::add_history(&conn, &hist);
+                if let Ok(conn) = db_state.conn.lock() {
+                    let hist = crate::db::ConnectionHistory {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        server_id: srv_id.clone(),
+                        timestamp: String::new(),
+                        status: "disconnected".to_string(),
+                        log: "SSH connection closed".to_string(),
+                    };
+                    let _ = crate::db::add_history(&conn, &hist);
+                }
             }
         }
 
         if let Some(state) = app_clone.try_state::<SshState>() {
-            let mut sessions = state.sessions.lock().unwrap();
-            sessions.remove(&session_id_clone);
+            if let Ok(mut sessions) = state.sessions.lock() {
+                sessions.remove(&session_id_clone);
+            }
         }
     });
 
     // Store in global state
     if let Some(state) = app.try_state::<SshState>() {
-        let mut sessions = state.sessions.lock().unwrap();
+        let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(
             session_id,
             SshSession {
@@ -242,12 +261,12 @@ pub fn write_ssh_input(
     session_id: &str,
     data: &str,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     let session = sessions
         .get(session_id)
         .ok_or_else(|| format!("SSH Session not found: {}", session_id))?;
 
-    let mut writer = session.writer.lock().unwrap();
+    let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
     writer.write_all(data.as_bytes())
         .map_err(|e| format!("Failed to write to SSH session: {}", e))?;
     writer.flush()
@@ -261,12 +280,12 @@ pub fn resize_ssh_pty(
     cols: u32,
     rows: u32,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     let session = sessions
         .get(session_id)
         .ok_or_else(|| format!("SSH Session not found: {}", session_id))?;
 
-    let master = session.master.lock().unwrap();
+    let master = session.master.lock().map_err(|e| e.to_string())?;
     master.resize(PtySize {
         rows: rows as u16,
         cols: cols as u16,
@@ -281,7 +300,7 @@ pub fn disconnect_ssh_session(
     state: &SshState,
     session_id: &str,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     if let Some(session) = sessions.remove(session_id) {
         // Drop the master pty handle, which automatically kills the spawned child process on Windows/Unix
         drop(session.master);

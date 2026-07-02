@@ -40,7 +40,7 @@ windows-core = "0.58"
 windows-interface = { version = "0.58" }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 base64 = "0.22"
-rdp-rs-2 = "0.1.2"
+rdp-rs-2 = { path = "vendor/rdp-rs-2" }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

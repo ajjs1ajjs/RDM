@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::process::Command;
+use std::sync::{Arc, Mutex, mpsc};
 use std::net::TcpStream;
 use std::time::Duration;
 use tauri::{Manager, Emitter};
 use serde::Serialize;
 use base64::Engine;
-use image::{ImageEncoder, ColorType};
-use image::codecs::jpeg::JpegEncoder;
+// No image crate imports needed since we use raw RGBA pixels
 
 // Import rdp-rs-2 types
 use rdp::core::client::Connector;
@@ -28,6 +26,8 @@ pub struct RdpSession {
 pub struct RdpFramePayload {
     pub session_id: String,
     pub data: String,
+    pub x: i32,
+    pub y: i32,
     pub width: i32,
     pub height: i32,
 }
@@ -149,7 +149,7 @@ pub fn launch_rdp_session(
     port: u32,
     fullscreen: bool,
     username: Option<&str>,
-    password: Option<&str>,
+    _password: Option<&str>,
     app_data_dir: PathBuf,
     server_id: Option<String>,
     rdp_clipboard: bool,
@@ -166,20 +166,6 @@ pub fn launch_rdp_session(
     } else {
         format!("{}:{}", host, port)
     };
-
-    if let (Some(user), Some(pass)) = (username, password) {
-        let target = format!("TERMSRV/{}", host);
-        let _ = Command::new("cmdkey")
-            .args(&[&format!("/generic:{}", target), &format!("/user:{}", user), &format!("/pass:{}", pass)])
-            .status();
-
-        if port != 3389 && port != 0 {
-            let target2 = format!("TERMSRV/{}:{}", host, port);
-            let _ = Command::new("cmdkey")
-                .args(&[&format!("/generic:{}", target2), &format!("/user:{}", user), &format!("/pass:{}", pass)])
-                .status();
-        }
-    }
 
     let rdp_sessions_dir = app_data_dir.join("rdp_sessions");
     let _ = std::fs::create_dir_all(&rdp_sessions_dir);
@@ -284,13 +270,14 @@ pub fn launch_rdp_embedded(
 
     let username_str = username.unwrap_or("").to_string();
     let password_str = password.unwrap_or("").to_string();
+    let hostname = host.to_string();
 
     let (tx_event, rx_event) = std::sync::mpsc::channel::<RdpEvent>();
     let running = Arc::new(AtomicBool::new(true));
 
     {
         let state = app.state::<RdpState>();
-        let mut sessions = state.sessions.lock().unwrap();
+        let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(
             session_id.clone(),
             RdpSession {
@@ -312,28 +299,6 @@ pub fn launch_rdp_embedded(
         let app_data_dir = app_clone.path().app_data_dir().unwrap_or_default();
         log_debug(&app_data_dir, &format!("Connecting pure Rust RDP client to {}", host_addr));
 
-        let tcp = match TcpStream::connect(&host_addr) {
-            Ok(s) => s,
-            Err(e) => {
-                log_debug(&app_data_dir, &format!("Failed to connect TCP: {:?}", e));
-                let _ = app_clone.emit("rdp-closed", &session_id_clone);
-                return;
-            }
-        };
-
-        // Set handshake read/write timeouts of 10 seconds to prevent hanging forever
-        let _ = tcp.set_read_timeout(Some(Duration::from_secs(10)));
-        let _ = tcp.set_write_timeout(Some(Duration::from_secs(10)));
-
-        let socket_control = match tcp.try_clone() {
-            Ok(s) => s,
-            Err(e) => {
-                log_debug(&app_data_dir, &format!("Failed to clone socket: {:?}", e));
-                let _ = app_clone.emit("rdp-closed", &session_id_clone);
-                return;
-            }
-        };
-
         // Parse domain from username if present (e.g. "DOMAIN\user")
         let mut domain_str = String::new();
         let mut username_clean = username_str.clone();
@@ -342,34 +307,163 @@ pub fn launch_rdp_embedded(
             username_clean = username_clean[pos + 1..].to_string();
         }
 
-        // Disable NLA if username is empty, allowing fallback to remote login screen
-        let use_nla = !username_clean.is_empty();
-        log_debug(&app_data_dir, &format!("RDP client options: domain='{}', username='{}', use_nla={}", domain_str, username_clean, use_nla));
+        // Determine NLA preference: try NLA first if we have credentials
+        let prefer_nla = !username_clean.is_empty();
+        log_debug(&app_data_dir, &format!("RDP client options: domain='{}', username='{}', prefer_nla={}", domain_str, username_clean, prefer_nla));
 
-        let mut connector = Connector::new()
-            .screen(width as u16, height as u16)
-            .credentials(domain_str, username_clean, password_str)
-            .check_certificate(false)
-            .use_nla(use_nla);
+        // Retry loop: try 4 combinations (NLA on/off × cert check on/off)
+        // to handle servers with self-signed certs or non-standard NLA config
+        let mut phase = 0u32;
+        let (mut client, socket_control) = loop {
+            let (use_nla, check_cert) = match phase {
+                0 => (prefer_nla, true),
+                1 => (prefer_nla, false),
+                2 => (!prefer_nla, true),
+                3 => (!prefer_nla, false),
+                _ => {
+                    log_debug(&app_data_dir, "Embedded RDP failed after all retries, auto-launching external mstsc.exe...");
+                    let _ = app_clone.emit("rdp-closed", &session_id_clone);
 
-        let mut client = match connector.connect(tcp) {
-            Ok(c) => c,
-            Err(e) => {
-                log_debug(&app_data_dir, &format!("RDP connection handshake failed: {:?}", e));
-                let _ = app_clone.emit("rdp-closed", &session_id_clone);
-                return;
+                    let rdp_sessions_dir = app_data_dir.join("rdp_sessions");
+                    let _ = std::fs::create_dir_all(&rdp_sessions_dir);
+                    let file_name = format!("session_auto-{}-{}.rdp", server_id.clone().unwrap_or_default(), uuid::Uuid::new_v4());
+                    let rdp_file_path = rdp_sessions_dir.join(file_name);
+                    let user_line = if username_str.is_empty() { String::new() } else { format!("username:s:{}\r\n", username_str) };
+                    let rdp_content = format!(
+                        "full address:s:{}\r\n{}\
+                         screen mode id:i:1\r\nsmart sizing:i:1\r\n\
+                         dynamic resolution:i:1\r\nredirectclipboard:i:1\r\n\
+                         authentication level:i:0\r\ndisplayconnectionbar:i:1\r\n",
+                        host_addr, user_line
+                    );
+                    let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
+                        .chain(rdp_content.encode_utf16())
+                        .collect();
+                    let rdp_content_bytes: &[u8] = unsafe {
+                        std::slice::from_raw_parts(
+                            rdp_content_utf16.as_ptr() as *const u8,
+                            rdp_content_utf16.len() * 2,
+                        )
+                    };
+                    let _ = std::fs::write(&rdp_file_path, rdp_content_bytes);
+                    let _ = std::process::Command::new("mstsc")
+                        .arg(rdp_file_path.to_string_lossy().to_string())
+                        .spawn();
+                    return;
+                }
+            };
+            phase += 1;
+
+            let tcp = match TcpStream::connect(&host_addr) {
+                Ok(s) => s,
+                Err(e) => {
+                    log_debug(&app_data_dir, &format!("Failed to connect TCP: {:?}", e));
+                    continue;
+                }
+            };
+            let _ = tcp.set_read_timeout(Some(Duration::from_secs(10)));
+            let _ = tcp.set_write_timeout(Some(Duration::from_secs(10)));
+
+            let socket_control = match tcp.try_clone() {
+                Ok(s) => s,
+                Err(e) => {
+                    log_debug(&app_data_dir, &format!("Failed to clone socket: {:?}", e));
+                    continue;
+                }
+            };
+
+            log_debug(&app_data_dir, &format!("Attempting RDP with use_nla={}, check_cert={}", use_nla, check_cert));
+            let mut connector = Connector::new()
+                .screen(width as u16, height as u16)
+                .credentials(domain_str.clone(), username_clean.clone(), password_str.clone())
+                .check_certificate(check_cert)
+                .use_nla(use_nla)
+                .hostname(hostname.clone());
+
+            // Run connect on a separate thread with a 20-second timeout
+            // to avoid hangs with SChannel + danger_accept_invalid_certs
+            let (tx_connect, rx_connect) = mpsc::channel();
+            std::thread::spawn(move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    connector.connect(tcp)
+                }));
+                let _ = tx_connect.send(match result {
+                    Ok(Ok(c)) => Ok(c),
+                    Ok(Err(e)) => Err(e),
+                    Err(panic_payload) => {
+                        let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                            s.clone()
+                        } else {
+                            "unknown panic".to_string()
+                        };
+                        Err(rdp::model::error::Error::RdpError(rdp::model::error::RdpError::new(
+                            rdp::model::error::RdpErrorKind::ProtocolNegFailure,
+                            &format!("Panic: {}", msg)
+                        )))
+                    }
+                });
+            });
+
+            match rx_connect.recv_timeout(Duration::from_secs(20)) {
+                Ok(Ok(c)) => break (c, socket_control),
+                Ok(Err(e)) => {
+                    log_debug(&app_data_dir, &format!("RDP connection with use_nla={}, check_cert={} failed: {:?}", use_nla, check_cert, e));
+                    continue;
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    log_debug(&app_data_dir, &format!("RDP connection with use_nla={}, check_cert={} timed out after 20s", use_nla, check_cert));
+                    continue;
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    log_debug(&app_data_dir, &format!("RDP connection with use_nla={}, check_cert={} thread panicked", use_nla, check_cert));
+                    continue;
+                }
             }
         };
 
         log_debug(&app_data_dir, "RDP Handshake completed successfully!");
 
-        if let Err(e) = socket_control.set_read_timeout(Some(Duration::from_millis(15))) {
+        if let Err(e) = socket_control.set_read_timeout(Some(Duration::from_millis(1))) {
             log_debug(&app_data_dir, &format!("Failed to set socket read timeout: {:?}", e));
         }
 
-        let mut main_frame = vec![0u8; (width as usize) * (height as usize) * 3];
-        let mut dirty = false;
-        let mut last_emit = std::time::Instant::now();
+        // Spawn a background thread to handle JPEG compression and Tauri emission.
+        // This offloads heavy work from the RDP network read thread, avoiding TCP backlog.
+        let (tx_frame, rx_frame) = mpsc::channel::<(usize, usize, i32, i32, Vec<u8>)>();
+        let app_worker = app_clone.clone();
+        let session_id_worker = session_id_clone.clone();
+        let running_worker = running_clone.clone();
+        
+        std::thread::spawn(move || {
+            while running_worker.load(Ordering::SeqCst) {
+                match rx_frame.recv_timeout(Duration::from_millis(100)) {
+                    Ok((rect_w, rect_h, dest_left, dest_top, mut decompressed_data)) => {
+                        // Ensure opaque alpha; BGRA→RGBA conversion is done on frontend via canvas
+                        let count = (rect_w * rect_h * 4).min(decompressed_data.len());
+                        let mut i = 3;
+                        while i < count {
+                            decompressed_data[i] = 255;
+                            i += 4;
+                        }
+
+                        let encoded = base64::engine::general_purpose::STANDARD.encode(&decompressed_data);
+                        let payload = RdpFramePayload {
+                            session_id: session_id_worker.clone(),
+                            data: encoded,
+                            x: dest_left,
+                            y: dest_top,
+                            width: rect_w as i32,
+                            height: rect_h as i32,
+                        };
+                        let _ = app_worker.emit("rdp-frame", &payload);
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        });
 
         while running_clone.load(Ordering::SeqCst) {
             // A. Process outgoing input events
@@ -385,106 +479,60 @@ pub fn launch_rdp_embedded(
                     RdpEvent::Bitmap(bitmap) => {
                         let rect_w = bitmap.width as usize;
                         let rect_h = bitmap.height as usize;
-                        let dest_left = bitmap.dest_left as usize;
-                        let dest_top = bitmap.dest_top as usize;
-                        let is_compress = bitmap.is_compress;
+                        let dest_left = bitmap.dest_left as i32;
+                        let dest_top = bitmap.dest_top as i32;
 
-                        let decompressed_data = if is_compress {
-                            match bitmap.decompress() {
-                                Ok(d) => d,
-                                Err(e) => {
-                                    log_debug(&app_data_dir, &format!("Decompression failed: {:?}", e));
-                                    return;
-                                }
-                            }
-                        } else {
-                            bitmap.data
-                        };
-
-                        for row in 0..rect_h {
-                            let src_y = row;
-                            let dest_y = dest_top + row;
-                            if dest_y >= height as usize {
-                                continue;
-                            }
-                            for col in 0..rect_w {
-                                let dest_x = dest_left + col;
-                                if dest_x >= width as usize {
-                                    continue;
-                                }
-                                let src_idx = (src_y * rect_w + col) * 4;
-                                let dest_idx = (dest_y * (width as usize) + dest_x) * 3;
-
-                                if src_idx + 2 < decompressed_data.len() && dest_idx + 2 < main_frame.len() {
-                                    let b = decompressed_data[src_idx];
-                                    let g = decompressed_data[src_idx + 1];
-                                    let r = decompressed_data[src_idx + 2];
-
-                                    main_frame[dest_idx] = r;
-                                    main_frame[dest_idx + 1] = g;
-                                    main_frame[dest_idx + 2] = b;
-                                }
-                            }
+                        if rect_w == 0 || rect_h == 0 {
+                            return;
                         }
-                        dirty = true;
+
+                        if let Ok(decompressed_data) = bitmap.decompress() {
+                            let _ = tx_frame.send((rect_w, rect_h, dest_left, dest_top, decompressed_data));
+                        }
                     }
                     _ => {}
                 }
             });
 
             // C. Handle error/timeout
+            let mut did_timeout = false;
             match read_ok {
                 Ok(_) => {}
                 Err(rdp::model::error::Error::Io(ref e)) 
                     if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
-                    // Normal timeout
+                    did_timeout = true;
                 }
                 Err(e) => {
                     log_debug(&app_data_dir, &format!("Error in client read loop: {:?}", e));
                     break;
                 }
             }
-
-            // D. Emit frame to canvas
-            if dirty && last_emit.elapsed() >= Duration::from_millis(70) {
-                let mut jpeg_bytes = Vec::new();
-                let mut cursor = std::io::Cursor::new(&mut jpeg_bytes);
-                let encoder = JpegEncoder::new_with_quality(&mut cursor, 70);
-                if let Ok(_) = encoder.write_image(&main_frame, width as u32, height as u32, ColorType::Rgb8.into()) {
-                    let encoded = base64::engine::general_purpose::STANDARD.encode(&jpeg_bytes);
-                    let payload = RdpFramePayload {
-                        session_id: session_id_clone.clone(),
-                        data: encoded,
-                        width,
-                        height,
-                    };
-                    let _ = app_clone.emit("rdp-frame", &payload);
-                }
-                dirty = false;
-                last_emit = std::time::Instant::now();
+ 
+            if did_timeout {
+                std::thread::sleep(Duration::from_millis(1));
             }
-
-            std::thread::sleep(Duration::from_millis(2));
         }
 
         log_debug(&app_data_dir, &format!("Cleaning up session {}", session_id_clone));
         {
             let state = app_clone.state::<RdpState>();
-            let mut sessions = state.sessions.lock().unwrap();
-            sessions.remove(&session_id_clone);
+            if let Ok(mut sessions) = state.sessions.lock() {
+                sessions.remove(&session_id_clone);
+            };
         }
 
         if let Some(ref srv_id) = server_id {
             if let Some(db_state) = app_clone.try_state::<crate::DbState>() {
-                let conn = db_state.conn.lock().unwrap();
-                let hist = crate::db::ConnectionHistory {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    server_id: srv_id.clone(),
-                    timestamp: String::new(),
-                    status: "disconnected".to_string(),
-                    log: "Embedded pure Rust RDP session disconnected".to_string(),
-                };
-                let _ = crate::db::add_history(&conn, &hist);
+                if let Ok(conn) = db_state.conn.lock() {
+                    let hist = crate::db::ConnectionHistory {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        server_id: srv_id.clone(),
+                        timestamp: String::new(),
+                        status: "disconnected".to_string(),
+                        log: "Embedded pure Rust RDP session disconnected".to_string(),
+                    };
+                    let _ = crate::db::add_history(&conn, &hist);
+                }
             }
         }
 
@@ -517,7 +565,7 @@ pub fn send_rdp_mouse(
     state: &RdpState,
 ) -> Result<(), String> {
     let tx_event = {
-        let sessions = state.sessions.lock().unwrap();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions.get(session_id)
             .ok_or_else(|| "RDP session not found".to_string())?
             .tx_event
@@ -550,7 +598,7 @@ pub fn send_rdp_mouse(
 
 pub fn send_rdp_key(session_id: &str, vk: u16, key_up: bool, state: &RdpState) -> Result<(), String> {
     let tx_event = {
-        let sessions = state.sessions.lock().unwrap();
+        let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions.get(session_id)
             .ok_or_else(|| "RDP session not found".to_string())?
             .tx_event
@@ -576,7 +624,7 @@ pub fn disconnect_rdp_embedded(
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
     log_debug(&app_data_dir, &format!("disconnect_rdp_embedded called for session {}", session_id));
 
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     if let Some(session) = sessions.remove(session_id) {
         session.running.store(false, Ordering::SeqCst);
     }
