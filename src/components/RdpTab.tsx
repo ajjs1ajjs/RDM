@@ -30,6 +30,7 @@ export const RdpTab: React.FC<RdpTabProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const workerRef = useRef<Worker | null>(null);
   const [connected, setConnected] = useState(false);
   const [closed, setClosed] = useState(false);
   const [loadingStep, setLoadingStep] = useState("Initializing connection...");
@@ -37,45 +38,10 @@ export const RdpTab: React.FC<RdpTabProps> = ({
   const [frameCountText, setFrameCountText] = useState("");
   const frameCountRef = useRef(0);
   const frameCountTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const queuedFramesRef = useRef<RdpFramePayload[]>([]);
-  const rAFIdRef = useRef(0);
   const connectedRef = useRef(false);
   const remoteSize = useRef({ width: 0, height: 0 });
   const lastMouseMoveTime = useRef(0);
   const lastMouseMoveCoords = useRef({ x: -1, y: -1 });
-
-  // rAF render loop — coalesces queued frames into one composite per vsync
-  const processFrameQueue = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const frames = queuedFramesRef.current;
-    queuedFramesRef.current = [];
-
-    for (const payload of frames) {
-      try {
-        const binaryString = atob(payload.data);
-        const len = binaryString.length;
-        const bytes = new Uint8ClampedArray(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const imageData = new ImageData(bytes, payload.width, payload.height);
-        // Swap BGR→RGB channels inline (BGRA from rdp-rs)
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const r = imageData.data[i];
-          imageData.data[i] = imageData.data[i + 2];
-          imageData.data[i + 2] = r;
-        }
-        ctx.putImageData(imageData, payload.x, payload.y);
-      } catch (_) {}
-    }
-    if (frames.length > 0) {
-      frameCountRef.current += frames.length;
-    }
-  };
 
   useEffect(() => {
     const steps = [
@@ -134,14 +100,27 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       resizeTimer = setTimeout(() => doResizeIpc(width, height, dpr), 150);
     };
 
+    // Spawn the OffscreenCanvas worker — all frame decoding + canvas rendering
+    // happens off the main thread so the UI stays responsive.
+    const worker = new Worker(
+      new URL("../workers/rdpRenderer.worker.ts", import.meta.url),
+      { type: "module" }
+    );
+    workerRef.current = worker;
+    worker.addEventListener("message", (e: MessageEvent) => {
+      if (e.data?.type === "rendered") {
+        frameCountRef.current = e.data.count;
+      }
+    });
+
     const startRdp = async () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !canvasRef.current) return;
 
       let rect = containerRef.current.getBoundingClientRect();
       for (let i = 0; i < 30; i++) {
         if (rect.width > 100 && rect.height > 100) break;
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (!active || !containerRef.current) return;
+        if (!active || !containerRef.current || !canvasRef.current) return;
         rect = containerRef.current.getBoundingClientRect();
       }
       if (!active) return;
@@ -152,6 +131,13 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       if (finalHeight < 100) finalHeight = 600;
 
       const dpr = window.devicePixelRatio || 1.0;
+
+      // Transfer canvas to worker thread
+      const offscreen = canvasRef.current.transferControlToOffscreen();
+      offscreen.width = finalWidth;
+      offscreen.height = finalHeight;
+      worker.postMessage({ type: "init", canvas: offscreen }, [offscreen]);
+
       try {
         await invoke("connect_rdp_embedded", {
           sessionId: sid,
@@ -164,11 +150,6 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           devicePixelRatio: dpr,
         });
         remoteSize.current = { width: finalWidth, height: finalHeight };
-        const canvas = canvasRef.current;
-        if (canvas) {
-          canvas.width = finalWidth;
-          canvas.height = finalHeight;
-        }
       } catch (err: any) {
         console.error("Failed to connect RDP:", err);
         alert(`RDP Error: ${err}`);
@@ -188,13 +169,8 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           connectedRef.current = true;
           setConnected(true);
         }
-        queuedFramesRef.current.push(event.payload);
-        if (!rAFIdRef.current) {
-          rAFIdRef.current = requestAnimationFrame(() => {
-            rAFIdRef.current = 0;
-            processFrameQueue();
-          });
-        }
+        // Forward to worker — non-blocking, fires-and-forgets
+        worker.postMessage({ type: "frame", payload: event.payload });
       }).catch(() => () => {}),
       listen<string>("rdp-closed", (event) => {
         if (event.payload !== sid) return;
@@ -207,10 +183,8 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       if (resizeTimer) clearTimeout(resizeTimer);
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
-      if (rAFIdRef.current) {
-        cancelAnimationFrame(rAFIdRef.current);
-        rAFIdRef.current = 0;
-      }
+      worker.terminate();
+      workerRef.current = null;
       Promise.all(unlistenPromises).then((fns) => fns.forEach((fn) => fn()));
       invoke("disconnect_rdp_embedded", { sessionId: sid }).catch((err) =>
         console.error("RDP disconnect error:", err)

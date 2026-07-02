@@ -429,8 +429,8 @@ pub fn launch_rdp_embedded(
             log_debug(&app_data_dir, &format!("Failed to set socket read timeout: {:?}", e));
         }
 
-        // Spawn a background thread to handle JPEG compression and Tauri emission.
-        // This offloads heavy work from the RDP network read thread, avoiding TCP backlog.
+        // Spawn a background thread to encode and emit frames to frontend.
+        // Drains all pending frames each cycle to minimize IPC latency.
         let (tx_frame, rx_frame) = mpsc::channel::<(usize, usize, i32, i32, Vec<u8>)>();
         let app_worker = app_clone.clone();
         let session_id_worker = session_id_clone.clone();
@@ -438,26 +438,32 @@ pub fn launch_rdp_embedded(
         
         std::thread::spawn(move || {
             while running_worker.load(Ordering::SeqCst) {
-                match rx_frame.recv_timeout(Duration::from_millis(100)) {
-                    Ok((rect_w, rect_h, dest_left, dest_top, mut decompressed_data)) => {
-                        // Ensure opaque alpha; BGRA→RGBA conversion is done on frontend via canvas
-                        let count = (rect_w * rect_h * 4).min(decompressed_data.len());
-                        let mut i = 3;
-                        while i < count {
-                            decompressed_data[i] = 255;
-                            i += 4;
+                // Wait for at least one frame, then drain all available
+                match rx_frame.recv_timeout(Duration::from_millis(16)) {
+                    Ok(first) => {
+                        let mut batch = vec![first];
+                        while let Ok(next) = rx_frame.try_recv() {
+                            batch.push(next);
                         }
-
-                        let encoded = base64::engine::general_purpose::STANDARD.encode(&decompressed_data);
-                        let payload = RdpFramePayload {
-                            session_id: session_id_worker.clone(),
-                            data: encoded,
-                            x: dest_left,
-                            y: dest_top,
-                            width: rect_w as i32,
-                            height: rect_h as i32,
-                        };
-                        let _ = app_worker.emit("rdp-frame", &payload);
+                        for (rect_w, rect_h, dest_left, dest_top, mut decompressed_data) in batch {
+                            // Only ensure opaque alpha (no BGRA→RGBA swap — done on frontend)
+                            let count = (rect_w * rect_h * 4).min(decompressed_data.len());
+                            let mut i = 3;
+                            while i < count {
+                                decompressed_data[i] = 255;
+                                i += 4;
+                            }
+                            let encoded = base64::engine::general_purpose::STANDARD.encode(&decompressed_data);
+                            let payload = RdpFramePayload {
+                                session_id: session_id_worker.clone(),
+                                data: encoded,
+                                x: dest_left,
+                                y: dest_top,
+                                width: rect_w as i32,
+                                height: rect_h as i32,
+                            };
+                            let _ = app_worker.emit("rdp-frame", &payload);
+                        }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
