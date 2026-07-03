@@ -6,18 +6,31 @@ use tauri::{Manager, Emitter};
 
 use windows::Win32::Foundation::{HWND, LPARAM, BOOL};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, GetClassNameW,
-    SetWindowLongW, GetWindowLongW, ShowWindow, SetWindowPos,
-    GWL_STYLE, GWLP_HWNDPARENT, WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_BORDER, WS_SYSMENU,
+    EnumWindows, EnumChildWindows, GetWindowThreadProcessId, GetClassNameW,
+    SetWindowLongW, SetWindowLongPtrW, GetWindowLongW, ShowWindow, MoveWindow, SetWindowPos,
+    IsWindow, GWL_STYLE, GWLP_HWNDPARENT, SetForegroundWindow,
+    WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_BORDER, WS_SYSMENU,
     WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
-    SW_SHOW, SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP,
+    SW_SHOW, SW_HIDE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP,
 };
+
+struct ChildResizeData {
+    width: i32,
+    height: i32,
+}
+
+unsafe extern "system" fn resize_child_fill(child: HWND, lparam: LPARAM) -> BOOL {
+    let data = &*(lparam.0 as *const ChildResizeData);
+    let _ = MoveWindow(child, 0, 0, data.width, data.height, BOOL(1));
+    BOOL(1)
+}
 
 pub struct RdpSession {
     pub target_host: String,
     pub server_id: Option<String>,
     pub mstsc_hwnd: isize,
     pub pid: u32,
+    pub visible: bool,
 }
 
 pub struct RdpState {
@@ -222,7 +235,16 @@ pub fn launch_rdp_embedded(
             .and_then(|mut c| c.wait());
     }
 
-    // 1. Create RDP file
+    // 1. Compute screen coordinates BEFORE creating RDP file (so winposstr is accurate)
+    let (screen_x, screen_y) = unsafe {
+        use windows::Win32::Graphics::Gdi::ClientToScreen;
+        use windows::Win32::Foundation::POINT;
+        let mut pt = POINT { x: x_phys, y: y_phys };
+        let _ = ClientToScreen(parent_hwnd, &mut pt);
+        (pt.x, pt.y)
+    };
+
+    // 2. Create RDP file with correct winposstr at screen coords
     let rdp_sessions_dir = app_data_dir.join("rdp_sessions");
     let _ = std::fs::create_dir_all(&rdp_sessions_dir);
 
@@ -238,6 +260,8 @@ pub fn launch_rdp_embedded(
     let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
     let audio_val = match rdp_audio { 0 => 0, 1 => 1, 2 => 2, _ => 0 };
     let auth_level = if password.is_some() { 2 } else { 0 };
+    let win_right = screen_x + width_phys;
+    let win_bottom = screen_y + height_phys;
 
     let rdp_content = format!(
         "full address:s:{}\r\n\
@@ -273,7 +297,7 @@ pub fn launch_rdp_embedded(
         auth_level,
         if password.is_some() { 1 } else { 0 },
         width_phys, height_phys,
-        0, 0, width_phys, height_phys,
+        screen_x, screen_y, win_right, win_bottom,
     );
 
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
@@ -289,9 +313,9 @@ pub fn launch_rdp_embedded(
         .map_err(|e| format!("Failed to write RDP file: {}", e))?;
 
     let fp = rdp_file_path.to_string_lossy().to_string();
-    log_debug(&app_data_dir, &format!("RDP file created: {}", fp));
+    log_debug(&app_data_dir, &format!("RDP file created with winposstr {} {} {} {}", screen_x, screen_y, win_right, win_bottom));
 
-    // 2. Launch mstsc.exe
+    // 3. Launch mstsc.exe (creates its window at correct screen coords via winposstr)
     let mut child = std::process::Command::new("mstsc")
         .arg(&fp)
         .spawn()
@@ -300,7 +324,7 @@ pub fn launch_rdp_embedded(
     let pid = child.id();
     log_debug(&app_data_dir, &format!("mstsc spawned PID {}", pid));
 
-    // 3. Poll for the mstsc window
+    // 4. Poll for the mstsc window
     let mut mstsc_hwnd = None;
     for _ in 0..200 {
         std::thread::sleep(Duration::from_millis(50));
@@ -326,31 +350,25 @@ pub fn launch_rdp_embedded(
         }
     };
 
-    // 4. Style and position mstsc as borderless top-level window at client-area screen coords
+    // 5. Style mstsc: remove border chrome, keep as independent top-level window, reinforce position
     unsafe {
-        use windows::Win32::Graphics::Gdi::ClientToScreen;
-        use windows::Win32::Foundation::POINT;
-        // Convert client coords to screen coords
-        let mut pt = POINT { x: x_phys, y: y_phys };
-        let _ = ClientToScreen(parent_hwnd, &mut pt);
-        let screen_x = pt.x;
-        let screen_y = pt.y;
-
-        // Keep WS_POPUP, remove border chrome
         let mut style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
         style &= !(WS_CAPTION.0 | WS_THICKFRAME.0 | WS_BORDER.0 | WS_SYSMENU.0);
         style |= WS_CLIPSIBLINGS.0 | WS_CLIPCHILDREN.0;
         SetWindowLongW(hwnd, GWL_STYLE, style as i32);
 
-        // Set owner to keep mstsc above our app (but not a child)
-        use windows::Win32::UI::WindowsAndMessaging::SetWindowLongPtrW;
+        // Set owner so mstsc follows app minimize/restore (visible flag prevents SSH interference)
         let _ = SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, parent_hwnd.0 as isize);
 
-        // Position at screen coords (overlaying the RDP tab area)
+        // Position at screen coords
         let _ = SetWindowPos(hwnd, HWND_TOP, screen_x, screen_y, width_phys, height_phys,
             SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        log_debug(&app_data_dir, &format!("Positioned mstsc at ({},{}) {}x{} screen coords", screen_x, screen_y, width_phys, height_phys));
+        log_debug(&app_data_dir, &format!("Styled/positioned mstsc @ ({},{}) {}x{}", screen_x, screen_y, width_phys, height_phys));
+
+        // Resize all child windows of mstsc to fill the parent
+        let resize_data = ChildResizeData { width: width_phys, height: height_phys };
+        let _ = EnumChildWindows(hwnd, Some(resize_child_fill), LPARAM(&resize_data as *const _ as isize));
     }
 
     // 5. Store session
@@ -362,21 +380,39 @@ pub fn launch_rdp_embedded(
             server_id,
             mstsc_hwnd: hwnd.0 as isize,
             pid,
+            visible: true,
         });
     }
 
-    // 6. Monitor thread
+    // 6. Monitor thread (keeps mstsc on top only while visible flag is true)
     let app_clone = app.clone();
     let session_id_clone = session_id.clone();
     let hwnd_raw = hwnd.0 as usize;
     let host_clone = host.to_string();
+    let sid_clone = session_id.clone();
     std::thread::spawn(move || {
         let thread_hwnd = HWND(hwnd_raw as *mut _);
         loop {
-            std::thread::sleep(Duration::from_millis(500));
+            std::thread::sleep(Duration::from_millis(200));
             unsafe {
                 if !IsWindow(thread_hwnd).as_bool() {
                     break;
+                }
+            }
+            // Check the visible flag (set by resize_rdp_embedded)
+            let should_be_visible = app_clone.state::<RdpState>().sessions.lock().ok()
+                .and_then(|s| s.get(&sid_clone).map(|sess| sess.visible))
+                .unwrap_or(false);
+            unsafe {
+                if should_be_visible {
+                    // Restore from minimized/hidden state after app restore
+                    ShowWindow(thread_hwnd, SW_SHOW);
+                    let _ = SetWindowPos(thread_hwnd, HWND_TOP, 0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                } else {
+                    // Force off-screen so it never blocks other windows
+                    let _ = SetWindowPos(thread_hwnd, HWND_TOP, -32000, -32000, 0, 0,
+                        SWP_NOSIZE | SWP_NOACTIVATE);
                 }
             }
         }
@@ -394,8 +430,6 @@ pub fn launch_rdp_embedded(
     Ok(())
 }
 
-use windows::Win32::UI::WindowsAndMessaging::IsWindow;
-
 pub fn resize_rdp_embedded(
     session_id: &str,
     x: i32,
@@ -403,17 +437,21 @@ pub fn resize_rdp_embedded(
     width: i32,
     height: i32,
     device_pixel_ratio: f64,
-    _app: &tauri::AppHandle,
+    app: &tauri::AppHandle,
     state: &RdpState,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-    if let Some(session) = sessions.get(session_id) {
+    let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    if let Some(session) = sessions.get_mut(session_id) {
         let hwnd = HWND(session.mstsc_hwnd as *mut _);
         unsafe {
             if width <= 0 || height <= 0 {
                 ShowWindow(hwnd, SW_HIDE);
+                session.visible = false;
+                // Move off-screen so even if mstsc re-shows, it's hidden
+                let _ = SetWindowPos(hwnd, HWND_TOP, -32000, -32000, 0, 0,
+                    SWP_NOSIZE | SWP_NOACTIVATE);
             } else {
-                let main_window = _app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
+                let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
                 let parent_hwnd = HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
 
                 use windows::Win32::Graphics::Gdi::ClientToScreen;
@@ -428,6 +466,7 @@ pub fn resize_rdp_embedded(
                 let _ = ClientToScreen(parent_hwnd, &mut pt);
 
                 ShowWindow(hwnd, SW_SHOW);
+                session.visible = true;
                 let _ = SetWindowPos(hwnd, HWND_TOP, pt.x, pt.y, width_phys, height_phys,
                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
             }

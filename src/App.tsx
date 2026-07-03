@@ -267,11 +267,11 @@ function App() {
           const server = serversCtrl.servers.find((s) => s.id === tab.serverId);
           if (tab.type === "ssh") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "block" : "none", width: "100%", height: "100%", overflow: "hidden" }} hidden={!isCurrent}>
-                {isCurrent && <TerminalTab sessionId={tab.id} host={tab.hostname || "127.0.0.1"}
+              <div key={tab.id} style={{ display: isCurrent ? "block" : "none", width: "100%", height: "100%", overflow: "hidden" }}>
+                <TerminalTab sessionId={tab.id} host={tab.hostname || "127.0.0.1"}
                   port={server?.port || 22}
                   username={server ? (server.username || credentialsCtrl.credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
-                  credentialId={server?.credential_id} serverId={server?.id} />}
+                  credentialId={server?.credential_id} serverId={server?.id} />
               </div>
             );
           }
@@ -281,17 +281,18 @@ function App() {
                 <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
                   host={tab.hostname || "127.0.0.1"} port={server?.port || 3389}
                   credentialId={server?.credential_id}
+                  serverUsername={server?.username || ""}
                   isActive={isCurrent} />
               </div>
             );
           }
           if (tab.type === "sftp") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }} hidden={!isCurrent}>
-                {isCurrent && <SftpTab sessionId={tab.id} serverId={tab.serverId || ""}
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }}>
+                <SftpTab sessionId={tab.id} serverId={tab.serverId || ""}
                   host={tab.hostname || "127.0.0.1"} port={server?.port || 22}
                   username={server ? (server.username || credentialsCtrl.credentials.find(c => c.id === server.credential_id)?.username || "root") : "root"}
-                  credentialId={server?.credential_id} />}
+                  credentialId={server?.credential_id} />
               </div>
             );
           }

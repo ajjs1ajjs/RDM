@@ -720,6 +720,8 @@ fn connect_rdp_embedded(
     port: u32,
     credential_id: Option<String>,
     server_id: Option<String>,
+    manual_username: Option<String>,
+    manual_password: Option<String>,
     x: i32,
     y: i32,
     width: i32,
@@ -760,6 +762,9 @@ fn connect_rdp_embedded(
     }
 
     let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
+    // Manual credentials override stored ones (clone to avoid partial move)
+    let rdp_username = manual_username.or(auth.username.clone());
+    let rdp_password = manual_password.or(auth.password.clone());
 
     // Get parent HWND from main window AND maximize via Win32 API directly
     let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
@@ -814,8 +819,8 @@ fn connect_rdp_embedded(
             session_id,
             &host,
             port,
-            auth.username.as_deref(),
-            auth.password.as_deref(),
+            rdp_username.as_deref(),
+            rdp_password.as_deref(),
             parent_hwnd,
             x,
             y,
@@ -1421,6 +1426,61 @@ struct ResolvedAuth {
     passphrase: Option<String>,
 }
 
+#[tauri::command]
+fn save_server_from_connect(
+    server_id: Option<String>,
+    host: String,
+    port: u32,
+    protocol: String,
+    username: String,
+    password: String,
+    state: State<'_, SessionState>,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+    let kek = kek_guard.as_ref().ok_or_else(|| "Vault is locked".to_string())?;
+
+    // Check if server already exists by hostname
+    let existing = db::get_servers(&conn)?;
+    let found = server_id.as_ref().and_then(|id| existing.iter().find(|s| &s.id == id));
+
+    let server_name = host.trim_start_matches("http://").trim_start_matches("https://").split('.').next().unwrap_or(&host);
+
+    if let Some(srv) = found {
+        // Update existing server with credentials
+        let encrypted = crypto::encrypt_secret(kek, &password)?;
+        let encrypted_json = serde_json::to_string(&encrypted)
+            .map_err(|e| format!("Failed to serialize password: {}", e))?;
+        let mut updated = srv.clone();
+        updated.username = Some(username);
+        updated.encrypted_password = Some(encrypted_json);
+        db::update_server(&conn, &updated)?;
+    } else {
+        // Create new server
+        use uuid::Uuid;
+        let new_id = format!("srv-{}", Uuid::new_v4());
+        let encrypted = crypto::encrypt_secret(kek, &password)?;
+        let encrypted_json = serde_json::to_string(&encrypted)
+            .map_err(|e| format!("Failed to serialize password: {}", e))?;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs().to_string()).unwrap_or_default();
+        let new_srv = db::Server {
+            id: new_id, name: server_name.to_string(), hostname: host.clone(), ip: host.clone(),
+            port, protocol: protocol.clone(), os: String::new(), folder_path: String::new(),
+            tags: String::new(), description: String::new(), credential_id: None,
+            username: Some(username), encrypted_password: Some(encrypted_json),
+            created_at: now.clone(), updated_at: now,
+            rdp_clipboard: Some(1), rdp_drives: Some(0), rdp_printers: Some(0),
+            rdp_smart_sizing: Some(1), rdp_audio: Some(0), rdp_smartcards: Some(0),
+            rdp_webauthn: Some(0), rdp_fullscreen: Some(0), rdp_multimon: Some(0),
+        };
+        db::add_server(&conn, &new_srv)?;
+        // Also update the session's serverId for future reference
+    }
+    Ok(())
+}
+
 fn resolve_auth(
     conn: &rusqlite::Connection,
     kek: &[u8; 32],
@@ -1702,7 +1762,8 @@ pub fn run() {
             select_and_export_backup,
             select_and_import_backup,
             decrypt_server_password,
-            bypass_rdp_warnings
+            bypass_rdp_warnings,
+            save_server_from_connect
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
