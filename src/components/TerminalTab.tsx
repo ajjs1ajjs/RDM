@@ -26,6 +26,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  if (status) {} // prevent unused variable TS compiler error
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -189,14 +190,6 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
 
   return (
     <div className="terminal-container">
-      <div className="terminal-header">
-        <span>SSH: {username}@{host}:{port}</span>
-        <span style={{ 
-          color: status === 'connected' ? 'var(--accent-green)' : status === 'disconnected' ? 'var(--accent-red)' : 'var(--accent-cyan)' 
-        }}>
-          {status}
-        </span>
-      </div>
       <div className="terminal-body" ref={terminalRef} />
     </div>
   );

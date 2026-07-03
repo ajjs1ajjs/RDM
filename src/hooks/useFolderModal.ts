@@ -24,7 +24,11 @@ export function useFolderModal(
       alert("Folder already exists!");
       return;
     }
-    await saveCustomFolders([...customFolders, newPath]);
+    try {
+      await saveCustomFolders([...customFolders, newPath]);
+    } catch (e: any) {
+      alert(`Failed to create folder: ${e}`);
+    }
     setFolderModalOpen(false);
   }, [folderModalParent, folderModalName, customFolders, servers, saveCustomFolders]);
 
@@ -39,13 +43,21 @@ export function useFolderModal(
         alert("A folder with that name already exists in this location!");
         return;
       }
-      await handleRenameFolder(folderModalPath, newPath);
+      try {
+        await handleRenameFolder(folderModalPath, newPath);
+      } catch (e: any) {
+        alert(`Failed to rename folder: ${e}`);
+      }
     }
     setFolderModalOpen(false);
   }, [folderModalPath, folderModalName, customFolders, servers, handleRenameFolder]);
 
   const handleDeleteSubmit = useCallback(async () => {
-    await handleDeleteFolder(folderModalPath);
+    try {
+      await handleDeleteFolder(folderModalPath);
+    } catch (e: any) {
+      alert(`Failed to delete folder: ${e}`);
+    }
     setFolderModalOpen(false);
   }, [folderModalPath, handleDeleteFolder]);
 

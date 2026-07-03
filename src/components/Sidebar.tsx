@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Server } from "../types";
-import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Terminal, Tag, ChevronDown, ChevronRight, Star, Plus, Edit2, Trash2 } from "lucide-react";
+import { Folder, FolderOpen, Shield, Settings, LayoutDashboard, Tag, ChevronDown, ChevronRight, Star, Plus, Edit2, Trash2 } from "lucide-react";
 
 interface SidebarProps {
   servers: Server[];
@@ -193,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <Terminal className="logo-icon" size={24} />
+        <img src="/logo.svg" alt="RDM" className="logo-icon" style={{ width: "28px", height: "28px" }} />
         <span className="logo-text">RDM MANAGER</span>
       </div>
 

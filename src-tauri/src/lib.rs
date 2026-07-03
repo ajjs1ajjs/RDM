@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use rand::{thread_rng, RngCore};
+use tauri_plugin_dialog::DialogExt;
 
 
 // State definitions
@@ -49,8 +50,49 @@ fn set_setting(key: String, value: String, db: State<'_, DbState>) -> Result<(),
     db::set_setting(&conn, &key, &value)
 }
 
+fn auto_initialize_vault(db: &DbState, session_kek: &mut Option<[u8; 32]>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut salt = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut salt);
+    let salt_hex = hex::encode(salt);
+    let kek = crypto::derive_key("default_rdm_key", &salt)?;
+    let sentinel_plaintext = "rdm-auth-sentinel";
+    let encrypted_sentinel = crypto::encrypt_secret(&kek, sentinel_plaintext)?;
+    let sentinel_json = serde_json::to_string(&encrypted_sentinel)
+        .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
+    db::set_setting(&conn, "salt", &salt_hex)?;
+    db::set_setting(&conn, "sentinel", &sentinel_json)?;
+    *session_kek = Some(kek);
+    Ok(())
+}
+
 #[tauri::command]
-fn is_vault_unlocked(state: State<'_, SessionState>) -> Result<bool, String> {
+fn is_vault_unlocked(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    
+    // Check if vault is initialized
+    if let Some(sentinel_json) = db::get_setting(&conn, "sentinel")? {
+        let salt_hex = db::get_setting(&conn, "salt")?.unwrap_or_default();
+        let salt = hex::decode(&salt_hex).map_err(|e| e.to_string())?;
+        if let Ok(default_kek) = crypto::derive_key("default_rdm_key", &salt) {
+            if let Ok(encrypted_sentinel) = serde_json::from_str::<crypto::EncryptedData>(&sentinel_json) {
+                if let Ok(decrypted) = crypto::decrypt_secret(&default_kek, &encrypted_sentinel) {
+                    if decrypted == "rdm-auth-sentinel" {
+                        let mut kek = state.kek.lock().map_err(|e| e.to_string())?;
+                        *kek = Some(default_kek);
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+    } else {
+        // Auto-initialize
+        drop(conn);
+        let mut kek = state.kek.lock().map_err(|e| e.to_string())?;
+        let _ = auto_initialize_vault(&db, &mut *kek);
+        return Ok(true);
+    }
+
     let kek = state.kek.lock().map_err(|e| e.to_string())?;
     Ok(kek.is_some())
 }
@@ -678,6 +720,8 @@ fn connect_rdp_embedded(
     port: u32,
     credential_id: Option<String>,
     server_id: Option<String>,
+    x: i32,
+    y: i32,
     width: i32,
     height: i32,
     device_pixel_ratio: f64,
@@ -773,6 +817,8 @@ fn connect_rdp_embedded(
             auth.username.as_deref(),
             auth.password.as_deref(),
             parent_hwnd,
+            x,
+            y,
             width,
             height,
             device_pixel_ratio,
@@ -810,13 +856,15 @@ fn connect_rdp_embedded(
 #[tauri::command]
 fn resize_rdp_embedded(
     session_id: String,
+    x: i32,
+    y: i32,
     width: i32,
     height: i32,
     device_pixel_ratio: f64,
     app: AppHandle,
     rdp_state: State<'_, rdp::RdpState>,
 ) -> Result<(), String> {
-    rdp::resize_rdp_embedded(&session_id, width, height, device_pixel_ratio, &app, rdp_state.inner())
+    rdp::resize_rdp_embedded(&session_id, x, y, width, height, device_pixel_ratio, &app, rdp_state.inner())
 }
 
 #[tauri::command]
@@ -1106,9 +1154,14 @@ fn import_devolutions_csv(
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
+    let mut clean_content = csv_content;
+    if clean_content.starts_with('\u{FEFF}') {
+        clean_content.remove(0);
+    }
+
     // Detect delimiter dynamically (handles comma, semicolon, tab)
     let mut delimiter = b',';
-    if let Some(first_line) = csv_content.lines().next() {
+    if let Some(first_line) = clean_content.lines().next() {
         let commas = first_line.matches(',').count();
         let semicolons = first_line.matches(';').count();
         let tabs = first_line.matches('\t').count();
@@ -1123,7 +1176,7 @@ fn import_devolutions_csv(
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .delimiter(delimiter)
-        .from_reader(csv_content.as_bytes());
+        .from_reader(clean_content.as_bytes());
 
     let headers = reader.headers()
         .map_err(|e| format!("Failed to read CSV headers: {}", e))?
@@ -1140,28 +1193,32 @@ fn import_devolutions_csv(
     let mut description_idx = None;
 
     for (idx, header) in headers.iter().enumerate() {
-        let h = header.to_lowercase().replace(' ', "").replace('_', "").replace('-', "");
-        if h == "name" || h == "connectionname" || h == "displayname" || h == "session" || h == "sessionname" || h == "title" || h == "назва" || h == "имя" {
+        let h = header.to_lowercase().replace(' ', "").replace('_', "").replace('-', "").replace('/', "");
+        if h == "name" || h == "connectionname" || h == "displayname" || h == "session" || h == "sessionname" || h == "title" || h == "назва" || h == "имя" || h.contains("session") || h.contains("name") || h.contains("назв") {
             name_idx = Some(idx);
-        } else if h == "host" || h == "computer" || h == "ip" || h == "hostname" || h == "ipaddress" || h == "хост" || h == "адреса" || h == "адрес" {
-            host_idx = Some(idx);
-        } else if h == "port" || h == "порт" {
+        } else if h == "host" || h == "computer" || h == "ip" || h == "hostname" || h == "ipaddress" || h == "хост" || h == "адреса" || h == "адрес" || h.contains("host") || (h.contains("ip") && !h.contains("desc")) || h.contains("computer") || h.contains("хост") || h.contains("адрес") {
+            if !h.contains("key") {
+                host_idx = Some(idx);
+            }
+        } else if h == "port" || h == "порт" || h.contains("port") || h.contains("порт") {
             port_idx = Some(idx);
-        } else if h == "group" || h == "folder" || h == "folderpath" || h == "directory" || h == "група" || h == "группа" || h == "папка" {
+        } else if h == "group" || h == "folder" || h == "folderpath" || h == "directory" || h == "група" || h == "группа" || h == "папка" || h.contains("group") || h.contains("folder") || h.contains("directory") || h.contains("папк") || h.contains("груп") {
             group_idx = Some(idx);
-        } else if h == "type" || h == "connectiontype" || h == "protocol" || h == "тип" || h == "протокол" {
+        } else if h == "type" || h == "connectiontype" || h == "protocol" || h == "тип" || h == "протокол" || h.contains("type") || h.contains("proto") || h.contains("тип") || h.contains("проток") {
             protocol_idx = Some(idx);
-        } else if h == "username" || h == "user" || h == "credentialusername" || h == "login" || h == "користувач" || h == "логін" || h == "пользователь" || h == "логин" {
+        } else if h == "username" || h == "user" || h == "credentialusername" || h == "login" || h == "користувач" || h == "логін" || h == "пользователь" || h == "логин" || h.contains("user") || h.contains("login") || h.contains("користув") || h.contains("пользов") {
             username_idx = Some(idx);
-        } else if h == "password" || h == "pass" || h == "credentialpassword" || h == "secret" || h == "пароль" {
+        } else if h == "password" || h == "pass" || h == "credentialpassword" || h == "secret" || h == "пароль" || h.contains("pass") || h.contains("secret") || h.contains("парол") {
             password_idx = Some(idx);
-        } else if h == "description" || h == "notes" || h == "comment" || h == "опис" || h == "описание" || h == "примітка" || h == "примечание" {
+        } else if h == "description" || h == "notes" || h == "comment" || h == "опис" || h == "описание" || h == "примітка" || h == "примечание" || h.contains("desc") || h.contains("note") || h.contains("comm") || h.contains("опис") || h.contains("приміт") {
             description_idx = Some(idx);
         }
     }
 
-    let name_idx = name_idx.ok_or_else(|| "CSV must contain a 'Name', 'DisplayName', 'Session', 'Title' or 'Назва' column".to_string())?;
-    let host_idx = host_idx.ok_or_else(|| "CSV must contain a 'Host', 'Computer', 'IP', 'Hostname' or 'Хост' column".to_string())?;
+    let name_idx = name_idx.unwrap_or(0);
+    let host_idx = host_idx.unwrap_or_else(|| {
+        if headers.len() > 1 { 1 } else { 0 }
+    });
 
     let existing_servers = db::get_servers(&conn)?;
     let mut seen_servers = std::collections::HashSet::new();
@@ -1170,9 +1227,15 @@ fn import_devolutions_csv(
     }
 
     let mut imported_count = 0;
+    let mut debug_rows = Vec::new();
+    let mut total_records = 0;
 
     for result in reader.records() {
+        total_records += 1;
         let record = result.map_err(|e| format!("Error reading CSV row: {}", e))?;
+        if debug_rows.len() < 5 {
+            debug_rows.push(format!("{:?}", record));
+        }
         
         let name = record.get(name_idx).unwrap_or("").trim().to_string();
         let host = record.get(host_idx).unwrap_or("").trim().to_string();
@@ -1186,7 +1249,7 @@ fn import_devolutions_csv(
         seen_servers.insert((name.clone(), host.clone()));
 
         let port_str = port_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim();
-        let folder_path = group_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
+        let folder_path = group_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string().replace('\\', "/");
         let description = description_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
 
         let protocol_str = protocol_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_lowercase();
@@ -1265,7 +1328,42 @@ fn import_devolutions_csv(
         imported_count += 1;
     }
 
+    if imported_count == 0 {
+        let headers_str: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
+        return Err(format!(
+            "Import failed: No records imported.\nDelimiter: {:?}\nHeaders: {:?}\nName Index: {}, Host Index: {}\nTotal rows in file: {}\nFirst 5 rows:\n{}",
+            char::from(delimiter),
+            headers_str,
+            name_idx,
+            host_idx,
+            total_records,
+            debug_rows.join("\n")
+        ));
+    }
+
     Ok(imported_count)
+}
+
+#[tauri::command]
+fn select_and_import_devolutions_csv(
+    app: AppHandle,
+    state: State<'_, SessionState>,
+    db: State<'_, DbState>,
+) -> Result<u32, String> {
+    let file_path = app.dialog()
+        .file()
+        .set_title("Select Devolutions CSV to Import")
+        .add_filter("CSV Files", &["csv"])
+        .blocking_pick_file();
+
+    if let Some(path) = file_path {
+        let path = path.as_path().ok_or("Invalid file path")?;
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read CSV file: {}", e))?;
+        import_devolutions_csv(content, state, db)
+    } else {
+        Err("Import cancelled".to_string())
+    }
 }
 
 #[tauri::command]
@@ -1275,13 +1373,15 @@ fn select_and_export_backup(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let file_path = rfd::FileDialog::new()
+    let file_path = app.dialog()
+        .file()
         .set_title("Save RDM Backup")
         .add_filter("SQLite Database", &["db", "sqlite"])
         .set_file_name("rdm_backup.db")
-        .save_file();
+        .blocking_save_file();
 
     if let Some(path) = file_path {
+        let path = path.as_path().ok_or("Invalid file path")?;
         let dest = path.to_string_lossy().to_string();
         export_database_backup(dest, password, app, state, db)?;
         Ok(path.file_name().unwrap().to_string_lossy().to_string())
@@ -1297,12 +1397,14 @@ fn select_and_import_backup(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let file_path = rfd::FileDialog::new()
+    let file_path = app.dialog()
+        .file()
         .set_title("Open RDM Backup")
         .add_filter("SQLite Database", &["db", "sqlite"])
-        .pick_file();
+        .blocking_pick_file();
 
     if let Some(path) = file_path {
+        let path = path.as_path().ok_or("Invalid file path")?;
         let src = path.to_string_lossy().to_string();
         import_database_backup(src, password, app, state, db)?;
         Ok(path.file_name().unwrap().to_string_lossy().to_string())
@@ -1401,10 +1503,11 @@ fn get_ssh_creds(
     app_username: &str,
     state: &State<'_, SessionState>,
     db: &State<'_, DbState>,
-) -> Result<(String, Option<String>, Option<String>), String> {
+) -> Result<(String, Option<String>, Option<String>, Option<String>), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut decrypted_password = None;
     let mut decrypted_key = None;
+    let mut passphrase = None;
     let mut final_username = app_username.to_string();
 
     if let Some(ref srv_id) = server_id {
@@ -1431,6 +1534,11 @@ fn get_ssh_creds(
             let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
             let list = db::get_credentials(&conn)?;
             let cred = list.iter().find(|c| c.id == *cred_id).ok_or("Credential not found")?;
+            
+            if final_username == *app_username {
+                final_username = cred.username.clone();
+            }
+            
             let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
                 .map_err(|e| e.to_string())?;
             let decrypted = crypto::decrypt_secret(kek, &encrypted).map_err(|_| "Decryption error")?;
@@ -1440,16 +1548,17 @@ fn get_ssh_creds(
             } else if cred.r#type == "ssh_key" {
                 if decrypted.starts_with('{') {
                     #[derive(serde::Deserialize)]
-                    struct KeyDetails { key: String }
+                    struct KeyDetails { key: String, passphrase: Option<String> }
                     if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
                         decrypted_key = Some(details.key);
+                        passphrase = details.passphrase;
                     } else { decrypted_key = Some(decrypted); }
                 } else { decrypted_key = Some(decrypted); }
             }
         }
     }
     
-    Ok((final_username, decrypted_password, decrypted_key))
+    Ok((final_username, decrypted_password, decrypted_key, passphrase))
 }
 
 #[tauri::command]
@@ -1464,23 +1573,20 @@ fn sftp_ls(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let (final_user, pwd, key) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+    let (final_user, pwd, key, passphrase) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
     let app_data = app.path().app_data_dir().unwrap();
     
-    // Validate path - reject shell metacharacters
     if path.contains([';', '|', '`', '$', '>', '<', '&', '\n', '\r']) {
         return Err("Invalid characters in path".to_string());
     }
-    // We use ssh to run ls -la (path as separate argument, not shell-interpolated)
     let mut args = vec![
         "-p".to_string(), port.to_string(),
         format!("{}@{}", final_user, host),
         "ls".to_string(), "-la".to_string(),
     ];
-    // Append path as separate arg to prevent injection
     args.push(path.clone());
     
-    sftp::run_ssh_command_sync(app_data, "ssh", &args, pwd.as_deref(), key.as_deref())
+    sftp::run_ssh_command_sync(app_data, "ssh", &args, pwd.as_deref(), key.as_deref(), passphrase.as_deref())
 }
 
 #[tauri::command]
@@ -1496,7 +1602,7 @@ fn sftp_download(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let (final_user, pwd, key) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+    let (final_user, pwd, key, passphrase) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
     let app_data = app.path().app_data_dir().unwrap();
     
     let args = vec![
@@ -1505,7 +1611,7 @@ fn sftp_download(
         local_path,
     ];
     
-    sftp::run_ssh_command_sync(app_data, "scp", &args, pwd.as_deref(), key.as_deref())
+    sftp::run_ssh_command_sync(app_data, "scp", &args, pwd.as_deref(), key.as_deref(), passphrase.as_deref())
 }
 
 #[tauri::command]
@@ -1521,7 +1627,7 @@ fn sftp_upload(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
-    let (final_user, pwd, key) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+    let (final_user, pwd, key, passphrase) = get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
     let app_data = app.path().app_data_dir().unwrap();
     
     let args = vec![
@@ -1530,7 +1636,7 @@ fn sftp_upload(
         format!("{}@{}:{}", final_user, host, remote_path),
     ];
     
-    sftp::run_ssh_command_sync(app_data, "scp", &args, pwd.as_deref(), key.as_deref())
+    sftp::run_ssh_command_sync(app_data, "scp", &args, pwd.as_deref(), key.as_deref(), passphrase.as_deref())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1589,6 +1695,7 @@ pub fn run() {
             export_database_backup,
             import_database_backup,
             import_devolutions_csv,
+            select_and_import_devolutions_csv,
             sftp_ls,
             sftp_download,
             sftp_upload,

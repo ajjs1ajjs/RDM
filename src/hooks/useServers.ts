@@ -20,7 +20,11 @@ export function useServers() {
   const loadServers = useCallback(async () => {
     try {
       const list = await invoke<Server[]>("get_servers");
-      setServers(list);
+      const normalizedList = list.map(s => ({
+        ...s,
+        folder_path: s.folder_path ? s.folder_path.replace(/\\/g, '/') : ""
+      }));
+      setServers(normalizedList);
     } catch (e) {
       console.error("Failed to load servers", e);
     }
@@ -41,7 +45,9 @@ export function useServers() {
     try {
       const foldersJson = await invoke<string | null>("get_setting", { key: "custom_folders" });
       if (foldersJson) {
-        setCustomFolders(JSON.parse(foldersJson));
+        const parsed: string[] = JSON.parse(foldersJson);
+        const normalized = parsed.map(p => p ? p.replace(/\\/g, '/') : "");
+        setCustomFolders(normalized);
       }
     } catch (e) {
       console.error("Failed to load custom folders setting", e);

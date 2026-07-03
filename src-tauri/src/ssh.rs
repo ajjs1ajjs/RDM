@@ -8,6 +8,28 @@ use tauri::{AppHandle, Emitter, Manager};
 use serde::Serialize;
 use std::path::PathBuf;
 
+fn strip_ansi_codes(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence: ESC [ ... m  (or other terminators)
+            if chars.next() == Some('[') {
+                for ch in &mut chars {
+                    if ch.is_ascii_alphabetic() || ch == '~' {
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Skip carriage returns (common in Windows PTY output)
+            if c != '\r' {
+                out.push(c);
+            }
+        }
+    }
+    out
+}
 
 pub struct TempKeyGuard {
     pub path: Option<PathBuf>,
@@ -17,7 +39,6 @@ impl Drop for TempKeyGuard {
     fn drop(&mut self) {
         if let Some(ref path) = self.path {
             if path.exists() {
-                // Overwrite with zeros before deletion to prevent forensic recovery
                 if let Ok(mut f) = std::fs::File::create(path) {
                     use std::io::Write;
                     let _ = f.write_all(&[0u8; 4096]);
@@ -87,8 +108,14 @@ pub fn connect_ssh(
     let mut args = vec![
         "-o".to_string(), "StrictHostKeyChecking=accept-new".to_string(),
         "-o".to_string(), format!("UserKnownHostsFile={}", known_hosts.display()),
+        "-o".to_string(), "BatchMode=no".to_string(),
         "-p".to_string(), port.to_string(),
     ];
+
+    // Force PTY allocation for proper password prompts on Windows
+    if password.is_some() || passphrase.is_some() {
+        args.push("-tt".to_string());
+    }
 
     // If private key is provided, write to secure temp file
     if let Some(key_content) = private_key {
@@ -112,7 +139,6 @@ pub fn connect_ssh(
         temp_key_path = Some(key_file);
     }
 
-    args.push("--".to_string());
     args.push(format!("{}@{}", username, host));
 
     // Open PTY
@@ -126,9 +152,14 @@ pub fn connect_ssh(
         })
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-    // Build SSH command (assumes ssh is in system path)
+    // Build SSH command
     let mut cmd = CommandBuilder::new("ssh");
     cmd.args(&args);
+
+    // Set HOME env for SSH config on Windows
+    if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        cmd.env("HOME", &home);
+    }
 
     // Spawn the SSH client process into the PTY
     let mut child = pair.slave.spawn_command(cmd)
@@ -159,62 +190,81 @@ pub fn connect_ssh(
         let mut password_sent = false;
         let mut passphrase_sent = false;
         let mut output_accumulated = String::new();
+        let mut drain_after_send = false;
+
+        thread::sleep(Duration::from_millis(300));
 
         loop {
-            // Check if process has exited
             if let Ok(Some(_)) = child.try_wait() {
                 break;
             }
 
             match reader.read(&mut buf) {
-                Ok(0) => break, // EOF
+                Ok(0) => break,
                 Ok(n) => {
                     let text = String::from_utf8_lossy(&buf[..n]).to_string();
                     
-                    // Auto-fill password / passphrase if prompt is detected
-                    if !password_sent || !passphrase_sent {
-                        output_accumulated.push_str(&text);
-                        let lower = output_accumulated.to_lowercase();
-                        
+                    output_accumulated.push_str(&text);
+                    let clean_lower = strip_ansi_codes(&output_accumulated).to_lowercase();
+
+                    if !password_sent {
                         if let Some(ref pass) = password_clone {
-                            if !password_sent && (lower.contains("password:") || lower.contains("password for")) {
-                                thread::sleep(Duration::from_millis(150)); // Wait for ssh to stabilize prompt
+                            let needs_pw = clean_lower.contains("password:")
+                                || clean_lower.contains("password: ")
+                                || clean_lower.ends_with("password:")
+                                || clean_lower.ends_with("password: ")
+                                || clean_lower.contains("'s password:")
+                                || (clean_lower.contains("password") && !clean_lower.contains("new password"))
+                                || clean_lower.contains("пароль:")
+                                || clean_lower.contains("verification code:");
+                            if needs_pw {
+                                thread::sleep(Duration::from_millis(250));
                                 if let Ok(mut wr) = writer_clone.lock() {
                                     let _ = write!(wr, "{}\r", pass);
+                                    let _ = wr.flush();
                                 }
                                 password_sent = true;
-                                output_accumulated.clear();
+                                drain_after_send = true;
                             }
-                        }
-
-                        if let Some(ref phrase) = passphrase_clone {
-                            if !passphrase_sent && (lower.contains("passphrase") || lower.contains("enter passphrase")) {
-                                thread::sleep(Duration::from_millis(150));
-                                if let Ok(mut wr) = writer_clone.lock() {
-                                    let _ = write!(wr, "{}\r", phrase);
-                                }
-                                passphrase_sent = true;
-                                output_accumulated.clear();
-                            }
-                        }
-
-                        if output_accumulated.len() > 1000 {
-                            output_accumulated.drain(..500);
                         }
                     }
 
-                    // Stream output to frontend
+                    if !passphrase_sent {
+                        if let Some(ref phrase) = passphrase_clone {
+                            let needs_pp = clean_lower.contains("passphrase:")
+                                || clean_lower.contains("passphrase for")
+                                || clean_lower.contains("enter passphrase")
+                                || clean_lower.contains("enter key passphrase")
+                                || (clean_lower.contains("пароль") && !password_sent);
+                            if needs_pp {
+                                thread::sleep(Duration::from_millis(250));
+                                if let Ok(mut wr) = writer_clone.lock() {
+                                    let _ = write!(wr, "{}\r", phrase);
+                                    let _ = wr.flush();
+                                }
+                                passphrase_sent = true;
+                                drain_after_send = true;
+                            }
+                        }
+                    }
+
+                    if drain_after_send {
+                        output_accumulated.clear();
+                        drain_after_send = false;
+                    } else if output_accumulated.len() > 2000 {
+                        output_accumulated.drain(..1000);
+                    }
+
                     let payload = SshOutputPayload {
                         session_id: session_id_clone.clone(),
                         data: text,
                     };
                     let _ = app_clone.emit("ssh-output", &payload);
                 }
-                Err(_) => break, // Read error (e.g. process terminated)
+                Err(_) => break,
             }
         }
 
-        // Clean up
         let _ = app_clone.emit("ssh-closed", &session_id_clone);
 
         if let Some(ref srv_id) = server_id_clone {
@@ -302,7 +352,6 @@ pub fn disconnect_ssh_session(
 ) -> Result<(), String> {
     let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     if let Some(session) = sessions.remove(session_id) {
-        // Drop the master pty handle, which automatically kills the spawned child process on Windows/Unix
         drop(session.master);
         drop(session.writer);
         if let Some(path) = session.temp_key_path {

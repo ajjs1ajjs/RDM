@@ -12,13 +12,10 @@ pub struct EncryptedData {
     pub nonce: String,      // Hex-encoded
 }
 
-/// Derives a 256-bit Key Encryption Key (KEK) from a master password and salt using Argon2id.
+/// Derives a 256-bit Key Encryption Key (KEK) from a master password and salt using PBKDF2-HMAC-SHA256 with 100,000 iterations.
 pub fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
     let mut key = [0u8; 32];
-    let argon2 = Argon2::default();
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| format!("Argon2 derivation error: {}", e))?;
+    pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(password.as_bytes(), salt, 100000, &mut key);
     Ok(key)
 }
 

@@ -44,6 +44,7 @@ export function useCredForm(loadCredentials: () => Promise<void>) {
       setCredModalOpen(false);
       loadCredentials();
     } catch (e: any) {
+      setCredModalOpen(false);
       alert(`Failed to save credential: ${e}`);
     }
   }, [editingCred, credName, credType, credUser, credSecret, loadCredentials]);

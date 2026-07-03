@@ -34,7 +34,6 @@ export function useConnectionTabs(unlocked: boolean) {
   }, [unlocked]);
 
   const handleConnect = useCallback((srv: Server) => {
-    alert(`Connect clicked: ${srv?.name} (${srv?.protocol})`);
     if (srv.protocol === "rdp") {
       const tabId = `rdp-${srv.id}-${Date.now()}`;
       const newTab: ActiveTab = {

@@ -116,6 +116,7 @@ export function useServerForm(
       loadServers();
       setSelectedServer(null);
     } catch (e: any) {
+      setServerModalOpen(false);
       alert(`Failed to save server: ${e}`);
     }
   }, [editingServer, srvName, srvHost, srvIp, srvPort, srvProto, srvOs,

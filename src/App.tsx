@@ -15,6 +15,7 @@ import { TerminalTab } from "./components/TerminalTab";
 import { RdpTab } from "./components/RdpTab";
 import { SftpTab } from "./components/SftpTab";
 import { CommandPalette } from "./components/CommandPalette";
+import { Taskbar } from "./components/Taskbar";
 import { Terminal, X } from "lucide-react";
 import "./App.css";
 
@@ -112,28 +113,17 @@ function App() {
     }
   };
 
-  const handleImportCSV = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".csv";
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        const content = evt.target?.result as string;
-        try {
-          const count = await invoke<number>("import_devolutions_csv", { csvContent: content });
-          alert(`Imported ${count} connections successfully!`);
-          serversCtrl.loadServers();
-          credentialsCtrl.loadCredentials();
-        } catch (err: any) {
-          alert(`Import failed: ${err}`);
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
+  const handleImportCSV = async () => {
+    try {
+      const count = await invoke<number>("select_and_import_devolutions_csv");
+      alert(`Imported ${count} connections successfully!`);
+      serversCtrl.loadServers();
+      credentialsCtrl.loadCredentials();
+    } catch (err: any) {
+      if (err !== "Import cancelled") {
+        alert(`Import failed: ${err}`);
+      }
+    }
   };
 
   const renderTabContent = () => {
@@ -287,10 +277,11 @@ function App() {
           }
           if (tab.type === "rdp") {
             return (
-              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }} hidden={!isCurrent}>
-                {isCurrent && <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
+              <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
+                <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
                   host={tab.hostname || "127.0.0.1"} port={server?.port || 3389}
-                  credentialId={server?.credential_id} />}
+                  credentialId={server?.credential_id}
+                  isActive={isCurrent} />
               </div>
             );
           }
@@ -315,81 +306,92 @@ function App() {
   }
 
   return (
+    <>
     <div className="app-container">
-      <Sidebar
-        servers={serversCtrl.servers}
-        customFolders={serversCtrl.customFolders}
-        activeTabType={tabs.activeTabType}
-        selectedFolder={serversCtrl.selectedFolder}
-        selectedTag={serversCtrl.selectedTag}
-        favoritesOnly={serversCtrl.favoritesOnly}
-        onSelectFolder={(folder) => {
-          serversCtrl.setSelectedFolder(folder);
-          serversCtrl.setSelectedTag("");
-          serversCtrl.setFavoritesOnly(false);
-          serversCtrl.setSelectedServer(null);
-        }}
-        onSelectTag={(tag) => {
-          serversCtrl.setSelectedTag(tag);
-          serversCtrl.setSelectedFolder("");
-          serversCtrl.setFavoritesOnly(false);
-          serversCtrl.setSelectedServer(null);
-        }}
-        onToggleFavorites={() => {
-          serversCtrl.setFavoritesOnly(true);
-          serversCtrl.setSelectedFolder("");
-          serversCtrl.setSelectedTag("");
-          serversCtrl.setSelectedServer(null);
-        }}
-        onCreateFolder={(parentFolder) => {
-          folderModal.setFolderModalMode('create');
-          folderModal.setFolderModalParent(parentFolder);
-          folderModal.setFolderModalName('');
-          folderModal.setFolderModalOpen(true);
-        }}
-        onRenameFolder={(folderPath) => {
-          folderModal.setFolderModalMode('rename');
-          folderModal.setFolderModalPath(folderPath);
-          const parts = folderPath.split('/');
-          folderModal.setFolderModalName(parts[parts.length - 1] || '');
-          folderModal.setFolderModalOpen(true);
-        }}
-        onDeleteFolder={(folderPath) => {
-          folderModal.setFolderModalMode('delete');
-          folderModal.setFolderModalPath(folderPath);
-          folderModal.setFolderModalOpen(true);
-        }}
-        onNavigateTo={(type) => {
-          if (type !== 'dashboard') {
+      <div className="app-body">
+        <Sidebar
+          servers={serversCtrl.servers}
+          customFolders={serversCtrl.customFolders}
+          activeTabType={tabs.activeTabType}
+          selectedFolder={serversCtrl.selectedFolder}
+          selectedTag={serversCtrl.selectedTag}
+          favoritesOnly={serversCtrl.favoritesOnly}
+          onSelectFolder={(folder) => {
+            serversCtrl.setSelectedFolder(folder);
+            serversCtrl.setSelectedTag("");
+            serversCtrl.setFavoritesOnly(false);
             serversCtrl.setSelectedServer(null);
-          }
-          tabs.setActiveTabType(type);
-          tabs.setCurrentTabId(type);
-        }}
-      />
+          }}
+          onSelectTag={(tag) => {
+            serversCtrl.setSelectedTag(tag);
+            serversCtrl.setSelectedFolder("");
+            serversCtrl.setFavoritesOnly(false);
+            serversCtrl.setSelectedServer(null);
+          }}
+          onToggleFavorites={() => {
+            serversCtrl.setFavoritesOnly(true);
+            serversCtrl.setSelectedFolder("");
+            serversCtrl.setSelectedTag("");
+            serversCtrl.setSelectedServer(null);
+          }}
+          onCreateFolder={(parentFolder) => {
+            folderModal.setFolderModalMode('create');
+            folderModal.setFolderModalParent(parentFolder);
+            folderModal.setFolderModalName('');
+            folderModal.setFolderModalOpen(true);
+          }}
+          onRenameFolder={(folderPath) => {
+            folderModal.setFolderModalMode('rename');
+            folderModal.setFolderModalPath(folderPath);
+            const parts = folderPath.split('/');
+            folderModal.setFolderModalName(parts[parts.length - 1] || '');
+            folderModal.setFolderModalOpen(true);
+          }}
+          onDeleteFolder={(folderPath) => {
+            folderModal.setFolderModalMode('delete');
+            folderModal.setFolderModalPath(folderPath);
+            folderModal.setFolderModalOpen(true);
+          }}
+          onNavigateTo={(type) => {
+            if (type !== 'dashboard') {
+              serversCtrl.setSelectedServer(null);
+            }
+            tabs.setActiveTabType(type);
+            tabs.setCurrentTabId(type);
+          }}
+        />
 
-      <div className="main-workspace">
-        <div className="tabs-bar">
-          <div className={`tab ${tabs.currentTabId === "dashboard" ? "active" : ""}`}
-            onClick={() => tabs.handleSelectTab("dashboard")}>
-            <span>Connections Directory</span>
-          </div>
-          {tabs.activeTabs.map((tab) => (
-            <div key={tab.id} className={`tab ${tabs.currentTabId === tab.id ? "active" : ""}`}
-              onClick={() => tabs.handleSelectTab(tab)}>
-              <Terminal size={14} style={{ color: "var(--accent-purple)" }} />
-              <span>{tab.title}</span>
-              <X size={12} className="tab-close" onClick={(e) => tabs.handleCloseTab(tab.id, e)} />
+        <div className="main-workspace">
+          <div className="tabs-bar">
+            <div className={`tab ${tabs.currentTabId === "dashboard" ? "active" : ""}`}
+              onClick={() => tabs.handleSelectTab("dashboard")}>
+              <span>Connections Directory</span>
             </div>
-          ))}
-          {tabs.activeTabType === "credentials" && <div className="tab active"><span>Credentials Vault</span></div>}
-          {tabs.activeTabType === "settings" && <div className="tab active"><span>Settings</span></div>}
-        </div>
+            {tabs.activeTabs.map((tab) => (
+              <div key={tab.id} className={`tab ${tabs.currentTabId === tab.id ? "active" : ""}`}
+                onClick={() => tabs.handleSelectTab(tab)}>
+                <Terminal size={14} style={{ color: "var(--accent-purple)" }} />
+                <span>{tab.title}</span>
+                <X size={12} className="tab-close" onClick={(e) => tabs.handleCloseTab(tab.id, e)} />
+              </div>
+            ))}
+            {tabs.activeTabType === "credentials" && <div className="tab active"><span>Credentials Vault</span></div>}
+            {tabs.activeTabType === "settings" && <div className="tab active"><span>Settings</span></div>}
+          </div>
 
-        <div className="tab-content">
-          {renderTabContent()}
+          <div className="tab-content">
+            {renderTabContent()}
+          </div>
         </div>
       </div>
+
+      <Taskbar
+        activeTabs={tabs.activeTabs}
+        currentTabId={tabs.currentTabId}
+        onSelectTab={tabs.handleSelectTab}
+        visible={tabs.activeTabType !== "rdp"}
+      />
+    </div>
 
       <CommandPalette
         servers={serversCtrl.servers}
@@ -399,8 +401,8 @@ function App() {
       />
 
       {serverForm.serverModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box glass-card">
+        <div className="modal-overlay" onClick={() => serverForm.setServerModalOpen(false)}>
+          <div className="modal-box glass-card" onClick={(e) => e.stopPropagation()}>
             <div className="header-row" style={{ marginBottom: "15px" }}>
               <h3>{serverForm.editingServer ? "Edit Server Configuration" : "New Server Connection"}</h3>
               <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => serverForm.setServerModalOpen(false)}>
@@ -538,8 +540,8 @@ function App() {
       )}
 
       {credForm.credModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box glass-card">
+        <div className="modal-overlay" onClick={() => credForm.setCredModalOpen(false)}>
+          <div className="modal-box glass-card" onClick={(e) => e.stopPropagation()}>
             <div className="header-row" style={{ marginBottom: "15px" }}>
               <h3>{credForm.editingCred ? "Edit Vault Credential" : "New Secure Credential"}</h3>
               <button className="btn btn-secondary" style={{ padding: "4px" }} onClick={() => credForm.setCredModalOpen(false)}>
@@ -582,8 +584,8 @@ function App() {
       )}
 
       {folderModal.folderModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box glass-card" style={{ maxWidth: "450px" }}>
+        <div className="modal-overlay" onClick={() => folderModal.setFolderModalOpen(false)}>
+          <div className="modal-box glass-card" style={{ maxWidth: "450px" }} onClick={(e) => e.stopPropagation()}>
             <div className="header-row" style={{ marginBottom: "15px" }}>
               <h3>
                 {folderModal.folderModalMode === 'create' && "Create New Folder"}
@@ -624,7 +626,7 @@ function App() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
