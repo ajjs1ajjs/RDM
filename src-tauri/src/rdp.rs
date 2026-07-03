@@ -225,7 +225,13 @@ pub fn launch_rdp_embedded(
     let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
     let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
 
-    // 0. Store RDP credentials via cmdkey if password is supplied
+    // 0. Bypass all RDP certificate warnings via registry
+    let _ = std::process::Command::new("reg")
+        .args(&["add", "HKCU\\Software\\Microsoft\\Terminal Server Client", "/v", "AuthenticationLevelOverride", "/t", "REG_DWORD", "/d", "0", "/f"])
+        .spawn()
+        .and_then(|mut c| c.wait());
+
+    // Store RDP credentials via cmdkey if password is supplied
     if let (Some(user), Some(pass)) = (username, password) {
         let target = format!("TERMSRV/{}", host);
         log_debug(&app_data_dir, &format!("Storing credential for {}", target));
@@ -259,7 +265,6 @@ pub fn launch_rdp_embedded(
     let redirect_smartcards = if rdp_smartcards { 1 } else { 0 };
     let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
     let audio_val = match rdp_audio { 0 => 0, 1 => 1, 2 => 2, _ => 0 };
-    let auth_level = if password.is_some() { 2 } else { 0 };
     let win_right = screen_x + width_phys;
     let win_bottom = screen_y + height_phys;
 
@@ -275,10 +280,13 @@ pub fn launch_rdp_embedded(
          audiomode:i:{}\r\n\
          redirectsmartcards:i:{}\r\n\
          enablewebauthn:i:{}\r\n\
-         authentication level:i:{}\r\n\
+         authentication level:i:0\r\n\
+         serverauth:i:0\r\n\
          enablecredsspsupport:i:{}\r\n\
          displayconnectionbar:i:0\r\n\
          prompt for credentials:i:0\r\n\
+         promptcredentialonce:i:0\r\n\
+         disableconnectionsharing:i:1\r\n\
          autoreconnection enabled:i:1\r\n\
          connection type:i:2\r\n\
          desktopwidth:i:{}\r\n\
@@ -294,7 +302,6 @@ pub fn launch_rdp_embedded(
         audio_val,
         redirect_smartcards,
         redirect_webauthn,
-        auth_level,
         if password.is_some() { 1 } else { 0 },
         width_phys, height_phys,
         screen_x, screen_y, win_right, win_bottom,
