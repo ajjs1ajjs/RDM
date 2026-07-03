@@ -34,6 +34,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     // Initialize xterm.js
     const term = new Terminal({
       cursorBlink: true,
+      scrollback: 100000,
       fontFamily: "var(--font-mono)",
       fontSize: 14,
       theme: {
