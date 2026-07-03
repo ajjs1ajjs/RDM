@@ -7,12 +7,14 @@ use tauri::{Manager, Emitter};
 use windows::Win32::Foundation::{HWND, LPARAM, BOOL};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, EnumChildWindows, GetWindowThreadProcessId, GetClassNameW,
-    SetWindowLongW, SetWindowLongPtrW, GetWindowLongW, ShowWindow, MoveWindow, SetWindowPos,
-    IsWindow, GWL_STYLE, GWLP_HWNDPARENT, SetForegroundWindow,
+    SetWindowLongW, SetWindowLongPtrW, GetWindowLongPtrW, GetWindowLongW, ShowWindow, MoveWindow, SetWindowPos,
+    IsWindow, GWL_STYLE, GWLP_HWNDPARENT,
     WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_BORDER, WS_SYSMENU,
     WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
     SW_SHOW, SW_HIDE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP,
 };
+
+struct OwnerData(isize);
 
 struct ChildResizeData {
     width: i32,
@@ -22,6 +24,17 @@ struct ChildResizeData {
 unsafe extern "system" fn resize_child_fill(child: HWND, lparam: LPARAM) -> BOOL {
     let data = &*(lparam.0 as *const ChildResizeData);
     let _ = MoveWindow(child, 0, 0, data.width, data.height, BOOL(1));
+    BOOL(1)
+}
+
+unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let data = &*(lparam.0 as *const OwnerData);
+    let owner_hwnd = data.0 as isize;
+    let owner = GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
+    if owner == owner_hwnd {
+        let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
     BOOL(1)
 }
 
@@ -412,12 +425,13 @@ pub fn launch_rdp_embedded(
                 .unwrap_or(false);
             unsafe {
                 if should_be_visible {
-                    // Restore from minimized/hidden state after app restore
                     ShowWindow(thread_hwnd, SW_SHOW);
                     let _ = SetWindowPos(thread_hwnd, HWND_TOP, 0, 0, 0, 0,
                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    // Bring all dialogs owned by mstsc to front
+                    let mut od = OwnerData(thread_hwnd.0 as isize);
+                    let _ = EnumWindows(Some(enum_owned_hwnd_top), LPARAM(&mut od as *mut _ as isize));
                 } else {
-                    // Force off-screen so it never blocks other windows
                     let _ = SetWindowPos(thread_hwnd, HWND_TOP, -32000, -32000, 0, 0,
                         SWP_NOSIZE | SWP_NOACTIVATE);
                 }
