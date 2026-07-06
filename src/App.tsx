@@ -16,6 +16,7 @@ import { RdpTab } from "./components/RdpTab";
 import { SftpTab } from "./components/SftpTab";
 import { CommandPalette } from "./components/CommandPalette";
 import { Taskbar } from "./components/Taskbar";
+import { useDialogs } from "./components/AppDialogs";
 import { Terminal, X } from "lucide-react";
 import "./App.css";
 
@@ -40,6 +41,7 @@ function App() {
     serversCtrl.handleDeleteFolder,
   );
 
+  const dialogs = useDialogs();
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState<boolean>(false);
 
   useEffect(() => {
@@ -67,39 +69,39 @@ function App() {
   }, []);
 
   const handleExportBackup = async () => {
-    const password = prompt("Enter a password to encrypt this database backup (Введіть пароль для шифрування резервної копії):");
+    const password = await dialogs.prompt("Enter a password to encrypt this database backup (Введіть пароль для шифрування резервної копії):");
     if (password === null) return;
     if (!password) {
-      alert("Password cannot be empty (Пароль не може бути порожнім)");
+      await dialogs.alert("Password cannot be empty (Пароль не може бути порожнім)");
       return;
     }
     try {
       const res = await invoke<string>("select_and_export_backup", { password });
-      alert(`Database backup exported successfully to: ${res}`);
+      await dialogs.alert(`Database backup exported successfully to: ${res}`);
     } catch (e: any) {
       if (e !== "Save cancelled") {
-        alert(`Export failed: ${e}`);
+        await dialogs.alert(`Export failed: ${e}`);
       }
     }
   };
 
   const handleImportBackup = async () => {
-    if (!confirm("Warning: Restoring will overwrite all current servers and credentials. Continue? (Увага: Відновлення перезапише всі поточні сервери та облікові дані. Продовжити?)")) return;
-    const password = prompt("Enter the password used to encrypt this backup (Введіть пароль, який використовувався для шифрування):");
+    if (!await dialogs.confirm("Warning: Restoring will overwrite all current servers and credentials. Continue? (Увага: Відновлення перезапише всі поточні сервери та облікові дані. Продовжити?)")) return;
+    const password = await dialogs.prompt("Enter the password used to encrypt this backup (Введіть пароль, який використовувався для шифрування):");
     if (password === null) return;
     if (!password) {
-      alert("Password cannot be empty (Пароль не може бути порожнім)");
+      await dialogs.alert("Password cannot be empty (Пароль не може бути порожнім)");
       return;
     }
     try {
       const res = await invoke<string>("select_and_import_backup", { password });
-      alert(`Database restored successfully from: ${res}`);
+      await dialogs.alert(`Database restored successfully from: ${res}`);
       serversCtrl.loadServers();
       credentialsCtrl.loadCredentials();
       serversCtrl.setSelectedServer(null);
     } catch (e: any) {
       if (e !== "Import cancelled") {
-        alert(`Restore failed: ${e}`);
+        await dialogs.alert(`Restore failed: ${e}`);
       }
     }
   };
@@ -107,21 +109,21 @@ function App() {
   const handleBypassWarnings = async () => {
     try {
       await invoke("bypass_rdp_warnings");
-      alert("Successfully configured Windows Registry. RDP warnings will now be reverted to legacy style. (Налаштування реєстру виконано успішно. Попередження RDP переведено в класичний режим.)");
+      await dialogs.alert("Successfully configured Windows Registry. RDP warnings will now be reverted to legacy style. (Налаштування реєстру виконано успішно. Попередження RDP переведено в класичний режим.)");
     } catch (e: any) {
-      alert(`Failed to configure registry: ${e}`);
+      await dialogs.alert(`Failed to configure registry: ${e}`);
     }
   };
 
   const handleImportCSV = async () => {
     try {
       const count = await invoke<number>("select_and_import_devolutions_csv");
-      alert(`Imported ${count} connections successfully!`);
+      await dialogs.alert(`Imported ${count} connections successfully!`);
       serversCtrl.loadServers();
       credentialsCtrl.loadCredentials();
     } catch (err: any) {
       if (err !== "Import cancelled") {
-        alert(`Import failed: ${err}`);
+        await dialogs.alert(`Import failed: ${err}`);
       }
     }
   };

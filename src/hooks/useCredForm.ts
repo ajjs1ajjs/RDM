@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Credential } from "../types";
+import { useDialogs } from "../components/AppDialogs";
 
 export function useCredForm(loadCredentials: () => Promise<void>) {
+  const dialogs = useDialogs();
   const [credModalOpen, setCredModalOpen] = useState<boolean>(false);
   const [editingCred, setEditingCred] = useState<Credential | null>(null);
   const [credName, setCredName] = useState("");
@@ -45,19 +47,19 @@ export function useCredForm(loadCredentials: () => Promise<void>) {
       loadCredentials();
     } catch (e: any) {
       setCredModalOpen(false);
-      alert(`Failed to save credential: ${e}`);
+      await dialogs.alert(`Failed to save credential: ${e}`);
     }
-  }, [editingCred, credName, credType, credUser, credSecret, loadCredentials]);
+  }, [editingCred, credName, credType, credUser, credSecret, loadCredentials, dialogs]);
 
   const deleteCredential = useCallback(async (id: string) => {
-    if (!confirm("Are you sure you want to delete this credential? Any linked servers will lose their auto-connection credentials.")) return;
+    if (!await dialogs.confirm("Are you sure you want to delete this credential? Any linked servers will lose their auto-connection credentials.")) return;
     try {
       await invoke("delete_credential", { id });
       loadCredentials();
     } catch (e: any) {
-      alert(`Failed to delete credential: ${e}`);
+      await dialogs.alert(`Failed to delete credential: ${e}`);
     }
-  }, [loadCredentials]);
+  }, [loadCredentials, dialogs]);
 
   return {
     credModalOpen, setCredModalOpen,

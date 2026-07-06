@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Server, Credential, ConnectionHistory } from "../types";
 import { invoke } from "@tauri-apps/api/core";
+import { useDialogs } from "./AppDialogs";
 import { Copy, Eye, EyeOff, ClipboardCheck, Terminal, Info } from "lucide-react";
 
 interface DetailsPanelProps {
@@ -16,6 +17,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
   onConnect,
   onEdit,
 }) => {
+  const dialogs = useDialogs();
   const [history, setHistory] = useState<ConnectionHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
   const [copyingPassword, setCopyingPassword] = useState<boolean>(false);
@@ -84,7 +86,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
       setDecryptedSecret(plain);
       setRevealingPassword(true);
     } catch (err) {
-      alert("Failed to decrypt credentials. Ensure Vault is unlocked.");
+      await dialogs.alert("Failed to decrypt credentials. Ensure Vault is unlocked.");
     }
   };
 
@@ -118,7 +120,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
         timerRef.current = null;
       }, 15000);
     } catch (err) {
-      alert("Failed to decrypt and copy secret.");
+      await dialogs.alert("Failed to decrypt and copy secret.");
     }
   };
 

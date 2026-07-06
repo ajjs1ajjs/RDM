@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useDialogs } from "./AppDialogs";
 import { File, Folder, Download, Upload, RefreshCw, ChevronRight, HardDrive } from "lucide-react";
 
 interface SftpTabProps {
@@ -26,6 +27,7 @@ export const SftpTab: React.FC<SftpTabProps> = ({
   credentialId,
   serverId,
 }) => {
+  const dialogs = useDialogs();
   const [currentPath, setCurrentPath] = useState<string>("/");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -121,9 +123,9 @@ export const SftpTab: React.FC<SftpTabProps> = ({
         credentialId: credentialId || null,
         serverId: serverId || null,
       });
-      alert("Download completed!");
+      await dialogs.alert("Download completed!");
     } catch (err: any) {
-      alert(`Download failed: ${err}`);
+      await dialogs.alert(`Download failed: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -150,10 +152,10 @@ export const SftpTab: React.FC<SftpTabProps> = ({
         credentialId: credentialId || null,
         serverId: serverId || null,
       });
-      alert("Upload completed!");
+      await dialogs.alert("Upload completed!");
       fetchFiles(currentPath);
     } catch (err: any) {
-      alert(`Upload failed: ${err}`);
+      await dialogs.alert(`Upload failed: ${err}`);
     } finally {
       setLoading(false);
     }

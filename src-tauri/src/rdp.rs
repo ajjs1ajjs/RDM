@@ -11,7 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IsWindow, GWL_STYLE, GWLP_HWNDPARENT,
     WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_BORDER, WS_SYSMENU,
     WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
-    SW_SHOW, SW_HIDE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP,
+    SW_SHOW, SW_HIDE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP, HWND_NOTOPMOST,
 };
 
 struct OwnerData(isize);
@@ -32,7 +32,7 @@ unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOO
     let owner_hwnd = data.0 as isize;
     let owner = GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
     if owner == owner_hwnd {
-        let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+        let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
     BOOL(1)
@@ -381,7 +381,7 @@ pub fn launch_rdp_embedded(
         let _ = SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, parent_hwnd.0 as isize);
 
         // Position at screen coords
-        let _ = SetWindowPos(hwnd, HWND_TOP, screen_x, screen_y, width_phys, height_phys,
+        let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, screen_x, screen_y, width_phys, height_phys,
             SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
         log_debug(&app_data_dir, &format!("Styled/positioned mstsc @ ({},{}) {}x{}", screen_x, screen_y, width_phys, height_phys));
@@ -426,13 +426,13 @@ pub fn launch_rdp_embedded(
             unsafe {
                 if should_be_visible {
                     ShowWindow(thread_hwnd, SW_SHOW);
-                    let _ = SetWindowPos(thread_hwnd, HWND_TOP, 0, 0, 0, 0,
+                    let _ = SetWindowPos(thread_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                     // Bring all dialogs owned by mstsc to front
                     let mut od = OwnerData(thread_hwnd.0 as isize);
                     let _ = EnumWindows(Some(enum_owned_hwnd_top), LPARAM(&mut od as *mut _ as isize));
                 } else {
-                    let _ = SetWindowPos(thread_hwnd, HWND_TOP, -32000, -32000, 0, 0,
+                    let _ = SetWindowPos(thread_hwnd, HWND_NOTOPMOST, -32000, -32000, 0, 0,
                         SWP_NOSIZE | SWP_NOACTIVATE);
                 }
             }
@@ -469,7 +469,7 @@ pub fn resize_rdp_embedded(
                 ShowWindow(hwnd, SW_HIDE);
                 session.visible = false;
                 // Move off-screen so even if mstsc re-shows, it's hidden
-                let _ = SetWindowPos(hwnd, HWND_TOP, -32000, -32000, 0, 0,
+                let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, -32000, -32000, 0, 0,
                     SWP_NOSIZE | SWP_NOACTIVATE);
             } else {
                 let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
@@ -488,7 +488,7 @@ pub fn resize_rdp_embedded(
 
                 ShowWindow(hwnd, SW_SHOW);
                 session.visible = true;
-                let _ = SetWindowPos(hwnd, HWND_TOP, pt.x, pt.y, width_phys, height_phys,
+                let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, pt.x, pt.y, width_phys, height_phys,
                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
             }
         }
