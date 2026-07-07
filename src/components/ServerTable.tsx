@@ -61,7 +61,7 @@ export const ServerTable: React.FC<ServerTableProps> = ({
   }), [servers, search, selectedFolder, selectedTag]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", padding: "20px", boxSizing: "border-box" }}>
       <div className="header-row">
         <div className="search-input-wrapper">
           <Search size={18} className="search-icon" />
