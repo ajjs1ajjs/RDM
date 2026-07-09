@@ -6,6 +6,13 @@ cargo_check.*
 # Build output
 BUILD/
 dist-portable/
+bin/
+obj/
+backup/
+wpf_backup/
+src-tauri/src/RdpHost/bin/
+src-tauri/src/RdpHost/obj/
+src-tauri/bin/
 
 # AI editor
 .claude/

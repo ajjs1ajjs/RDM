@@ -56,6 +56,17 @@ pub fn run_ssh_command_sync(
             std::fs::set_permissions(&key_file, std::fs::Permissions::from_mode(0o600))
                 .map_err(|e| format!("Failed to set permissions on key file: {}", e))?;
         }
+        #[cfg(windows)]
+        {
+            let _ = std::process::Command::new("icacls")
+                .args(&[
+                    key_file.to_string_lossy().as_ref(),
+                    "/inheritance:r",
+                    "/grant:r",
+                    &format!("{}:(R,W)", std::env::var("USERNAME").unwrap_or_default()),
+                ])
+                .output();
+        }
 
         actual_args.push("-i".to_string());
         actual_args.push(key_file.to_string_lossy().to_string());

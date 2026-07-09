@@ -50,46 +50,15 @@ fn set_setting(key: String, value: String, db: State<'_, DbState>) -> Result<(),
     db::set_setting(&conn, &key, &value)
 }
 
-fn auto_initialize_vault(db: &DbState, session_kek: &mut Option<[u8; 32]>) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut salt = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut salt);
-    let salt_hex = hex::encode(salt);
-    let kek = crypto::derive_key("default_rdm_key", &salt)?;
-    let sentinel_plaintext = "rdm-auth-sentinel";
-    let encrypted_sentinel = crypto::encrypt_secret(&kek, sentinel_plaintext)?;
-    let sentinel_json = serde_json::to_string(&encrypted_sentinel)
-        .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
-    db::set_setting(&conn, "salt", &salt_hex)?;
-    db::set_setting(&conn, "sentinel", &sentinel_json)?;
-    *session_kek = Some(kek);
-    Ok(())
-}
-
 #[tauri::command]
 fn is_vault_unlocked(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<bool, String> {
+    // Check if vault is initialized at all
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    
-    // Check if vault is initialized
-    if let Some(sentinel_json) = db::get_setting(&conn, "sentinel")? {
-        let salt_hex = db::get_setting(&conn, "salt")?.unwrap_or_default();
-        let salt = hex::decode(&salt_hex).map_err(|e| e.to_string())?;
-        if let Ok(default_kek) = crypto::derive_key("default_rdm_key", &salt) {
-            if let Ok(encrypted_sentinel) = serde_json::from_str::<crypto::EncryptedData>(&sentinel_json) {
-                if let Ok(decrypted) = crypto::decrypt_secret(&default_kek, &encrypted_sentinel) {
-                    if decrypted == "rdm-auth-sentinel" {
-                        let mut kek = state.kek.lock().map_err(|e| e.to_string())?;
-                        *kek = Some(default_kek);
-                        return Ok(true);
-                    }
-                }
-            }
-        }
-    } else {
-        // Auto-initialize
-        drop(conn);
-        let mut kek = state.kek.lock().map_err(|e| e.to_string())?;
-        let _ = auto_initialize_vault(&db, &mut *kek);
+    let sentinel = db::get_setting(&conn, "sentinel")?;
+    drop(conn);
+
+    if sentinel.is_none() {
+        // Vault not yet initialized — treat as "unlocked" so the UI can show the setup form
         return Ok(true);
     }
 
@@ -178,33 +147,9 @@ fn unlock_vault(
     password: String,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
-    app: AppHandle,
 ) -> Result<bool, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let success = unlock_vault_impl(&conn, &state.kek, &password)?;
-    if success {
-        if password != "default_rdm_key" {
-            drop(conn); // Drop connection locks to safely re-encrypt in re_encrypt_database
-            
-            let app_dir = app.path().app_data_dir().unwrap();
-            let db_path = app_dir.join("rdm.db");
-            
-            let old_kek = state.kek.lock().map_err(|e| e.to_string())?.ok_or_else(|| "KEK missing".to_string())?;
-            
-            let mut local_salt = [0u8; 16];
-            thread_rng().fill_bytes(&mut local_salt);
-            let local_salt_hex = hex::encode(local_salt);
-            let local_kek = crypto::derive_key("default_rdm_key", &local_salt)?;
-            
-            if let Err(e) = re_encrypt_database(&db_path, &old_kek, &local_kek, &local_salt_hex) {
-                println!("Failed to auto-re-encrypt database to default key: {}", e);
-            } else {
-                let mut kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
-                *kek_guard = Some(local_kek);
-                println!("Successfully auto-re-encrypted database to default_rdm_key!");
-            }
-        }
-    }
     Ok(success)
 }
 
@@ -1709,13 +1654,9 @@ pub fn run() {
             let conn = db::init_db(app_dir)?;
             let session_state = SessionState::new();
 
-            // Auto-unlock or initialize vault with default key: "default_rdm_key"
-            let sentinel = db::get_setting(&conn, "sentinel").unwrap_or(None);
-            if sentinel.is_none() {
-                let _ = setup_master_password_impl(&conn, &session_state.kek, "default_rdm_key");
-            } else {
-                let _ = unlock_vault_impl(&conn, &session_state.kek, "default_rdm_key");
-            }
+            // Vault starts locked — user must enter master password via UI.
+            // setup_master_password/unlock_vault is called from the frontend.
+            // No auto-unlock with hardcoded keys.
 
             app.manage(DbState { conn: Mutex::new(conn) });
             app.manage(session_state);

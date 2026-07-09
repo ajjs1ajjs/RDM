@@ -103,6 +103,66 @@ fn find_mstsc_hwnd(pid: u32) -> Option<HWND> {
 
 
 
+#[repr(C)]
+struct WinCredential {
+    flags: u32,
+    typ: u32,
+    target_name: *mut u16,
+    comment: *mut u16,
+    last_written: i64,
+    credential_blob_size: u32,
+    credential_blob: *mut u8,
+    persist: u32,
+    attribute_count: u32,
+    attributes: *mut u8,
+    target_alias: *mut u16,
+    user_name: *mut u16,
+}
+
+extern "system" {
+    fn CredWriteW(credential: *const WinCredential, flags: u32) -> i32;
+    fn CredDeleteW(target_name: *const u16, typ: u32, flags: u32) -> i32;
+}
+
+const CRED_TYPE_GENERIC: u32 = 1;
+const CRED_PERSIST_SESSION: u32 = 2;
+
+fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
+    let target = format!("TERMSRV/{}", host);
+    unsafe {
+        let mut password_wide: Vec<u16> = password.encode_utf16().collect();
+        password_wide.push(0);
+        let mut username_wide: Vec<u16> = username.encode_utf16().collect();
+        username_wide.push(0);
+        let mut target_wide: Vec<u16> = target.encode_utf16().collect();
+        target_wide.push(0);
+
+        let mut cred = WinCredential {
+            flags: 0,
+            typ: CRED_TYPE_GENERIC,
+            target_name: target_wide.as_mut_ptr(),
+            comment: std::ptr::null_mut(),
+            last_written: 0,
+            credential_blob_size: (password_wide.len() * 2) as u32,
+            credential_blob: password_wide.as_mut_ptr() as *mut u8,
+            persist: CRED_PERSIST_SESSION,
+            attribute_count: 0,
+            attributes: std::ptr::null_mut(),
+            target_alias: std::ptr::null_mut(),
+            user_name: username_wide.as_mut_ptr(),
+        };
+        let _ = CredWriteW(&cred, 0);
+    }
+}
+
+fn delete_rdp_credential_secure(host: &str) {
+    let target = format!("TERMSRV/{}", host);
+    let mut target_wide: Vec<u16> = target.encode_utf16().collect();
+    unsafe {
+        let _ = CredDeleteW(target_wide.as_mut_ptr(), CRED_TYPE_GENERIC, 0);
+    }
+}
+
 pub fn launch_rdp_session(
     host: &str,
     port: u32,
@@ -244,14 +304,10 @@ pub fn launch_rdp_embedded(
         .spawn()
         .and_then(|mut c| c.wait());
 
-    // Store RDP credentials via cmdkey if password is supplied
+    // Store RDP credentials via Windows Credential Manager API (secure, no cmdline exposure)
     if let (Some(user), Some(pass)) = (username, password) {
-        let target = format!("TERMSRV/{}", host);
-        log_debug(&app_data_dir, &format!("Storing credential for {}", target));
-        let _ = std::process::Command::new("cmdkey")
-            .args(&["/generic:", &target, "/user:", user, "/pass:", pass])
-            .spawn()
-            .and_then(|mut c| c.wait());
+        log_debug(&app_data_dir, &format!("Storing credential for TERMSRV/{}", host));
+        store_rdp_credential_secure(host, user, pass);
     }
 
     // 1. Compute screen coordinates BEFORE creating RDP file (so winposstr is accurate)
@@ -437,11 +493,8 @@ pub fn launch_rdp_embedded(
                 }
             }
         }
-        // Cleanup stored credential
-        let _ = std::process::Command::new("cmdkey")
-            .args(&["/delete:", &format!("TERMSRV/{}", host_clone)])
-            .spawn()
-            .and_then(|mut c| c.wait());
+        // Cleanup stored credential via Windows Credential Manager
+        delete_rdp_credential_secure(&host_clone);
         if let Ok(mut sessions) = app_clone.state::<RdpState>().sessions.lock() {
             sessions.remove(&session_id_clone);
         }

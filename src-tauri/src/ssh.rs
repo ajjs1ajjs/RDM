@@ -132,6 +132,18 @@ pub fn connect_ssh(
             std::fs::set_permissions(&key_file, std::fs::Permissions::from_mode(0o600))
                 .map_err(|e| format!("Failed to set permissions on key file: {}", e))?;
         }
+        #[cfg(windows)]
+        {
+            // Restrict key file to current user only using icacls
+            let _ = std::process::Command::new("icacls")
+                .args(&[
+                    key_file.to_string_lossy().as_ref(),
+                    "/inheritance:r",
+                    "/grant:r",
+                    &format!("{}:(R,W)", std::env::var("USERNAME").unwrap_or_default()),
+                ])
+                .output();
+        }
 
         args.push("-i".to_string());
         args.push(key_file.to_string_lossy().to_string());
