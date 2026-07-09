@@ -35,7 +35,33 @@ impl SessionState {
 fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let sentinel = db::get_setting(&conn, "sentinel")?;
-    Ok(sentinel.is_some())
+
+    match sentinel {
+        None => Ok(false),
+        Some(sentinel_json) => {
+            // Detect legacy vault (auto-initialized with default_rdm_key)
+            let salt_hex = match db::get_setting(&conn, "salt")? {
+                Some(s) => s,
+                None => return Ok(false),
+            };
+            let salt = match hex::decode(&salt_hex) {
+                Ok(s) => s,
+                Err(_) => return Ok(true),
+            };
+            let default_kek = match crypto::derive_key("default_rdm_key", &salt) {
+                Ok(k) => k,
+                Err(_) => return Ok(true),
+            };
+            let encrypted: crypto::EncryptedData = match serde_json::from_str(&sentinel_json) {
+                Ok(d) => d,
+                Err(_) => return Ok(true),
+            };
+            match crypto::decrypt_secret(&default_kek, &encrypted) {
+                Ok(decrypted) if decrypted == "rdm-auth-sentinel" => Ok(false),
+                _ => Ok(true),
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -71,32 +97,102 @@ fn setup_master_password_impl(
     session_kek_mutex: &Mutex<Option<[u8; 32]>>,
     password: &str,
 ) -> Result<(), String> {
-    // Check if already setup
-    if db::get_setting(conn, "sentinel")?.is_some() {
-        return Err("Vault is already initialized".to_string());
-    }
+    // Generate new salt and KEK
+    let mut new_salt = [0u8; 16];
+    thread_rng().fill_bytes(&mut new_salt);
+    let new_salt_hex = hex::encode(new_salt);
+    let new_kek = crypto::derive_key(password, &new_salt)?;
 
-    // Generate random 16-byte salt
-    let mut salt = [0u8; 16];
-    thread_rng().fill_bytes(&mut salt);
-    let salt_hex = hex::encode(salt);
-
-    // Derive Key Encryption Key (KEK)
-    let kek = crypto::derive_key(password, &salt)?;
-
-    // Encrypt authentication sentinel
-    let sentinel_plaintext = "rdm-auth-sentinel";
-    let encrypted_sentinel = crypto::encrypt_secret(&kek, sentinel_plaintext)?;
+    let encrypted_sentinel = crypto::encrypt_secret(&new_kek, "rdm-auth-sentinel")?;
     let sentinel_json = serde_json::to_string(&encrypted_sentinel)
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
 
-    // Store salt and sentinel in db
-    db::set_setting(conn, "salt", &salt_hex)?;
-    db::set_setting(conn, "sentinel", &sentinel_json)?;
+    let existing_sentinel = db::get_setting(conn, "sentinel")?;
+
+    if let Some(ref sentinel_str) = existing_sentinel {
+        // Sentinel exists — check if this is a legacy vault (encrypted with default_rdm_key)
+        let salt_hex = db::get_setting(conn, "salt")?
+            .ok_or_else(|| "Vault is corrupted: salt not found".to_string())?;
+        let salt = hex::decode(&salt_hex)
+            .map_err(|e| format!("Invalid salt encoding: {}", e))?;
+
+        let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
+        let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_str)
+            .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
+
+        match crypto::decrypt_secret(&default_kek, &encrypted) {
+            Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
+                // Legacy vault migration: re-encrypt all data
+                db::set_setting(conn, "salt", &new_salt_hex)?;
+                db::set_setting(conn, "sentinel", &sentinel_json)?;
+
+                // Re-encrypt credentials table
+                let mut stmt = conn
+                    .prepare("SELECT id, encrypted_secret FROM credentials")
+                    .map_err(|e| e.to_string())?;
+                let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+                let mut creds_to_update = Vec::new();
+                while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+                    let id: String = row.get(0).map_err(|e| e.to_string())?;
+                    let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
+                    let enc_data: crypto::EncryptedData = serde_json::from_str(&enc_json)
+                        .map_err(|e| e.to_string())?;
+                    let plain = crypto::decrypt_secret(&default_kek, &enc_data)?;
+                    let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
+                    let re_enc_json = serde_json::to_string(&re_enc)
+                        .map_err(|e| e.to_string())?;
+                    creds_to_update.push((id, re_enc_json));
+                }
+                drop(rows);
+                drop(stmt);
+
+                for (id, secret_json) in &creds_to_update {
+                    conn.execute(
+                        "UPDATE credentials SET encrypted_secret = ?1 WHERE id = ?2",
+                        [secret_json, id],
+                    ).map_err(|e| e.to_string())?;
+                }
+
+                // Re-encrypt servers table
+                let mut stmt = conn
+                    .prepare("SELECT id, encrypted_password FROM servers WHERE encrypted_password IS NOT NULL AND encrypted_password != ''")
+                    .map_err(|e| e.to_string())?;
+                let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+                let mut servers_to_update = Vec::new();
+                while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+                    let id: String = row.get(0).map_err(|e| e.to_string())?;
+                    let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
+                    let enc_data: crypto::EncryptedData = serde_json::from_str(&enc_json)
+                        .map_err(|e| e.to_string())?;
+                    let plain = crypto::decrypt_secret(&default_kek, &enc_data)?;
+                    let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
+                    let re_enc_json = serde_json::to_string(&re_enc)
+                        .map_err(|e| e.to_string())?;
+                    servers_to_update.push((id, re_enc_json));
+                }
+                drop(rows);
+                drop(stmt);
+
+                for (id, pw_json) in &servers_to_update {
+                    conn.execute(
+                        "UPDATE servers SET encrypted_password = ?1 WHERE id = ?2",
+                        [pw_json, id],
+                    ).map_err(|e| e.to_string())?;
+                }
+            }
+            _ => {
+                return Err("Vault is already initialized with a different master password".to_string());
+            }
+        }
+    } else {
+        // Fresh setup — no sentinel yet
+        db::set_setting(conn, "salt", &new_salt_hex)?;
+        db::set_setting(conn, "sentinel", &sentinel_json)?;
+    }
 
     // Store KEK in session state
     let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
-    *session_kek = Some(kek);
+    *session_kek = Some(new_kek);
 
     Ok(())
 }
