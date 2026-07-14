@@ -7,7 +7,7 @@ import { useConnectionTabs } from "./hooks/useConnectionTabs";
 import { useServerForm } from "./hooks/useServerForm";
 import { useCredForm } from "./hooks/useCredForm";
 import { useFolderModal } from "./hooks/useFolderModal";
-import { MasterPassword } from "./components/MasterPassword";
+
 import { Sidebar } from "./components/Sidebar";
 import { ServerTable } from "./components/ServerTable";
 import { DetailsPanel } from "./components/DetailsPanel";
@@ -24,7 +24,7 @@ function App() {
   const vault = useVault();
   const serversCtrl = useServers();
   const credentialsCtrl = useCredentials();
-  const tabs = useConnectionTabs(vault.unlocked);
+  const tabs = useConnectionTabs();
 
   const serverForm = useServerForm(
     serversCtrl.selectedFolder,
@@ -41,21 +41,30 @@ function App() {
     serversCtrl.handleDeleteFolder,
   );
 
-  const dialogs = useDialogs();
+    const dialogs = useDialogs();
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState<boolean>(false);
+  const [updateInfo, setUpdateInfo] = useState<{ latest: string; current: string; url: string } | null>(null);
 
   useEffect(() => {
     vault.checkUnlockStatus();
     serversCtrl.loadServers();
     serversCtrl.loadFavorites();
     serversCtrl.loadCustomFolders();
+    checkForUpdate();
   }, []);
 
+  const checkForUpdate = async () => {
+    try {
+      const res = await invoke<{ available: boolean; latest_version: string; current_version: string; download_url: string }>("check_for_update");
+      if (res.available) {
+        setUpdateInfo({ latest: res.latest_version, current: res.current_version, url: res.download_url });
+      }
+    } catch { }
+  };
+
   useEffect(() => {
-    if (vault.unlocked) {
-      credentialsCtrl.loadCredentials();
-    }
-  }, [vault.unlocked]);
+    credentialsCtrl.loadCredentials();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -216,24 +225,6 @@ function App() {
             <h2 style={{ marginBottom: "20px" }}>Application Settings</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
-                <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Security</h3>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
-                  Automatically lock the Vault after a period of inactivity.
-                </p>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <select className="input-field" style={{ width: "200px" }}
-                    value={vault.autoLockMinutes}
-                    onChange={(e) => vault.setAutoLockMinutes(parseInt(e.target.value, 10))}>
-                    <option value={0}>Never</option>
-                    <option value={1}>1 minute</option>
-                    <option value={5}>5 minutes</option>
-                    <option value={15}>15 minutes</option>
-                    <option value={30}>30 minutes</option>
-                    <option value={60}>1 hour</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Backup & Restore</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
                   Export a copy of the database, or restore from a previous backup file.
@@ -255,9 +246,16 @@ function App() {
               <div>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>About</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                  <div>Version: 1.0.0 (MVP)</div>
+                  <div>Version: {updateInfo?.current ?? "—"}</div>
                   <div>Runtime: Tauri v2 + React</div>
                   <div>OS Backend: Windows native PTY & Command integrations</div>
+                  {updateInfo && (
+                    <div style={{ marginTop: "8px" }}>
+                      <a href={updateInfo.url} target="_blank" style={{ color: "var(--accent-cyan)", textDecoration: "underline", cursor: "pointer" }}>
+                        Update available: {updateInfo.latest}
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -304,12 +302,28 @@ function App() {
     );
   };
 
-  if (!vault.unlocked) {
-    return <MasterPassword onUnlock={vault.handleUnlock} />;
-  }
+  const handleUpdateClick = async () => {
+    if (updateInfo) {
+      await invoke("plugin:opener|open_url", { url: updateInfo.url });
+    }
+  };
 
   return (
     <>
+      {updateInfo && (
+        <div style={{
+          background: "linear-gradient(90deg, var(--accent-purple), var(--accent-cyan))",
+          color: "#fff",
+          textAlign: "center",
+          padding: "8px 16px",
+          fontSize: "0.85rem",
+          fontWeight: 500,
+          cursor: "pointer",
+          userSelect: "none"
+        }} onClick={handleUpdateClick}>
+          New version {updateInfo.latest} available &mdash; click to download
+        </div>
+      )}
     <div className="app-container">
       <div className="app-body">
         <Sidebar

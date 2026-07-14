@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use rand::{thread_rng, RngCore};
 use tauri_plugin_dialog::DialogExt;
+use serde::Serialize;
 
 
 // State definitions
@@ -77,19 +78,8 @@ fn set_setting(key: String, value: String, db: State<'_, DbState>) -> Result<(),
 }
 
 #[tauri::command]
-fn is_vault_unlocked(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<bool, String> {
-    // Check if vault is initialized at all
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let sentinel = db::get_setting(&conn, "sentinel")?;
-    drop(conn);
-
-    if sentinel.is_none() {
-        // Vault not yet initialized — treat as "unlocked" so the UI can show the setup form
-        return Ok(true);
-    }
-
-    let kek = state.kek.lock().map_err(|e| e.to_string())?;
-    Ok(kek.is_some())
+fn is_vault_unlocked() -> Result<bool, String> {
+    Ok(true)
 }
 
 fn setup_master_password_impl(
@@ -250,12 +240,7 @@ fn unlock_vault(
 }
 
 #[tauri::command]
-fn lock_vault(state: State<'_, SessionState>) -> Result<(), String> {
-    let mut session_kek = state.kek.lock().map_err(|e| e.to_string())?;
-    if let Some(mut key) = session_kek.take() {
-        // Zero out the key in memory
-        key.iter_mut().for_each(|x| *x = 0);
-    }
+fn lock_vault() -> Result<(), String> {
     Ok(())
 }
 
@@ -958,6 +943,98 @@ fn bypass_rdp_warnings() -> Result<(), String> {
         return Err("UAC elevation was cancelled or failed".to_string());
     }
         
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateInfo {
+    pub available: bool,
+    pub latest_version: String,
+    pub current_version: String,
+    pub download_url: String,
+}
+
+#[tauri::command]
+fn check_for_update() -> Result<UpdateInfo, String> {
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    let repo = "ajjs1ajjs/RDM";
+    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .user_agent("RDM-Manager")
+        .build()
+        .map_err(|e| format!("Client error: {}", e))?;
+    let resp: serde_json::Value = client
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|e| format!("Network error: {}", e))?
+        .json()
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    let tag = resp["tag_name"].as_str().unwrap_or("");
+    let html_url = resp["html_url"].as_str().unwrap_or("");
+    if tag.is_empty() || html_url.is_empty() {
+        return Ok(UpdateInfo {
+            available: false,
+            latest_version: String::new(),
+            current_version: current,
+            download_url: String::new(),
+        });
+    }
+
+    let latest_ver = tag.trim_start_matches('v');
+    let latest = semver_parse(latest_ver).unwrap_or((0, 0, 0));
+    let cur = semver_parse(&current).unwrap_or((0, 0, 0));
+
+    Ok(UpdateInfo {
+        available: latest > cur,
+        latest_version: tag.to_string(),
+        current_version: current,
+        download_url: format!("https://github.com/{}/releases/tag/{}", repo, tag),
+    })
+}
+
+fn semver_parse(v: &str) -> Option<(u32, u32, u32)> {
+    let parts: Vec<&str> = v.splitn(3, '.').collect();
+    if parts.len() < 3 { return None; }
+    Some((
+        parts[0].parse().ok()?,
+        parts[1].parse().ok()?,
+        parts[2].parse().ok()?,
+    ))
+}
+
+fn auto_setup_vault(conn: &rusqlite::Connection, session_state: &SessionState) -> Result<(), String> {
+    let sentinel = db::get_setting(conn, "sentinel")?;
+
+    if sentinel.is_none() {
+        let mut salt = [0u8; 16];
+        thread_rng().fill_bytes(&mut salt);
+        let salt_hex = hex::encode(salt);
+        let kek = crypto::derive_key("default_rdm_key", &salt)?;
+
+        let encrypted = crypto::encrypt_secret(&kek, "rdm-auth-sentinel")?;
+        let sentinel_json = serde_json::to_string(&encrypted)
+            .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
+
+        db::set_setting(conn, "salt", &salt_hex)?;
+        db::set_setting(conn, "sentinel", &sentinel_json)?;
+
+        let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
+        *session_kek = Some(kek);
+    } else {
+        let salt_hex = db::get_setting(conn, "salt")?
+            .ok_or_else(|| "Vault salt not found".to_string())?;
+        let salt = hex::decode(&salt_hex)
+            .map_err(|e| format!("Invalid salt encoding: {}", e))?;
+        let kek = crypto::derive_key("default_rdm_key", &salt)?;
+
+        let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
+        *session_kek = Some(kek);
+    }
+
     Ok(())
 }
 
@@ -1750,9 +1827,11 @@ pub fn run() {
             let conn = db::init_db(app_dir)?;
             let session_state = SessionState::new();
 
-            // Vault starts locked — user must enter master password via UI.
-            // setup_master_password/unlock_vault is called from the frontend.
-            // No auto-unlock with hardcoded keys.
+            // Auto-setup vault with a default key — no master password prompt.
+            // Password is only required for export/import operations.
+            if let Err(e) = auto_setup_vault(&conn, &session_state) {
+                eprintln!("Auto-setup vault warning: {}", e);
+            }
 
             app.manage(DbState { conn: Mutex::new(conn) });
             app.manage(session_state);
@@ -1800,7 +1879,8 @@ pub fn run() {
             select_and_import_backup,
             decrypt_server_password,
             bypass_rdp_warnings,
-            save_server_from_connect
+            save_server_from_connect,
+            check_for_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

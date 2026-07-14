@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Server, ActiveTab } from "../types";
 
-export function useConnectionTabs(unlocked: boolean) {
+export function useConnectionTabs() {
   const [activeTabType, setActiveTabType] = useState<string>("dashboard");
   const [activeTabs, setActiveTabs] = useState<ActiveTab[]>([]);
   const [currentTabId, setCurrentTabId] = useState<string>("dashboard");
@@ -23,15 +23,13 @@ export function useConnectionTabs(unlocked: boolean) {
       });
     };
 
-    if (unlocked) {
-      setupListeners();
-    }
+    setupListeners();
 
     return () => {
       if (unlistenRdp) unlistenRdp();
       if (unlistenSsh) unlistenSsh();
     };
-  }, [unlocked]);
+  }, []);
 
   const handleConnect = useCallback((srv: Server) => {
     if (srv.protocol === "rdp") {
