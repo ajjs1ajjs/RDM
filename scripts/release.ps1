@@ -35,7 +35,7 @@ if ($dirty) {
     throw "Uncommitted changes found (see above). Commit them manually before release."
 }
 
-git push origin master
+git push origin main
 git tag $tag
 git push origin $tag
 
