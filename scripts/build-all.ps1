@@ -38,12 +38,6 @@ if ($msiPath) {
     Write-Host "  Copied MSI installer to BUILD\" -ForegroundColor Gray
 }
 
-$nsisPath = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($nsisPath) {
-    Copy-Item $nsisPath.FullName "$buildDest\" -Force
-    Write-Host "  Copied NSIS installer to BUILD\" -ForegroundColor Gray
-}
-
 # Copy portable ZIP
 $zipPath = Get-ChildItem "dist-portable\*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($zipPath) {

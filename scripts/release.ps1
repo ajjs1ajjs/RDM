@@ -49,14 +49,12 @@ if (-not $ReleaseNotes) {
     }
 }
 
-# Find build artifacts
+# Find build artifacts (MSI + portable ZIP only)
 $msiPath = Get-ChildItem "$root/src-tauri/target/release/bundle/msi/*.msi" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-$nsisPath = Get-ChildItem "$root/src-tauri/target/release/bundle/nsis/*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $zipPath = Get-ChildItem "$root/dist-portable/*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
 $assets = @()
 if ($msiPath) { $assets += "`"$($msiPath.FullName)`"" }
-if ($nsisPath) { $assets += "`"$($nsisPath.FullName)`"" }
 if ($zipPath) { $assets += "`"$($zipPath.FullName)`"" }
 
 $notesFile = [System.IO.Path]::GetTempFileName()
