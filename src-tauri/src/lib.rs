@@ -356,7 +356,7 @@ fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result
     drop(conn);
 
     // Re-run auto_setup_vault which will detect empty sentinel and create fresh vault
-    auto_setup_vault(&db.conn.lock().map_err(|e| e.to_string())?, &state)
+    auto_setup_vault(&*db.conn.lock().map_err(|e| e.to_string())?, &state)
         .map_err(|e| format!("Failed to reinitialize vault: {}", e))
 }
 

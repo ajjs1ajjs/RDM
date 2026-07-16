@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.53
+
+- Fix Rust compiler warnings (unused ShowWindow return values)
+- Code cleanup and formatting
+
 ## v0.1.52
 
 - Add vault reset option for users who forgot their master password

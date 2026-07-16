@@ -2,16 +2,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, Emitter};
+use tauri::{Emitter, Manager};
 
-use windows::Win32::Foundation::{HWND, LPARAM, BOOL};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, EnumChildWindows, GetWindowThreadProcessId, GetClassNameW,
-    SetWindowLongW, SetWindowLongPtrW, GetWindowLongPtrW, GetWindowLongW, ShowWindow, MoveWindow, SetWindowPos,
-    IsWindow, GWL_STYLE, GWLP_HWNDPARENT,
-    WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_BORDER, WS_SYSMENU,
-    WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
-    SW_SHOW, SW_HIDE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE, SWP_SHOWWINDOW, HWND_TOP, HWND_NOTOPMOST,
+    EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW, GetWindowLongW,
+    GetWindowThreadProcessId, IsWindow, MoveWindow, SetWindowLongPtrW, SetWindowLongW,
+    SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE, HWND_NOTOPMOST, HWND_TOP, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WS_BORDER, WS_CAPTION,
+    WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 
 struct OwnerData(isize);
@@ -32,8 +31,15 @@ unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOO
     let owner_hwnd = data.0 as isize;
     let owner = GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
     if owner == owner_hwnd {
-        let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        let _ = SetWindowPos(
+            hwnd,
+            HWND_NOTOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
     }
     BOOL(1)
 }
@@ -52,7 +58,9 @@ pub struct RdpState {
 
 impl RdpState {
     pub fn new() -> Self {
-        Self { sessions: Mutex::new(HashMap::new()) }
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -60,7 +68,8 @@ fn log_debug(app_data_dir: &std::path::Path, message: &str) {
     let log_file = app_data_dir.join("rdp_debug.log");
     let line = format!("{}\n", message);
     let _ = std::fs::OpenOptions::new()
-        .create(true).append(true)
+        .create(true)
+        .append(true)
         .open(log_file)
         .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
 }
@@ -80,7 +89,10 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         let len = GetClassNameW(hwnd, &mut class_name);
         if len > 0 {
             let class_str = String::from_utf16_lossy(&class_name[..len as usize]);
-            if class_str == "TscShellContainerClass" || class_str.contains("FreeRDP") || class_str.contains("wfreerdp") {
+            if class_str == "TscShellContainerClass"
+                || class_str.contains("FreeRDP")
+                || class_str.contains("wfreerdp")
+            {
                 data.hwnd = Some(hwnd);
                 return BOOL(0);
             }
@@ -92,16 +104,13 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
 fn find_mstsc_hwnd(pid: u32) -> Option<HWND> {
     let mut data = EnumData { pid, hwnd: None };
     unsafe {
-        let _ = EnumWindows(Some(enum_windows_callback), LPARAM(&mut data as *mut EnumData as isize));
+        let _ = EnumWindows(
+            Some(enum_windows_callback),
+            LPARAM(&mut data as *mut EnumData as isize),
+        );
     }
     data.hwnd
 }
-
-
-
-
-
-
 
 #[repr(C)]
 struct WinCredential {
@@ -189,7 +198,11 @@ pub fn launch_rdp_session(
     let rdp_sessions_dir = app_data_dir.join("rdp_sessions");
     let _ = std::fs::create_dir_all(&rdp_sessions_dir);
 
-    let file_name = format!("session_ext-{}-{}.rdp", server_id.unwrap_or_default(), uuid::Uuid::new_v4());
+    let file_name = format!(
+        "session_ext-{}-{}.rdp",
+        server_id.unwrap_or_default(),
+        uuid::Uuid::new_v4()
+    );
     let rdp_file_path = rdp_sessions_dir.join(file_name);
 
     let user_line = if let Some(user) = username {
@@ -199,8 +212,12 @@ pub fn launch_rdp_session(
     };
 
     let screen_mode = if fullscreen { 2 } else { 1 };
-    let multimon_line = if rdp_multimon { "use multimon:i:1\r\n" } else { "" };
-    
+    let multimon_line = if rdp_multimon {
+        "use multimon:i:1\r\n"
+    } else {
+        ""
+    };
+
     let smart_sizing_val = if rdp_smart_sizing { 1 } else { 0 };
     let redirect_clipboard = if rdp_clipboard { 1 } else { 0 };
     let redirect_drives = if rdp_drives { 1 } else { 0 };
@@ -245,7 +262,7 @@ pub fn launch_rdp_session(
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
         .chain(rdp_content.encode_utf16())
         .collect();
-    
+
     let rdp_content_bytes: &[u8] = unsafe {
         std::slice::from_raw_parts(
             rdp_content_utf16.as_ptr() as *const u8,
@@ -300,21 +317,37 @@ pub fn launch_rdp_embedded(
 
     // 0. Bypass all RDP certificate warnings via registry
     let _ = std::process::Command::new("reg")
-        .args(&["add", "HKCU\\Software\\Microsoft\\Terminal Server Client", "/v", "AuthenticationLevelOverride", "/t", "REG_DWORD", "/d", "0", "/f"])
+        .args(&[
+            "add",
+            "HKCU\\Software\\Microsoft\\Terminal Server Client",
+            "/v",
+            "AuthenticationLevelOverride",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "0",
+            "/f",
+        ])
         .spawn()
         .and_then(|mut c| c.wait());
 
     // Store RDP credentials via Windows Credential Manager API (secure, no cmdline exposure)
     if let (Some(user), Some(pass)) = (username, password) {
-        log_debug(&app_data_dir, &format!("Storing credential for TERMSRV/{}", host));
+        log_debug(
+            &app_data_dir,
+            &format!("Storing credential for TERMSRV/{}", host),
+        );
         store_rdp_credential_secure(host, user, pass);
     }
 
     // 1. Compute screen coordinates BEFORE creating RDP file (so winposstr is accurate)
     let (screen_x, screen_y) = unsafe {
-        use windows::Win32::Graphics::Gdi::ClientToScreen;
         use windows::Win32::Foundation::POINT;
-        let mut pt = POINT { x: x_phys, y: y_phys };
+        use windows::Win32::Graphics::Gdi::ClientToScreen;
+        let mut pt = POINT {
+            x: x_phys,
+            y: y_phys,
+        };
         let _ = ClientToScreen(parent_hwnd, &mut pt);
         (pt.x, pt.y)
     };
@@ -326,14 +359,21 @@ pub fn launch_rdp_embedded(
     let file_name = format!("session_emb-{}.rdp", uuid::Uuid::new_v4());
     let rdp_file_path = rdp_sessions_dir.join(file_name);
 
-    let user_line = username.map(|u| format!("username:s:{}\r\n", u)).unwrap_or_default();
+    let user_line = username
+        .map(|u| format!("username:s:{}\r\n", u))
+        .unwrap_or_default();
     let smart_sizing_val = if rdp_smart_sizing { 1 } else { 0 };
     let redirect_clipboard = if rdp_clipboard { 1 } else { 0 };
     let redirect_drives = if rdp_drives { 1 } else { 0 };
     let redirect_printers = if rdp_printers { 1 } else { 0 };
     let redirect_smartcards = if rdp_smartcards { 1 } else { 0 };
     let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
-    let audio_val = match rdp_audio { 0 => 0, 1 => 1, 2 => 2, _ => 0 };
+    let audio_val = match rdp_audio {
+        0 => 0,
+        1 => 1,
+        2 => 2,
+        _ => 0,
+    };
     let win_right = screen_x + width_phys;
     let win_bottom = screen_y + height_phys;
 
@@ -372,8 +412,12 @@ pub fn launch_rdp_embedded(
         redirect_smartcards,
         redirect_webauthn,
         if password.is_some() { 1 } else { 0 },
-        width_phys, height_phys,
-        screen_x, screen_y, win_right, win_bottom,
+        width_phys,
+        height_phys,
+        screen_x,
+        screen_y,
+        win_right,
+        win_bottom,
     );
 
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
@@ -389,7 +433,13 @@ pub fn launch_rdp_embedded(
         .map_err(|e| format!("Failed to write RDP file: {}", e))?;
 
     let fp = rdp_file_path.to_string_lossy().to_string();
-    log_debug(&app_data_dir, &format!("RDP file created with winposstr {} {} {} {}", screen_x, screen_y, win_right, win_bottom));
+    log_debug(
+        &app_data_dir,
+        &format!(
+            "RDP file created with winposstr {} {} {} {}",
+            screen_x, screen_y, win_right, win_bottom
+        ),
+    );
 
     // 3. Launch mstsc.exe (creates its window at correct screen coords via winposstr)
     let mut child = std::process::Command::new("mstsc")
@@ -406,14 +456,23 @@ pub fn launch_rdp_embedded(
         std::thread::sleep(Duration::from_millis(50));
         match child.try_wait() {
             Ok(Some(status)) => {
-                log_debug(&app_data_dir, &format!("mstsc exited prematurely with code {:?}", status.code()));
-                return Err(format!("mstsc exited prematurely (code {:?})", status.code()));
+                log_debug(
+                    &app_data_dir,
+                    &format!("mstsc exited prematurely with code {:?}", status.code()),
+                );
+                return Err(format!(
+                    "mstsc exited prematurely (code {:?})",
+                    status.code()
+                ));
             }
             _ => {}
         }
         if let Some(hwnd) = find_mstsc_hwnd(pid) {
             mstsc_hwnd = Some(hwnd);
-            log_debug(&app_data_dir, &format!("Found mstsc window HWND={:?}", hwnd));
+            log_debug(
+                &app_data_dir,
+                &format!("Found mstsc window HWND={:?}", hwnd),
+            );
             break;
         }
     }
@@ -437,27 +496,50 @@ pub fn launch_rdp_embedded(
         let _ = SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, parent_hwnd.0 as isize);
 
         // Position at screen coords
-        let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, screen_x, screen_y, width_phys, height_phys,
-            SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        let _ = SetWindowPos(
+            hwnd,
+            HWND_NOTOPMOST,
+            screen_x,
+            screen_y,
+            width_phys,
+            height_phys,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        );
 
-        log_debug(&app_data_dir, &format!("Styled/positioned mstsc @ ({},{}) {}x{}", screen_x, screen_y, width_phys, height_phys));
+        log_debug(
+            &app_data_dir,
+            &format!(
+                "Styled/positioned mstsc @ ({},{}) {}x{}",
+                screen_x, screen_y, width_phys, height_phys
+            ),
+        );
 
         // Resize all child windows of mstsc to fill the parent
-        let resize_data = ChildResizeData { width: width_phys, height: height_phys };
-        let _ = EnumChildWindows(hwnd, Some(resize_child_fill), LPARAM(&resize_data as *const _ as isize));
+        let resize_data = ChildResizeData {
+            width: width_phys,
+            height: height_phys,
+        };
+        let _ = EnumChildWindows(
+            hwnd,
+            Some(resize_child_fill),
+            LPARAM(&resize_data as *const _ as isize),
+        );
     }
 
     // 5. Store session
     let state = app.state::<RdpState>();
     {
         let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(session_id.clone(), RdpSession {
-            target_host: host.to_string(),
-            server_id,
-            mstsc_hwnd: hwnd.0 as isize,
-            pid,
-            visible: true,
-        });
+        sessions.insert(
+            session_id.clone(),
+            RdpSession {
+                target_host: host.to_string(),
+                server_id,
+                mstsc_hwnd: hwnd.0 as isize,
+                pid,
+                visible: true,
+            },
+        );
     }
 
     // 6. Monitor thread (keeps mstsc on top only while visible flag is true)
@@ -476,20 +558,41 @@ pub fn launch_rdp_embedded(
                 }
             }
             // Check the visible flag (set by resize_rdp_embedded)
-            let should_be_visible = app_clone.state::<RdpState>().sessions.lock().ok()
+            let should_be_visible = app_clone
+                .state::<RdpState>()
+                .sessions
+                .lock()
+                .ok()
                 .and_then(|s| s.get(&sid_clone).map(|sess| sess.visible))
                 .unwrap_or(false);
             unsafe {
                 if should_be_visible {
-                    ShowWindow(thread_hwnd, SW_SHOW);
-                    let _ = SetWindowPos(thread_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    let _ = ShowWindow(thread_hwnd, SW_SHOW);
+                    let _ = SetWindowPos(
+                        thread_hwnd,
+                        HWND_NOTOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
                     // Bring all dialogs owned by mstsc to front
                     let mut od = OwnerData(thread_hwnd.0 as isize);
-                    let _ = EnumWindows(Some(enum_owned_hwnd_top), LPARAM(&mut od as *mut _ as isize));
+                    let _ = EnumWindows(
+                        Some(enum_owned_hwnd_top),
+                        LPARAM(&mut od as *mut _ as isize),
+                    );
                 } else {
-                    let _ = SetWindowPos(thread_hwnd, HWND_NOTOPMOST, -32000, -32000, 0, 0,
-                        SWP_NOSIZE | SWP_NOACTIVATE);
+                    let _ = SetWindowPos(
+                        thread_hwnd,
+                        HWND_NOTOPMOST,
+                        -32000,
+                        -32000,
+                        0,
+                        0,
+                        SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
                 }
             }
         }
@@ -519,30 +622,49 @@ pub fn resize_rdp_embedded(
         let hwnd = HWND(session.mstsc_hwnd as *mut _);
         unsafe {
             if width <= 0 || height <= 0 {
-                ShowWindow(hwnd, SW_HIDE);
+                let _ = ShowWindow(hwnd, SW_HIDE);
                 session.visible = false;
                 // Move off-screen so even if mstsc re-shows, it's hidden
-                let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, -32000, -32000, 0, 0,
-                    SWP_NOSIZE | SWP_NOACTIVATE);
+                let _ = SetWindowPos(
+                    hwnd,
+                    HWND_NOTOPMOST,
+                    -32000,
+                    -32000,
+                    0,
+                    0,
+                    SWP_NOSIZE | SWP_NOACTIVATE,
+                );
             } else {
-                let main_window = app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())?;
+                let main_window = app
+                    .get_webview_window("main")
+                    .ok_or_else(|| "Main window not found".to_string())?;
                 let parent_hwnd = HWND(main_window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
 
-                use windows::Win32::Graphics::Gdi::ClientToScreen;
                 use windows::Win32::Foundation::POINT;
+                use windows::Win32::Graphics::Gdi::ClientToScreen;
 
                 let x_phys = (x as f64 * device_pixel_ratio).round() as i32;
                 let y_phys = (y as f64 * device_pixel_ratio).round() as i32;
                 let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
                 let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
 
-                let mut pt = POINT { x: x_phys, y: y_phys };
+                let mut pt = POINT {
+                    x: x_phys,
+                    y: y_phys,
+                };
                 let _ = ClientToScreen(parent_hwnd, &mut pt);
 
-                ShowWindow(hwnd, SW_SHOW);
+                let _ = ShowWindow(hwnd, SW_SHOW);
                 session.visible = true;
-                let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, pt.x, pt.y, width_phys, height_phys,
-                    SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                let _ = SetWindowPos(
+                    hwnd,
+                    HWND_NOTOPMOST,
+                    pt.x,
+                    pt.y,
+                    width_phys,
+                    height_phys,
+                    SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                );
             }
         }
     }
@@ -555,7 +677,10 @@ pub fn disconnect_rdp_embedded(
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
     let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-    log_debug(&app_data_dir, &format!("disconnect_rdp_embedded called for session {}", session_id));
+    log_debug(
+        &app_data_dir,
+        &format!("disconnect_rdp_embedded called for session {}", session_id),
+    );
 
     let session = {
         let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
