@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.55
+
+- Fix vault reset now also clears encrypted credentials/passwords (old KEK is gone)
+
 ## v0.1.54
 
 - Fix vault reset ("Reset Vault") — was setting sentinel to empty string instead of deleting it, causing JSON parse error
