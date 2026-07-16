@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.54
+
+- Fix vault reset ("Reset Vault") — was setting sentinel to empty string instead of deleting it, causing JSON parse error
+
 ## v0.1.53
 
 - Fix Rust compiler warnings (unused ShowWindow return values)
