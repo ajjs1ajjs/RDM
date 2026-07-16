@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.52
+
+- Add vault reset option for users who forgot their master password
+- "Reset Vault" button in migration dialog clears vault and reinitializes with default key
+
 ## v0.1.51
 
 - Fix vault decryption error for users who previously had a master password
