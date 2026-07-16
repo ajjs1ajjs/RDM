@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.58
+
+- Fix Windows Credential Manager: password blob must be UTF-16LE for mstsc
+- Change credential persistence to LOCAL_MACHINE
+
 ## v0.1.57
 
 - Fix RDP NLA authentication error (authentication level + enablecredsspsupport)
