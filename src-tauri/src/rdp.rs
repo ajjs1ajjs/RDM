@@ -8,26 +8,27 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, EnumWindows, GetClassNameW, GetWindowLongPtrW, GetWindowLongW,
     GetWindowThreadProcessId, IsWindow, MoveWindow, SetWindowLongPtrW, SetWindowLongW,
-    SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE, HWND_NOTOPMOST, HWND_TOP, SWP_NOACTIVATE,
+    SetWindowPos, ShowWindow, GWLP_HWNDPARENT, GWL_STYLE, HWND_NOTOPMOST, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WS_BORDER, WS_CAPTION,
-    WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_SYSMENU, WS_THICKFRAME,
 };
 
 struct OwnerData(isize);
 
+#[derive(Clone, Copy)]
 struct ChildResizeData {
     width: i32,
     height: i32,
 }
 
-unsafe extern "system" fn resize_child_fill(child: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn resize_child_fill(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let data = &*(lparam.0 as *const ChildResizeData);
-    let _ = MoveWindow(child, 0, 0, data.width, data.height, BOOL(1));
+    let _ = MoveWindow(hwnd, 0, 0, data.width, data.height, true);
     BOOL(1)
 }
 
 unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let data = &*(lparam.0 as *const OwnerData);
+    let data = &mut *(lparam.0 as *mut OwnerData);
     let owner_hwnd = data.0 as isize;
     let owner = GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
     if owner == owner_hwnd {
@@ -56,6 +57,18 @@ pub struct RdpState {
     pub sessions: Mutex<HashMap<String, RdpSession>>,
 }
 
+impl Drop for RdpState {
+    fn drop(&mut self) {
+        // Kill orphaned mstsc/RdpHost processes when app exits
+        let _ = std::process::Command::new("taskkill")
+            .args(&["/f", "/im", "mstsc.exe"])
+            .output();
+        let _ = std::process::Command::new("taskkill")
+            .args(&["/f", "/im", "RdpHost.exe"])
+            .output();
+    }
+}
+
 impl RdpState {
     pub fn new() -> Self {
         Self {
@@ -74,7 +87,7 @@ fn log_debug(app_data_dir: &std::path::Path, message: &str) {
         .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
 }
 
-// Win32 EnumWindows helper structures
+#[derive(Clone, Copy)]
 struct EnumData {
     pid: u32,
     hwnd: Option<HWND>,
@@ -82,9 +95,9 @@ struct EnumData {
 
 unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let data = &mut *(lparam.0 as *mut EnumData);
-    let mut window_pid = 0u32;
-    GetWindowThreadProcessId(hwnd, Some(&mut window_pid));
-    if window_pid == data.pid {
+    let mut pid: u32 = 0;
+    let tid = GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if tid != 0 && pid == data.pid {
         let mut class_name = [0u16; 256];
         let len = GetClassNameW(hwnd, &mut class_name);
         if len > 0 {
@@ -116,62 +129,61 @@ fn find_mstsc_hwnd(pid: u32) -> Option<HWND> {
 struct WinCredential {
     flags: u32,
     typ: u32,
-    target_name: *mut u16,
-    comment: *mut u16,
+    target_name: *const u16,
+    comment: *const u16,
     last_written: i64,
     credential_blob_size: u32,
-    credential_blob: *mut u8,
+    credential_blob: *const u8,
     persist: u32,
     attribute_count: u32,
-    attributes: *mut u8,
-    target_alias: *mut u16,
-    user_name: *mut u16,
+    attributes: *const std::ffi::c_void,
+    target_alias: *const u16,
+    user_name: *const u16,
 }
 
+#[link(name = "advapi32")]
 extern "system" {
-    fn CredWriteW(credential: *const WinCredential, flags: u32) -> i32;
-    fn CredDeleteW(target_name: *const u16, typ: u32, flags: u32) -> i32;
+    fn CredWriteW(credential: *const WinCredential, flags: u32) -> BOOL;
+    fn CredDeleteW(target_name: *const u16, typ: u32, flags: u32) -> BOOL;
 }
 
 const CRED_TYPE_GENERIC: u32 = 1;
-const CRED_PERSIST_SESSION: u32 = 2;
+const CRED_PERSIST_SESSION: u32 = 1;
 
 fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
-    let target = format!("TERMSRV/{}", host);
-    unsafe {
-        let mut password_wide: Vec<u16> = password.encode_utf16().collect();
-        password_wide.push(0);
-        let mut username_wide: Vec<u16> = username.encode_utf16().collect();
-        username_wide.push(0);
-        let mut target_wide: Vec<u16> = target.encode_utf16().collect();
-        target_wide.push(0);
+    let target_name: Vec<u16> = format!("TERMSRV/{}", host).encode_utf16().collect();
+    let user_name: Vec<u16> = username.encode_utf16().collect();
+    let password_bytes: Vec<u8> = password.as_bytes().to_vec();
+    let blob_size = password_bytes.len() as u32;
 
-        let mut cred = WinCredential {
-            flags: 0,
-            typ: CRED_TYPE_GENERIC,
-            target_name: target_wide.as_mut_ptr(),
-            comment: std::ptr::null_mut(),
-            last_written: 0,
-            credential_blob_size: (password_wide.len() * 2) as u32,
-            credential_blob: password_wide.as_mut_ptr() as *mut u8,
-            persist: CRED_PERSIST_SESSION,
-            attribute_count: 0,
-            attributes: std::ptr::null_mut(),
-            target_alias: std::ptr::null_mut(),
-            user_name: username_wide.as_mut_ptr(),
-        };
-        let _ = CredWriteW(&cred, 0);
+    let mut cred = WinCredential {
+        flags: 0,
+        typ: CRED_TYPE_GENERIC,
+        target_name: target_name.as_ptr(),
+        comment: std::ptr::null(),
+        last_written: 0,
+        credential_blob_size: blob_size,
+        credential_blob: password_bytes.as_ptr(),
+        persist: CRED_PERSIST_SESSION,
+        attribute_count: 0,
+        attributes: std::ptr::null(),
+        target_alias: std::ptr::null(),
+        user_name: user_name.as_ptr(),
+    };
+
+    unsafe {
+        let _ = CredWriteW(&mut cred, 0);
     }
 }
 
 fn delete_rdp_credential_secure(host: &str) {
-    let target = format!("TERMSRV/{}", host);
-    let mut target_wide: Vec<u16> = target.encode_utf16().collect();
+    let target_name: Vec<u16> = format!("TERMSRV/{}", host).encode_utf16().collect();
     unsafe {
-        let _ = CredDeleteW(target_wide.as_mut_ptr(), CRED_TYPE_GENERIC, 0);
+        let _ = CredDeleteW(target_name.as_ptr(), CRED_TYPE_GENERIC, 0);
     }
 }
 
+/// Launches an external mstsc.exe RDP session
 pub fn launch_rdp_session(
     host: &str,
     port: u32,
@@ -231,20 +243,25 @@ pub fn launch_rdp_session(
         _ => 0,
     };
 
+    let has_creds = _password.is_some();
+    let auth_level = if has_creds { 2 } else { 0 };
+    let credssp = if has_creds { 1 } else { 0 };
+
     let rdp_content = format!(
-        "full address:s:{}\r\n\
-         {}\
-         screen mode id:i:{}\r\n\
-         {}\
-         smart sizing:i:{}\r\n\
+        "full address:s:{0}\r\n\
+         {1}\
+         screen mode id:i:{2}\r\n\
+         {3}\
+         smart sizing:i:{4}\r\n\
          dynamic resolution:i:1\r\n\
-         redirectclipboard:i:{}\r\n\
-         redirectdrives:i:{}\r\n\
-         redirectprinters:i:{}\r\n\
-         audiomode:i:{}\r\n\
-         redirectsmartcards:i:{}\r\n\
-         enablewebauthn:i:{}\r\n\
-         authentication level:i:0\r\n\
+         redirectclipboard:i:{5}\r\n\
+         redirectdrives:i:{6}\r\n\
+         redirectprinters:i:{7}\r\n\
+         audiomode:i:{8}\r\n\
+         redirectsmartcards:i:{9}\r\n\
+         enablewebauthn:i:{10}\r\n\
+         authentication level:i:{11}\r\n\
+         enablecredsspsupport:i:{12}\r\n\
          displayconnectionbar:i:1\r\n",
         connection_string,
         user_line,
@@ -256,7 +273,9 @@ pub fn launch_rdp_session(
         redirect_printers,
         audio_val,
         redirect_smartcards,
-        redirect_webauthn
+        redirect_webauthn,
+        auth_level,
+        credssp,
     );
 
     let rdp_content_utf16: Vec<u16> = std::iter::once(0xFEFF)
@@ -280,6 +299,7 @@ pub fn launch_rdp_session(
         .map_err(|e| format!("Failed to spawn mstsc process: {}", e))
 }
 
+/// Launches an embedded (reparented) mstsc.exe RDP session
 pub fn launch_rdp_embedded(
     session_id: String,
     host: &str,
@@ -377,31 +397,36 @@ pub fn launch_rdp_embedded(
     let win_right = screen_x + width_phys;
     let win_bottom = screen_y + height_phys;
 
+    let has_creds = password.is_some();
+    let auth_level = if has_creds { 2 } else { 0 };
+    let server_auth = if has_creds { 1 } else { 0 };
+    let credssp = if has_creds { 1 } else { 0 };
+
     let rdp_content = format!(
-        "full address:s:{}\r\n\
-         {}\
+        "full address:s:{0}\r\n\
+         {1}\
          screen mode id:i:1\r\n\
-         smart sizing:i:{}\r\n\
+         smart sizing:i:{2}\r\n\
          dynamic resolution:i:1\r\n\
-         redirectclipboard:i:{}\r\n\
-         redirectdrives:i:{}\r\n\
-         redirectprinters:i:{}\r\n\
-         audiomode:i:{}\r\n\
-         redirectsmartcards:i:{}\r\n\
-         enablewebauthn:i:{}\r\n\
-         authentication level:i:0\r\n\
-         serverauth:i:0\r\n\
-         enablecredsspsupport:i:{}\r\n\
+         redirectclipboard:i:{3}\r\n\
+         redirectdrives:i:{4}\r\n\
+         redirectprinters:i:{5}\r\n\
+         audiomode:i:{6}\r\n\
+         redirectsmartcards:i:{7}\r\n\
+         enablewebauthn:i:{8}\r\n\
+         authentication level:i:{9}\r\n\
+         serverauth:i:{10}\r\n\
+         enablecredsspsupport:i:{11}\r\n\
          displayconnectionbar:i:0\r\n\
          prompt for credentials:i:0\r\n\
          promptcredentialonce:i:0\r\n\
          disableconnectionsharing:i:1\r\n\
          autoreconnection enabled:i:1\r\n\
          connection type:i:2\r\n\
-         desktopwidth:i:{}\r\n\
-         desktopheight:i:{}\r\n\
+         desktopwidth:i:{12}\r\n\
+         desktopheight:i:{13}\r\n\
          session bpp:i:32\r\n\
-         winposstr:s:0,1,{},{},{},{}\r\n",
+         winposstr:s:0,1,{14},{15},{16},{17}\r\n",
         connection_string,
         user_line,
         smart_sizing_val,
@@ -411,7 +436,9 @@ pub fn launch_rdp_embedded(
         audio_val,
         redirect_smartcards,
         redirect_webauthn,
-        if password.is_some() { 1 } else { 0 },
+        auth_level,
+        server_auth,
+        credssp,
         width_phys,
         height_phys,
         screen_x,
@@ -676,57 +703,78 @@ pub fn disconnect_rdp_embedded(
     state: &RdpState,
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
-    let app_data_dir = app.path().app_data_dir().unwrap_or_default();
-    log_debug(
-        &app_data_dir,
-        &format!("disconnect_rdp_embedded called for session {}", session_id),
-    );
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
 
-    let session = {
-        let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.remove(session_id)
-    };
-
-    if let Some(sess) = session {
-        let mut window_pid = 0u32;
+    let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    if let Some(session) = sessions.remove(session_id) {
+        let hwnd = HWND(session.mstsc_hwnd as *mut _);
         unsafe {
-            GetWindowThreadProcessId(HWND(sess.mstsc_hwnd as *mut _), Some(&mut window_pid));
+            // Send WM_CLOSE to gracefully close the mstsc window
+            let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
         }
-
-        if window_pid != 0 {
-            let _ = std::process::Command::new("taskkill")
-                .args(&["/F", "/PID", &window_pid.to_string()])
-                .spawn()
-                .and_then(|mut c| c.wait());
-        }
-
-        let _ = std::process::Command::new("taskkill")
-            .args(&["/F", "/PID", &sess.pid.to_string()])
-            .spawn()
-            .and_then(|mut c| c.wait());
     }
-
     Ok(())
 }
 
-// Deprecated empty handlers to avoid breaking Tauri registration signatures
 pub fn send_rdp_mouse(
-    _session_id: &str,
-    _x: i32,
-    _y: i32,
-    _button: &str,
-    _action: &str,
+    session_id: &str,
+    x: i32,
+    y: i32,
+    button: &str,
+    action: &str,
     _wheel_delta: i32,
-    _state: &RdpState,
+    state: &RdpState,
 ) -> Result<(), String> {
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        PostMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    };
+
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    if let Some(session) = sessions.get(session_id) {
+        let hwnd = HWND(session.mstsc_hwnd as *mut _);
+        let lparam = LPARAM((((y as u32) << 16) | ((x as u32) & 0xFFFF)) as isize);
+        unsafe {
+            match (button, action) {
+                ("left", "down") => {
+                    let _ = PostMessageW(hwnd, WM_LBUTTONDOWN, WPARAM(1), lparam);
+                }
+                ("left", "up") => {
+                    let _ = PostMessageW(hwnd, WM_LBUTTONUP, WPARAM(0), lparam);
+                }
+                ("right", "down") => {
+                    let _ = PostMessageW(hwnd, WM_RBUTTONDOWN, WPARAM(1), lparam);
+                }
+                ("right", "up") => {
+                    let _ = PostMessageW(hwnd, WM_RBUTTONUP, WPARAM(0), lparam);
+                }
+                ("move", _) => {
+                    let _ = PostMessageW(hwnd, WM_MOUSEMOVE, WPARAM(0), lparam);
+                }
+                _ => {}
+            }
+        }
+    }
     Ok(())
 }
 
 pub fn send_rdp_key(
-    _session_id: &str,
-    _vk: u16,
-    _key_up: bool,
-    _state: &RdpState,
+    session_id: &str,
+    vk: u16,
+    key_up: bool,
+    state: &RdpState,
 ) -> Result<(), String> {
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_KEYDOWN, WM_KEYUP};
+
+    let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
+    if let Some(session) = sessions.get(session_id) {
+        let hwnd = HWND(session.mstsc_hwnd as *mut _);
+        let msg = if key_up { WM_KEYUP } else { WM_KEYDOWN };
+        unsafe {
+            let _ = PostMessageW(hwnd, msg, WPARAM(vk as usize), LPARAM(0));
+        }
+    }
     Ok(())
 }
