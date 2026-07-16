@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RDM Manager",
-  "version": "0.1.55"
-  "identifier": "com.admin.rdm-manager",
+  "version": "0.1.55",
+    "identifier": "com.admin.rdm-manager",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
