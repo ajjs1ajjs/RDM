@@ -24,7 +24,8 @@ const MigrationDialog: React.FC<{
   migrating: boolean;
   error: string;
   onMigrate: (password: string) => Promise<void>;
-}> = ({ migrating, error, onMigrate }) => {
+  onReset: () => void;
+}> = ({ migrating, error, onMigrate, onReset }) => {
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
 
@@ -88,6 +89,23 @@ const MigrationDialog: React.FC<{
         }}
       >
         {migrating ? "Migrating..." : "Unlock & Migrate"}
+      </button>
+      <div style={{ fontSize: "0.75rem", color: "var(--text-muted, rgba(255,255,255,0.3))", textAlign: "center" }}>
+        Forgot your password?
+      </div>
+      <button
+        onClick={onReset}
+        disabled={migrating}
+        style={{
+          width: "100%", padding: "8px",
+          background: "transparent",
+          border: "1px solid rgba(255,100,100,0.3)", borderRadius: "6px",
+          color: migrating ? "rgba(255,255,255,0.3)" : "rgba(255,100,100,0.8)",
+          cursor: migrating ? "default" : "pointer",
+          fontSize: "0.8rem", fontFamily: "var(--font-mono, monospace)",
+        }}
+      >
+        Reset Vault (lose encrypted passwords)
       </button>
     </div>
   );
@@ -393,6 +411,7 @@ function App() {
             migrating={vault.migrating}
             error={vault.migrationError}
             onMigrate={vault.migrateVault}
+            onReset={vault.resetVault}
           />
         </div>
       )}

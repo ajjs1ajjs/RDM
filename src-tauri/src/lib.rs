@@ -342,6 +342,24 @@ fn migrate_vault_to_default(
     Ok(())
 }
 
+/// Reset vault: clear sentinel and salt, reinitialize with default_rdm_key.
+/// This will make all previously encrypted credentials unreadable.
+#[tauri::command]
+fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Clear old sentinel and salt
+    db::set_setting(&conn, "sentinel", "")?;
+    db::set_setting(&conn, "salt", "")?;
+
+    // Drop old connection, reinit DB
+    drop(conn);
+
+    // Re-run auto_setup_vault which will detect empty sentinel and create fresh vault
+    auto_setup_vault(&db.conn.lock().map_err(|e| e.to_string())?, &state)
+        .map_err(|e| format!("Failed to reinitialize vault: {}", e))
+}
+
 // Credentials commands
 #[tauri::command]
 fn get_credentials(
@@ -2260,7 +2278,8 @@ pub fn run() {
             bypass_rdp_warnings,
             save_server_from_connect,
             check_for_update,
-            migrate_vault_to_default
+            migrate_vault_to_default,
+            reset_vault
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

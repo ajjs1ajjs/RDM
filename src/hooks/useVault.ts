@@ -40,6 +40,18 @@ export function useVault() {
     }
   }, []);
 
+  const resetVault = useCallback(async () => {
+    if (!window.confirm("Are you sure? All encrypted passwords and credentials will be permanently lost.\n\nВи впевнені? Усі зашифровані паролі та облікові дані буде втрачено назавжди.")) return;
+    try {
+      await invoke("reset_vault");
+      setNeedsMigration(false);
+      setUnlocked(true);
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.message || String(e);
+      setMigrationError(msg);
+    }
+  }, []);
+
   return {
     unlocked,
     setUnlocked: (_v: boolean) => {},
@@ -48,5 +60,6 @@ export function useVault() {
     migrationError,
     checkUnlockStatus,
     migrateVault,
+    resetVault,
   };
 }
