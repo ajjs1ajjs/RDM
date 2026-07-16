@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVault } from "./hooks/useVault";
 import { useServers } from "./hooks/useServers";
@@ -19,6 +19,79 @@ import { Taskbar } from "./components/Taskbar";
 import { useDialogs } from "./components/AppDialogs";
 import { Terminal, X } from "lucide-react";
 import "./App.css";
+
+const MigrationDialog: React.FC<{
+  migrating: boolean;
+  error: string;
+  onMigrate: (password: string) => Promise<void>;
+}> = ({ migrating, error, onMigrate }) => {
+  const [password, setPassword] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!password) return;
+    setLocalError("");
+    try {
+      await onMigrate(password);
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.message || String(e);
+      setLocalError(msg);
+    }
+  };
+
+  return (
+    <div style={{
+      background: "var(--bg-card, #1a1a2e)", border: "1px solid var(--border-color, rgba(255,255,255,0.1))",
+      borderRadius: "12px", padding: "32px", width: "380px",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+      display: "flex", flexDirection: "column", alignItems: "center", gap: "16px",
+    }}>
+      <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#fff", textAlign: "center" }}>
+        Vault Migration Required
+      </div>
+      <div style={{ fontSize: "0.85rem", color: "var(--text-secondary, rgba(255,255,255,0.6))", textAlign: "center", lineHeight: 1.5 }}>
+        Your vault was previously protected with a master password.
+        Please enter it to migrate your data to the new encryption key.
+      </div>
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => { setPassword(e.target.value); setLocalError(""); }}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+        placeholder="Enter your vault master password"
+        autoFocus
+        style={{
+          width: "100%", padding: "10px 12px",
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px",
+          color: "#fff", fontFamily: "var(--font-mono, monospace)", fontSize: "0.85rem",
+          outline: "none", boxSizing: "border-box",
+        }}
+      />
+      {(localError || error) && (
+        <div style={{ fontSize: "0.8rem", color: "#ff6b6b", textAlign: "center", lineHeight: 1.4 }}>
+          {localError || error}
+        </div>
+      )}
+      <button
+        onClick={handleSubmit}
+        disabled={!password || migrating}
+        style={{
+          width: "100%", padding: "10px",
+          background: !password || migrating
+            ? "rgba(255,255,255,0.05)"
+            : "linear-gradient(90deg, var(--accent-cyan, #00f0ff), var(--accent-purple, #a855f7))",
+          border: "none", borderRadius: "6px",
+          color: !password || migrating ? "rgba(255,255,255,0.3)" : "#fff",
+          cursor: !password || migrating ? "default" : "pointer",
+          fontSize: "0.85rem", fontFamily: "var(--font-mono, monospace)",
+        }}
+      >
+        {migrating ? "Migrating..." : "Unlock & Migrate"}
+      </button>
+    </div>
+  );
+};
 
 function App() {
   const vault = useVault();
@@ -310,6 +383,19 @@ function App() {
 
   return (
     <>
+      {vault.needsMigration && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.85)", zIndex: 9999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <MigrationDialog
+            migrating={vault.migrating}
+            error={vault.migrationError}
+            onMigrate={vault.migrateVault}
+          />
+        </div>
+      )}
       {updateInfo && (
         <div style={{
           background: "linear-gradient(90deg, var(--accent-purple), var(--accent-cyan))",

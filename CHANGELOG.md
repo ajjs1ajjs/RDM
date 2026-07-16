@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.51
+
+- Fix vault decryption error for users who previously had a master password
+- Add one-time migration dialog to migrate vault to default encryption key
+- Verify vault sentinel on startup before auto-unlocking
+
 ## v0.1.50
 
 - Clean release: MSI + portable only (no NSIS)
