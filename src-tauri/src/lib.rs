@@ -351,6 +351,10 @@ fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result
     // Delete old sentinel and salt so auto_setup_vault sees fresh state
     let _ = conn.execute("DELETE FROM settings WHERE key IN ('sentinel', 'salt')", []);
 
+    // Clear all encrypted data — old KEK is gone, these are undecryptable
+    let _ = conn.execute("UPDATE credentials SET encrypted_secret = ''", []);
+    let _ = conn.execute("UPDATE servers SET encrypted_password = NULL", []);
+
     // Drop old connection, reinit DB
     drop(conn);
 
