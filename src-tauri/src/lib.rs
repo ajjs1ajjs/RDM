@@ -348,17 +348,16 @@ fn migrate_vault_to_default(
 fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Delete old sentinel and salt so auto_setup_vault sees fresh state
-    let _ = conn.execute("DELETE FROM settings WHERE key IN ('sentinel', 'salt')", []);
-
-    // Clear all encrypted data — old KEK is gone, these are undecryptable
-    let _ = conn.execute("UPDATE credentials SET encrypted_secret = ''", []);
-    let _ = conn.execute("UPDATE servers SET encrypted_password = NULL", []);
+    // Wipe ALL data — user confirmed they want a clean start
+    let _ = conn.execute("DELETE FROM connection_history", []);
+    let _ = conn.execute("DELETE FROM servers", []);
+    let _ = conn.execute("DELETE FROM credentials", []);
+    let _ = conn.execute("DELETE FROM settings", []);
 
     // Drop old connection, reinit DB
     drop(conn);
 
-    // Re-run auto_setup_vault which will detect empty sentinel and create fresh vault
+    // Re-run auto_setup_vault which will create fresh vault with default key
     auto_setup_vault(&*db.conn.lock().map_err(|e| e.to_string())?, &state)
         .map_err(|e| format!("Failed to reinitialize vault: {}", e))
 }

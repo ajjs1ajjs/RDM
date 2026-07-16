@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.59
+
+- Reset Vault now wipes ALL data (servers, credentials, history, settings) for a completely clean start
+
 ## v0.1.58
 
 - Fix Windows Credential Manager: password blob must be UTF-16LE for mstsc
