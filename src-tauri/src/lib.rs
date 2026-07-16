@@ -348,9 +348,8 @@ fn migrate_vault_to_default(
 fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Clear old sentinel and salt
-    db::set_setting(&conn, "sentinel", "")?;
-    db::set_setting(&conn, "salt", "")?;
+    // Delete old sentinel and salt so auto_setup_vault sees fresh state
+    let _ = conn.execute("DELETE FROM settings WHERE key IN ('sentinel', 'salt')", []);
 
     // Drop old connection, reinit DB
     drop(conn);
@@ -1188,7 +1187,8 @@ fn auto_setup_vault(
 ) -> Result<(), String> {
     let sentinel = db::get_setting(conn, "sentinel")?;
 
-    if sentinel.is_none() {
+    // Treat missing or empty sentinel as "not set up"
+    if sentinel.is_none() || sentinel.as_deref() == Some("") {
         let mut salt = [0u8; 16];
         thread_rng().fill_bytes(&mut salt);
         let salt_hex = hex::encode(salt);
