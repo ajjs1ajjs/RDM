@@ -1959,12 +1959,13 @@ fn resolve_auth(
             }
             if let Some(ref encrypted_pass_json) = srv.encrypted_password {
                 if !encrypted_pass_json.is_empty() {
-                    let encrypted: crypto::EncryptedData =
-                        serde_json::from_str(encrypted_pass_json).map_err(|e| e.to_string())?;
-                    decrypted_password =
-                        Some(crypto::decrypt_secret(kek, &encrypted).map_err(|_| {
-                            "Decryption error - password may need to be re-entered"
-                        })?);
+                    if let Ok(encrypted) =
+                        serde_json::from_str::<crypto::EncryptedData>(encrypted_pass_json)
+                    {
+                        if let Ok(plain) = crypto::decrypt_secret(kek, &encrypted) {
+                            decrypted_password = Some(plain);
+                        }
+                    }
                 }
             }
         }
@@ -1982,11 +1983,40 @@ fn resolve_auth(
                 final_username = cred.username.clone();
             }
 
-            let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
-                .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
+            let encrypted: crypto::EncryptedData =
+                match serde_json::from_str(&cred.encrypted_secret) {
+                    Ok(e) => e,
+                    Err(_) => {
+                        // Encrypted data was cleared (e.g. after vault reset) — skip and let user enter manually
+                        return Ok(ResolvedAuth {
+                            username: if final_username == *app_username {
+                                None
+                            } else {
+                                Some(final_username)
+                            },
+                            password: None,
+                            private_key: None,
+                            passphrase: None,
+                        });
+                    }
+                };
 
-            let decrypted = crypto::decrypt_secret(kek, &encrypted)
-                .map_err(|_| "Decryption error - credential may need to be re-entered")?;
+            let decrypted = match crypto::decrypt_secret(kek, &encrypted) {
+                Ok(d) => d,
+                Err(_) => {
+                    // Old KEK gone — skip and let user enter manually
+                    return Ok(ResolvedAuth {
+                        username: if final_username == *app_username {
+                            None
+                        } else {
+                            Some(final_username)
+                        },
+                        password: None,
+                        private_key: None,
+                        passphrase: None,
+                    });
+                }
+            };
 
             match cred.r#type.as_str() {
                 "password" => {
