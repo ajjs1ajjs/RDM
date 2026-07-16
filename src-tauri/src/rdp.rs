@@ -148,12 +148,17 @@ extern "system" {
 }
 
 const CRED_TYPE_GENERIC: u32 = 1;
-const CRED_PERSIST_SESSION: u32 = 1;
+const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
 
 fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
-    let target_name: Vec<u16> = format!("TERMSRV/{}", host).encode_utf16().collect();
-    let user_name: Vec<u16> = username.encode_utf16().collect();
-    let password_bytes: Vec<u8> = password.as_bytes().to_vec();
+    let target_name: Vec<u16> = format!("TERMSRV/{}\0", host).encode_utf16().collect();
+    let user_name: Vec<u16> = format!("{}\0", username).encode_utf16().collect();
+    // mstsc expects password as UTF-16LE null-terminated in the credential blob
+    let password_utf16: Vec<u16> = format!("{}\0", password).encode_utf16().collect();
+    let password_bytes: Vec<u8> = password_utf16
+        .iter()
+        .flat_map(|c| c.to_le_bytes())
+        .collect();
     let blob_size = password_bytes.len() as u32;
 
     let mut cred = WinCredential {
@@ -164,7 +169,7 @@ fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
         last_written: 0,
         credential_blob_size: blob_size,
         credential_blob: password_bytes.as_ptr(),
-        persist: CRED_PERSIST_SESSION,
+        persist: CRED_PERSIST_LOCAL_MACHINE,
         attribute_count: 0,
         attributes: std::ptr::null(),
         target_alias: std::ptr::null(),
