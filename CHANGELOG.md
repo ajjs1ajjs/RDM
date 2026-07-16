@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.56
+
+- Make resolve_auth gracefully handle decryption errors (fallback to manual credentials)
+- Save manually entered RDP credentials even when server already has linked credential
+
 ## v0.1.55
 
 - Fix vault reset now also clears encrypted credentials/passwords (old KEK is gone)

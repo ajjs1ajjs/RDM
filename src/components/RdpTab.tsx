@@ -81,8 +81,8 @@ export const RdpTab: React.FC<RdpTabProps> = ({
           height: finalHeight,
           devicePixelRatio: window.devicePixelRatio || 1.0,
         });
-        // Save server + credentials after successful connect if from quick-connect or without creds
-        if (!hasStoredCreds && manualUser && manualPass) {
+        // Save manually entered credentials on successful connect
+        if (manualUser && manualPass && serverId) {
           setSaving(true);
           invoke("save_server_from_connect", {
             serverId,
