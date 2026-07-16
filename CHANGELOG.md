@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.57
+
+- Fix RDP NLA authentication error (authentication level + enablecredsspsupport)
+- Kill orphaned mstsc.exe on app exit (Drop impl for RdpState)
+
 ## v0.1.56
 
 - Make resolve_auth gracefully handle decryption errors (fallback to manual credentials)
