@@ -24,6 +24,7 @@ export function useServerForm(
   const [srvCredId, setSrvCredId] = useState("");
   const [srvUsername, setSrvUsername] = useState("");
   const [srvPassword, setSrvPassword] = useState("");
+  const [srvPasswordChanged, setSrvPasswordChanged] = useState(false);
   const [rdpClipboard, setRdpClipboard] = useState<boolean>(true);
   const [rdpDrives, setRdpDrives] = useState<boolean>(false);
   const [rdpPrinters, setRdpPrinters] = useState<boolean>(false);
@@ -48,7 +49,8 @@ export function useServerForm(
       setSrvDesc(srv.description);
       setSrvCredId(srv.credential_id || "");
       setSrvUsername(srv.username || "");
-      setSrvPassword(srv.encrypted_password ? "__UNCHANGED__" : "");
+      setSrvPassword(srv.encrypted_password || "");
+      setSrvPasswordChanged(false);
       setRdpClipboard(srv.rdp_clipboard !== undefined ? srv.rdp_clipboard !== 0 : true);
       setRdpDrives(srv.rdp_drives !== undefined ? srv.rdp_drives !== 0 : false);
       setRdpPrinters(srv.rdp_printers !== undefined ? srv.rdp_printers !== 0 : false);
@@ -71,6 +73,7 @@ export function useServerForm(
       setSrvCredId("");
       setSrvUsername("");
       setSrvPassword("");
+      setSrvPasswordChanged(false);
       setRdpClipboard(true);
       setRdpDrives(false);
       setRdpPrinters(false);
@@ -89,17 +92,18 @@ export function useServerForm(
     try {
       if (editingServer) {
         await invoke("update_server", {
-          id: editingServer.id, name: srvName, hostname: srvHost, ip: srvIp,
-          port: srvPort, protocol: srvProto, os: srvOs,
-          folderPath: srvFolder, tags: srvTags, description: srvDesc,
-          credentialId: srvCredId || null, username: srvUsername || null,
-          password: srvPassword || null,
-          rdpClipboard: rdpClipboard ? 1 : 0, rdpDrives: rdpDrives ? 1 : 0,
-          rdpPrinters: rdpPrinters ? 1 : 0, rdpSmartSizing: rdpSmartSizing ? 1 : 0,
-          rdpAudio: rdpAudio, rdpSmartcards: rdpSmartcards ? 1 : 0,
-          rdpWebauthn: rdpWebauthn ? 1 : 0, rdpFullscreen: rdpFullscreen ? 1 : 0,
-          rdpMultimon: rdpMultimon ? 1 : 0,
-        });
+            id: editingServer.id, name: srvName, hostname: srvHost, ip: srvIp,
+            port: srvPort, protocol: srvProto, os: srvOs,
+            folderPath: srvFolder, tags: srvTags, description: srvDesc,
+            credentialId: srvCredId || null, username: srvUsername || null,
+            password: srvPassword || null,
+            passwordChanged: srvPasswordChanged,
+            rdpClipboard: rdpClipboard ? 1 : 0, rdpDrives: rdpDrives ? 1 : 0,
+            rdpPrinters: rdpPrinters ? 1 : 0, rdpSmartSizing: rdpSmartSizing ? 1 : 0,
+            rdpAudio: rdpAudio, rdpSmartcards: rdpSmartcards ? 1 : 0,
+            rdpWebauthn: rdpWebauthn ? 1 : 0, rdpFullscreen: rdpFullscreen ? 1 : 0,
+            rdpMultimon: rdpMultimon ? 1 : 0,
+          });
       } else {
         await invoke("add_server", {
           name: srvName, hostname: srvHost, ip: srvIp, port: srvPort,
@@ -145,6 +149,7 @@ export function useServerForm(
     srvPort, setSrvPort, srvProto, setSrvProto, srvOs, setSrvOs,
     srvFolder, setSrvFolder, srvTags, setSrvTags, srvDesc, setSrvDesc,
     srvCredId, setSrvCredId, srvUsername, setSrvUsername, srvPassword, setSrvPassword,
+    srvPasswordChanged, setSrvPasswordChanged,
     rdpClipboard, setRdpClipboard, rdpDrives, setRdpDrives,
     rdpPrinters, setRdpPrinters, rdpSmartSizing, setRdpSmartSizing,
     rdpAudio, setRdpAudio, rdpSmartcards, setRdpSmartcards,

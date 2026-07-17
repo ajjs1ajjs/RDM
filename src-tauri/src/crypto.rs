@@ -1,10 +1,14 @@
-use argon2::Argon2;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
+use argon2::Argon2;
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+
+/// Sentinel string used to verify the master password is correct.
+/// Stored encrypted with the KEK — no password hash is ever written to disk.
+pub const AUTH_SENTINEL: &str = "rdm-auth-sentinel";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EncryptedData {
@@ -23,7 +27,7 @@ pub fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
 pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<EncryptedData, String> {
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| format!("Cipher initialization error: {}", e))?;
-    
+
     let mut nonce_bytes = [0u8; 12]; // 12-byte nonce for AES-GCM
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
@@ -43,11 +47,11 @@ pub fn decrypt_secret(key: &[u8; 32], encrypted: &EncryptedData) -> Result<Strin
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| format!("Cipher initialization error: {}", e))?;
 
-    let ciphertext_bytes = hex::decode(&encrypted.ciphertext)
-        .map_err(|e| format!("Invalid ciphertext hex: {}", e))?;
-    
-    let nonce_bytes = hex::decode(&encrypted.nonce)
-        .map_err(|e| format!("Invalid nonce hex: {}", e))?;
+    let ciphertext_bytes =
+        hex::decode(&encrypted.ciphertext).map_err(|e| format!("Invalid ciphertext hex: {}", e))?;
+
+    let nonce_bytes =
+        hex::decode(&encrypted.nonce).map_err(|e| format!("Invalid nonce hex: {}", e))?;
 
     if nonce_bytes.len() != 12 {
         return Err("Invalid nonce length (must be 12 bytes)".to_string());
@@ -71,7 +75,7 @@ mod tests {
     fn test_encryption_decryption() {
         let password = "my_super_secure_master_password";
         let salt = b"salt_must_be_long_enough_16_bytes"; // At least 16 bytes for Argon2
-        
+
         let key = derive_key(password, salt).unwrap();
         let secret = "my_super_secret_ssh_key_or_password";
 

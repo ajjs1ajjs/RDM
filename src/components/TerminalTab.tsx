@@ -25,8 +25,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
-  if (status) {} // prevent unused variable TS compiler error
+  const [, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   useEffect(() => {
     if (!terminalRef.current) return;

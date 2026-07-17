@@ -54,7 +54,7 @@ export function useVault() {
 
   return {
     unlocked,
-    setUnlocked: (_v: boolean) => {},
+    setUnlocked,
     needsMigration,
     migrating,
     migrationError,

@@ -30,6 +30,16 @@ impl SessionState {
     }
 }
 
+impl Drop for SessionState {
+    fn drop(&mut self) {
+        if let Ok(mut kek) = self.kek.lock() {
+            if let Some(ref mut key) = *kek {
+                key.fill(0);
+            }
+        }
+    }
+}
+
 // Commands implementation
 #[tauri::command]
 fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
@@ -57,7 +67,7 @@ fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
                 Err(_) => return Ok(true),
             };
             match crypto::decrypt_secret(&default_kek, &encrypted) {
-                Ok(decrypted) if decrypted == "rdm-auth-sentinel" => Ok(false),
+                Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => Ok(false),
                 _ => Ok(true),
             }
         }
@@ -93,7 +103,7 @@ fn setup_master_password_impl(
     let new_salt_hex = hex::encode(new_salt);
     let new_kek = crypto::derive_key(password, &new_salt)?;
 
-    let encrypted_sentinel = crypto::encrypt_secret(&new_kek, "rdm-auth-sentinel")?;
+    let encrypted_sentinel = crypto::encrypt_secret(&new_kek, crypto::AUTH_SENTINEL)?;
     let sentinel_json = serde_json::to_string(&encrypted_sentinel)
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
 
@@ -110,64 +120,28 @@ fn setup_master_password_impl(
             .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
 
         match crypto::decrypt_secret(&default_kek, &encrypted) {
-            Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
+            Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
                 // Legacy vault migration: re-encrypt all data
                 db::set_setting(conn, "salt", &new_salt_hex)?;
                 db::set_setting(conn, "sentinel", &sentinel_json)?;
 
-                // Re-encrypt credentials table
-                let mut stmt = conn
-                    .prepare("SELECT id, encrypted_secret FROM credentials")
-                    .map_err(|e| e.to_string())?;
-                let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-                let mut creds_to_update = Vec::new();
-                while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-                    let id: String = row.get(0).map_err(|e| e.to_string())?;
-                    let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
-                    let enc_data: crypto::EncryptedData =
-                        serde_json::from_str(&enc_json).map_err(|e| e.to_string())?;
-                    let plain = crypto::decrypt_secret(&default_kek, &enc_data)?;
-                    let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
-                    let re_enc_json = serde_json::to_string(&re_enc).map_err(|e| e.to_string())?;
-                    creds_to_update.push((id, re_enc_json));
-                }
-                drop(rows);
-                drop(stmt);
-
-                for (id, secret_json) in &creds_to_update {
-                    conn.execute(
-                        "UPDATE credentials SET encrypted_secret = ?1 WHERE id = ?2",
-                        [secret_json, id],
-                    )
-                    .map_err(|e| e.to_string())?;
-                }
-
-                // Re-encrypt servers table
-                let mut stmt = conn
-                    .prepare("SELECT id, encrypted_password FROM servers WHERE encrypted_password IS NOT NULL AND encrypted_password != ''")
-                    .map_err(|e| e.to_string())?;
-                let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-                let mut servers_to_update = Vec::new();
-                while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-                    let id: String = row.get(0).map_err(|e| e.to_string())?;
-                    let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
-                    let enc_data: crypto::EncryptedData =
-                        serde_json::from_str(&enc_json).map_err(|e| e.to_string())?;
-                    let plain = crypto::decrypt_secret(&default_kek, &enc_data)?;
-                    let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
-                    let re_enc_json = serde_json::to_string(&re_enc).map_err(|e| e.to_string())?;
-                    servers_to_update.push((id, re_enc_json));
-                }
-                drop(rows);
-                drop(stmt);
-
-                for (id, pw_json) in &servers_to_update {
-                    conn.execute(
-                        "UPDATE servers SET encrypted_password = ?1 WHERE id = ?2",
-                        [pw_json, id],
-                    )
-                    .map_err(|e| e.to_string())?;
-                }
+                // Re-encrypt all data with new KEK
+                re_encrypt_table(
+                    conn,
+                    "credentials",
+                    "encrypted_secret",
+                    "1=1",
+                    &default_kek,
+                    &new_kek,
+                )?;
+                re_encrypt_table(
+                    conn,
+                    "servers",
+                    "encrypted_password",
+                    "encrypted_password IS NOT NULL AND encrypted_password != ''",
+                    &default_kek,
+                    &new_kek,
+                )?;
             }
             _ => {
                 return Err(
@@ -193,6 +167,23 @@ fn unlock_vault_impl(
     session_kek_mutex: &Mutex<Option<[u8; 32]>>,
     password: &str,
 ) -> Result<bool, String> {
+    // Rate limiting: check lockout
+    if let Some(lockout_str) = db::get_setting(conn, "lockout_until")? {
+        if let Ok(lockout_until) = lockout_str.parse::<u64>() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            if now < lockout_until {
+                let remaining = lockout_until - now;
+                return Err(format!(
+                    "Vault is locked. Try again in {} seconds. (Сейф заблоковано. Спробуйте через {} секунд.)",
+                    remaining, remaining
+                ));
+            }
+        }
+    }
+
     let salt_hex = db::get_setting(conn, "salt")?
         .ok_or_else(|| "Vault has not been initialized yet".to_string())?;
 
@@ -208,13 +199,39 @@ fn unlock_vault_impl(
 
     // Try to decrypt sentinel
     match crypto::decrypt_secret(&kek, &encrypted_sentinel) {
-        Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
+        Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
+            // Success — reset failed attempts counter
+            let _ = db::set_setting(conn, "failed_attempts", "0");
+            let _ = db::delete_setting(conn, "lockout_until");
             // Save KEK in session state
             let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
             *session_kek = Some(kek);
             Ok(true)
         }
-        _ => Ok(false), // Incorrect password
+        _ => {
+            // Failed attempt — increment counter
+            let attempts = db::get_setting(conn, "failed_attempts")?
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0)
+                + 1;
+            db::set_setting(conn, "failed_attempts", &attempts.to_string())?;
+
+            if attempts >= 5 {
+                let lockout_duration = 300u64; // 5 minutes
+                let lockout_until = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    + lockout_duration;
+                db::set_setting(conn, "lockout_until", &lockout_until.to_string())?;
+                return Err(format!(
+                    "Too many failed attempts. Vault locked for {} seconds. (Забагато невдалих спроб. Сейф заблоковано на {} секунд.)",
+                    lockout_duration, lockout_duration
+                ));
+            }
+
+            Ok(false) // Incorrect password
+        }
     }
 }
 
@@ -240,7 +257,13 @@ fn unlock_vault(
 }
 
 #[tauri::command]
-fn lock_vault() -> Result<(), String> {
+fn lock_vault(state: State<'_, SessionState>) -> Result<(), String> {
+    let mut kek = state.kek.lock().map_err(|e| e.to_string())?;
+    if let Some(key) = kek.as_mut() {
+        // Zeroize the key in memory
+        key.fill(0);
+    }
+    *kek = None;
     Ok(())
 }
 
@@ -266,7 +289,7 @@ fn migrate_vault_to_default(
     // Verify old password against the sentinel
     let old_kek = crypto::derive_key(&old_password, &salt)?;
     match crypto::decrypt_secret(&old_kek, &encrypted_sentinel) {
-        Ok(ref decrypted) if decrypted == "rdm-auth-sentinel" => {}
+        Ok(ref decrypted) if decrypted == crypto::AUTH_SENTINEL => {}
         _ => return Err("Incorrect vault password".to_string()),
     }
 
@@ -277,63 +300,29 @@ fn migrate_vault_to_default(
     let new_kek = crypto::derive_key("default_rdm_key", &new_salt)?;
 
     // Re-encrypt sentinel with new KEK
-    let new_encrypted_sentinel = crypto::encrypt_secret(&new_kek, "rdm-auth-sentinel")?;
+    let new_encrypted_sentinel = crypto::encrypt_secret(&new_kek, crypto::AUTH_SENTINEL)?;
     let new_sentinel_json = serde_json::to_string(&new_encrypted_sentinel)
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
     db::set_setting(&conn, "salt", &new_salt_hex)?;
     db::set_setting(&conn, "sentinel", &new_sentinel_json)?;
 
-    // Re-encrypt credentials
-    let mut stmt = conn
-        .prepare("SELECT id, encrypted_secret FROM credentials")
-        .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-    let mut creds_to_update = Vec::new();
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        let id: String = row.get(0).map_err(|e| e.to_string())?;
-        let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
-        let enc_data: crypto::EncryptedData =
-            serde_json::from_str(&enc_json).map_err(|e| e.to_string())?;
-        let plain = crypto::decrypt_secret(&old_kek, &enc_data)?;
-        let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
-        let re_enc_json = serde_json::to_string(&re_enc).map_err(|e| e.to_string())?;
-        creds_to_update.push((id, re_enc_json));
-    }
-    drop(rows);
-    drop(stmt);
-    for (id, secret_json) in &creds_to_update {
-        conn.execute(
-            "UPDATE credentials SET encrypted_secret = ?1 WHERE id = ?2",
-            [secret_json.as_str(), id.as_str()],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-
-    // Re-encrypt server passwords
-    let mut stmt = conn
-        .prepare("SELECT id, encrypted_password FROM servers WHERE encrypted_password IS NOT NULL AND encrypted_password != ''")
-        .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-    let mut servers_to_update = Vec::new();
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        let id: String = row.get(0).map_err(|e| e.to_string())?;
-        let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
-        let enc_data: crypto::EncryptedData =
-            serde_json::from_str(&enc_json).map_err(|e| e.to_string())?;
-        let plain = crypto::decrypt_secret(&old_kek, &enc_data)?;
-        let re_enc = crypto::encrypt_secret(&new_kek, &plain)?;
-        let re_enc_json = serde_json::to_string(&re_enc).map_err(|e| e.to_string())?;
-        servers_to_update.push((id, re_enc_json));
-    }
-    drop(rows);
-    drop(stmt);
-    for (id, pw_json) in &servers_to_update {
-        conn.execute(
-            "UPDATE servers SET encrypted_password = ?1 WHERE id = ?2",
-            [pw_json.as_str(), id.as_str()],
-        )
-        .map_err(|e| e.to_string())?;
-    }
+    // Re-encrypt all data with new KEK
+    re_encrypt_table(
+        &conn,
+        "credentials",
+        "encrypted_secret",
+        "1=1",
+        &old_kek,
+        &new_kek,
+    )?;
+    re_encrypt_table(
+        &conn,
+        "servers",
+        "encrypted_password",
+        "encrypted_password IS NOT NULL AND encrypted_password != ''",
+        &old_kek,
+        &new_kek,
+    )?;
 
     // Store new KEK in session
     let mut session_kek = state.kek.lock().map_err(|e| e.to_string())?;
@@ -368,13 +357,13 @@ fn get_credentials(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<Vec<db::Credential>, String> {
-    // Require vault to be unlocked
+    // Lock order: conn first, then kek (prevents deadlock)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek = state.kek.lock().map_err(|e| e.to_string())?;
     if kek.is_none() {
         return Err("Vault is locked".to_string());
     }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    drop(kek);
     db::get_credentials(&conn)
 }
 
@@ -387,6 +376,8 @@ fn add_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    // Lock order: conn first, then kek (prevents deadlock)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
 
@@ -418,10 +409,10 @@ fn update_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    // Lock order: conn first, then kek (prevents deadlock)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let encrypted_json = if let Some(sec_val) = secret {
         let encrypted = crypto::encrypt_secret(&kek, &sec_val)?;
@@ -456,12 +447,12 @@ fn delete_credential(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek = state.kek.lock().map_err(|e| e.to_string())?;
     if kek.is_none() {
         return Err("Vault is locked".to_string());
     }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    drop(kek);
     db::delete_credential(&conn, &id)
 }
 
@@ -471,10 +462,10 @@ fn decrypt_credential_secret(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
+    // Lock order: conn first, then kek (prevents deadlock)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let list = db::get_credentials(&conn)?;
     let cred = list
         .iter()
@@ -494,10 +485,10 @@ fn decrypt_server_password(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
+    // Lock order: conn first, then kek (prevents deadlock)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let list = db::get_servers(&conn)?;
     let srv = list
         .iter()
@@ -549,6 +540,7 @@ fn add_server(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut encrypted_password = None;
 
     if let Some(ref pass_val) = password {
@@ -590,7 +582,6 @@ fn add_server(
         rdp_multimon,
     };
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::add_server(&conn, &srv)
 }
 
@@ -609,6 +600,7 @@ fn update_server(
     credential_id: Option<String>,
     username: Option<String>,
     password: Option<String>,
+    password_changed: bool,
     rdp_clipboard: Option<i32>,
     rdp_drives: Option<i32>,
     rdp_printers: Option<i32>,
@@ -625,23 +617,22 @@ fn update_server(
     let mut encrypted_password = None;
 
     if let Some(ref pass_val) = password {
-        if !pass_val.is_empty() {
-            if pass_val == "__UNCHANGED__" {
-                let list = db::get_servers(&conn)?;
-                let existing = list
-                    .iter()
-                    .find(|s| s.id == id)
-                    .ok_or_else(|| "Server not found".to_string())?;
-                encrypted_password = existing.encrypted_password.clone();
-            } else {
-                let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
-                let kek = kek_guard
-                    .ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
-                let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
-                let encrypted_json = serde_json::to_string(&encrypted)
-                    .map_err(|e| format!("Failed to serialize manual password: {}", e))?;
-                encrypted_password = Some(encrypted_json);
-            }
+        if password_changed && !pass_val.is_empty() {
+            let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+            let kek = kek_guard
+                .ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
+            let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
+            let encrypted_json = serde_json::to_string(&encrypted)
+                .map_err(|e| format!("Failed to serialize manual password: {}", e))?;
+            encrypted_password = Some(encrypted_json);
+        } else if !password_changed {
+            // Keep existing password unchanged
+            let list = db::get_servers(&conn)?;
+            let existing = list
+                .iter()
+                .find(|s| s.id == id)
+                .ok_or_else(|| "Server not found".to_string())?;
+            encrypted_password = existing.encrypted_password.clone();
         }
     }
 
@@ -1108,16 +1099,21 @@ fn send_rdp_key(
 
 #[tauri::command]
 fn bypass_rdp_warnings() -> Result<(), String> {
-    let script = "Start-Process cmd.exe -ArgumentList '/c reg add \"HKLM\\Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\Client\" /v RedirectionWarningDialogVersion /t REG_DWORD /d 1 /f' -Verb RunAs";
-
-    let status = std::process::Command::new("powershell")
-        .args(&["-Command", script])
-        .status()
-        .map_err(|e| format!("Failed to spawn elevated process: {}", e))?;
-
-    if !status.success() {
-        return Err("UAC elevation was cancelled or failed".to_string());
-    }
+    // Write to HKCU — no admin required
+    let _ = std::process::Command::new("reg")
+        .args(&[
+            "add",
+            "HKCU\\Software\\Microsoft\\Terminal Server Client",
+            "/v",
+            "AuthenticationLevelOverride",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "0",
+            "/f",
+        ])
+        .spawn()
+        .and_then(|mut c| c.wait());
 
     Ok(())
 }
@@ -1197,7 +1193,7 @@ fn auto_setup_vault(
         let salt_hex = hex::encode(salt);
         let kek = crypto::derive_key("default_rdm_key", &salt)?;
 
-        let encrypted = crypto::encrypt_secret(&kek, "rdm-auth-sentinel")?;
+        let encrypted = crypto::encrypt_secret(&kek, crypto::AUTH_SENTINEL)?;
         let sentinel_json = serde_json::to_string(&encrypted)
             .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
 
@@ -1216,7 +1212,7 @@ fn auto_setup_vault(
         let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
 
         match crypto::decrypt_secret(&default_kek, &encrypted) {
-            Ok(decrypted) if decrypted == "rdm-auth-sentinel" => {
+            Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
                 // Vault uses default_rdm_key — auto-unlock
                 let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
                 *session_kek = Some(default_kek);
@@ -1232,6 +1228,51 @@ fn auto_setup_vault(
     Ok(())
 }
 
+/// Re-encrypts a single column in a table from old_kek to new_kek.
+fn re_encrypt_table(
+    conn: &rusqlite::Connection,
+    table: &str,
+    column: &str,
+    where_clause: &str,
+    old_kek: &[u8; 32],
+    new_kek: &[u8; 32],
+) -> Result<(), String> {
+    let query = format!(
+        "SELECT id, {} FROM {} WHERE {}",
+        column, table, where_clause
+    );
+    let update_query = format!(
+        "UPDATE {} SET {} = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+        table, column
+    );
+
+    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+
+    let mut to_update = Vec::new();
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let id: String = row.get(0).map_err(|e| e.to_string())?;
+        let enc_json: String = row.get(1).map_err(|e| e.to_string())?;
+
+        let enc_data: crypto::EncryptedData =
+            serde_json::from_str(&enc_json).map_err(|e| e.to_string())?;
+        let plain = crypto::decrypt_secret(old_kek, &enc_data)?;
+        let re_enc = crypto::encrypt_secret(new_kek, &plain)?;
+        let re_enc_json = serde_json::to_string(&re_enc).map_err(|e| e.to_string())?;
+
+        to_update.push((id, re_enc_json));
+    }
+    drop(rows);
+    drop(stmt);
+
+    for (id, secret_json) in &to_update {
+        conn.execute(&update_query, [secret_json.as_str(), id.as_str()])
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 fn re_encrypt_database(
     db_path: &std::path::Path,
     old_kek: &[u8; 32],
@@ -1242,7 +1283,7 @@ fn re_encrypt_database(
         .map_err(|e| format!("Failed to open export database for re-encryption: {}", e))?;
 
     // Update settings table
-    let sentinel_plaintext = "rdm-auth-sentinel";
+    let sentinel_plaintext = crypto::AUTH_SENTINEL;
     let encrypted_sentinel = crypto::encrypt_secret(new_kek, sentinel_plaintext)?;
     let sentinel_json = serde_json::to_string(&encrypted_sentinel)
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
@@ -1259,68 +1300,23 @@ fn re_encrypt_database(
     )
     .map_err(|e| e.to_string())?;
 
-    // Re-encrypt credentials table
-    let mut stmt = conn
-        .prepare("SELECT id, encrypted_secret FROM credentials")
-        .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-
-    let mut creds_to_update = Vec::new();
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        let id: String = row.get(0).map_err(|e| e.to_string())?;
-        let encrypted_secret_json: String = row.get(1).map_err(|e| e.to_string())?;
-
-        let encrypted_secret: crypto::EncryptedData = serde_json::from_str(&encrypted_secret_json)
-            .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
-
-        let secret = crypto::decrypt_secret(old_kek, &encrypted_secret)?;
-        let re_encrypted = crypto::encrypt_secret(new_kek, &secret)?;
-        let re_encrypted_json = serde_json::to_string(&re_encrypted).map_err(|e| e.to_string())?;
-
-        creds_to_update.push((id, re_encrypted_json));
-    }
-    drop(rows);
-    drop(stmt);
-
-    for (id, secret_json) in creds_to_update {
-        conn.execute(
-            "UPDATE credentials SET encrypted_secret = ?1 WHERE id = ?2",
-            [&secret_json, &id],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-
-    // Re-encrypt servers table
-    let mut stmt = conn
-        .prepare("SELECT id, encrypted_password FROM servers WHERE encrypted_password IS NOT NULL AND encrypted_password != ''")
-        .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
-
-    let mut servers_to_update = Vec::new();
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        let id: String = row.get(0).map_err(|e| e.to_string())?;
-        let encrypted_password_json: String = row.get(1).map_err(|e| e.to_string())?;
-
-        let encrypted_password: crypto::EncryptedData =
-            serde_json::from_str(&encrypted_password_json)
-                .map_err(|e| format!("Failed to parse server password: {}", e))?;
-
-        let password = crypto::decrypt_secret(old_kek, &encrypted_password)?;
-        let re_encrypted = crypto::encrypt_secret(new_kek, &password)?;
-        let re_encrypted_json = serde_json::to_string(&re_encrypted).map_err(|e| e.to_string())?;
-
-        servers_to_update.push((id, re_encrypted_json));
-    }
-    drop(rows);
-    drop(stmt);
-
-    for (id, password_json) in servers_to_update {
-        conn.execute(
-            "UPDATE servers SET encrypted_password = ?1 WHERE id = ?2",
-            [&password_json, &id],
-        )
-        .map_err(|e| e.to_string())?;
-    }
+    // Re-encrypt tables using shared helper
+    re_encrypt_table(
+        &conn,
+        "credentials",
+        "encrypted_secret",
+        "1=1",
+        old_kek,
+        new_kek,
+    )?;
+    re_encrypt_table(
+        &conn,
+        "servers",
+        "encrypted_password",
+        "encrypted_password IS NOT NULL AND encrypted_password != ''",
+        old_kek,
+        new_kek,
+    )?;
 
     Ok(())
 }
@@ -1333,7 +1329,10 @@ fn export_database_backup(
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
-    let app_dir = app.path().app_data_dir().unwrap();
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
     let db_path = app_dir.join("rdm.db");
 
     // Lock local connection
@@ -1407,14 +1406,17 @@ fn import_database_backup(
             .to_string()
     })?;
 
-    if decrypted != "rdm-auth-sentinel" {
+    if decrypted != crypto::AUTH_SENTINEL {
         return Err("Invalid sentinel inside backup database.".to_string());
     }
 
     drop(backup_conn); // Release handle to backup file
 
     // 2. Prepare re-encryption to local_kek (derived from "default_rdm_key")
-    let app_dir = app.path().app_data_dir().unwrap();
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
     let db_path = app_dir.join("rdm.db");
     let temp_db_path = app_dir.join("rdm_import_temp.db");
 
@@ -2153,9 +2155,15 @@ fn sftp_ls(
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
         get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
-    let app_data = app.path().app_data_dir().unwrap();
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
 
-    if path.contains([';', '|', '`', '$', '>', '<', '&', '\n', '\r']) {
+    if !path
+        .chars()
+        .all(|c| c.is_alphanumeric() || "/._-".contains(c))
+    {
         return Err("Invalid characters in path".to_string());
     }
     let mut args = vec![
@@ -2192,7 +2200,10 @@ fn sftp_download(
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
         get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
-    let app_data = app.path().app_data_dir().unwrap();
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
 
     let args = vec![
         "-P".to_string(),
@@ -2226,7 +2237,10 @@ fn sftp_upload(
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
         get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
-    let app_data = app.path().app_data_dir().unwrap();
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
 
     let args = vec![
         "-P".to_string(),

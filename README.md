@@ -15,7 +15,7 @@
 ---
 
 ## 🔒 Архітектура безпеки
-1. **Master Password**: Усі паролі та ключі шифруються локальним ключем KEK (Key Encryption Key), який виводиться за допомогою **Argon2id** з унікальною сіллю.
+1. **Master Password**: Усі паролі та ключі шифруються локальним ключем KEK (Key Encryption Engine), який виводиться за допомогою **PBKDF2-HMAC-SHA256** з 100,000 ітерацій та унікальною сіллю.
 2. **AES-256-GCM**: Облікові дані шифруються за допомогою симетричного алгоритму AES-256-GCM.
 3. **Безпека пам'яті**: Ключ дешифрування тримається виключно в оперативній пам'яті бекенду Rust та миттєво занулюється (zeroized) при виході або блокуванні сейфа.
 4. **Sentinel**: Перевірка правильності пароля здійснюється дешифруванням контрольного рядка (`rdm-auth-sentinel`). База даних не зберігає хеш пароля, що виключає можливість його брутфорсу у разі крадіжки файлу бази.
@@ -26,7 +26,7 @@
 * **Core**: Tauri v2, Rust
 * **Frontend**: React (TypeScript), CSS
 * **Database**: SQLite (через `rusqlite` з `bundled` збіркою)
-* **Crypto**: Argon2, AES-GCM
+* **Crypto**: PBKDF2-HMAC-SHA256, AES-256-GCM
 * **PTY & Terminal**: `portable-pty` (ConPTY / `/dev/ptmx`), `xterm.js` + `fit-addon`
 * **Utilities**: `rfd` (Rust File Dialogs), `csv`
 

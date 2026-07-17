@@ -511,7 +511,7 @@ function App() {
         activeTabs={tabs.activeTabs}
         currentTabId={tabs.currentTabId}
         onSelectTab={tabs.handleSelectTab}
-        visible={tabs.activeTabType !== "rdp"}
+        visible={tabs.activeTabType === "dashboard" || tabs.activeTabType === "credentials" || tabs.activeTabType === "settings"}
       />
     </div>
 
@@ -605,7 +605,7 @@ function App() {
                   </div>
                   <div className="input-group">
                     <label className="input-label">Custom Password (Manual)</label>
-                    <input type="password" className="text-input" value={serverForm.srvPassword} onChange={(e) => serverForm.setSrvPassword(e.target.value)} placeholder={serverForm.srvPassword === "__UNCHANGED__" ? "•••••••• (Unchanged)" : "Enter password"} />
+                    <input type="password" className="text-input" value={serverForm.srvPassword} onChange={(e) => { serverForm.setSrvPassword(e.target.value); serverForm.setSrvPasswordChanged(true); }} placeholder={serverForm.editingServer && !serverForm.srvPasswordChanged ? "•••••••• (Unchanged)" : "Enter password"} />
                   </div>
                 </div>
               )}

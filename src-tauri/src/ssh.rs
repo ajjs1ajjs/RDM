@@ -1,31 +1,62 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize, MasterPty};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use serde::Serialize;
-use std::path::PathBuf;
 
+/// Strips ANSI/VT100 escape sequences from a string.
+/// Handles CSI, OSC, DCS, APC, PM, and SOS sequences.
 fn strip_ansi_codes(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
+    let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\x1b' {
-            // Skip escape sequence: ESC [ ... m  (or other terminators)
-            if chars.next() == Some('[') {
-                for ch in &mut chars {
-                    if ch.is_ascii_alphabetic() || ch == '~' {
-                        break;
+            match chars.next() {
+                // CSI: ESC [ params... terminator (0x40-0x7E)
+                Some('[') => {
+                    while let Some(&ch) = chars.peek() {
+                        if (ch >= '\x40' && ch <= '\x7e') {
+                            chars.next();
+                            break;
+                        }
+                        chars.next();
                     }
                 }
+                // OSC: ESC ] ... ST (ESC \\) or BEL (\x07)
+                Some(']') => {
+                    while let Some(ch) = chars.next() {
+                        if ch == '\x07' {
+                            break;
+                        }
+                        if ch == '\x1b' {
+                            if chars.next() == Some('\\') {
+                                break;
+                            }
+                        }
+                    }
+                }
+                // DCS (P), APC (_), PM (^), SOS (X): ... ST
+                Some('P') | Some('_') | Some('^') | Some('X') => {
+                    while let Some(ch) = chars.next() {
+                        if ch == '\x1b' {
+                            if chars.next() == Some('\\') {
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Two-character sequences: ESC N (SS2), ESC O (SS3)
+                Some('N') | Some('O') => {}
+                // ESC alone — skip
+                _ => {}
             }
-        } else {
+        } else if c != '\r' {
             // Skip carriage returns (common in Windows PTY output)
-            if c != '\r' {
-                out.push(c);
-            }
+            out.push(c);
         }
     }
     out
@@ -106,10 +137,14 @@ pub fn connect_ssh(
     let app_data_dir = app.path().app_data_dir().unwrap();
     let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
-        "-o".to_string(), "StrictHostKeyChecking=accept-new".to_string(),
-        "-o".to_string(), format!("UserKnownHostsFile={}", known_hosts.display()),
-        "-o".to_string(), "BatchMode=no".to_string(),
-        "-p".to_string(), port.to_string(),
+        "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
+        "-o".to_string(),
+        format!("UserKnownHostsFile={}", known_hosts.display()),
+        "-o".to_string(),
+        "BatchMode=no".to_string(),
+        "-p".to_string(),
+        port.to_string(),
     ];
 
     // Force PTY allocation for proper password prompts on Windows
@@ -121,11 +156,13 @@ pub fn connect_ssh(
     if let Some(key_content) = private_key {
         let app_dir = app.path().app_data_dir().unwrap();
         let keys_dir = app_dir.join("temp_keys");
-        std::fs::create_dir_all(&keys_dir).map_err(|e| format!("Failed to create temp key dir: {}", e))?;
-        
+        std::fs::create_dir_all(&keys_dir)
+            .map_err(|e| format!("Failed to create temp key dir: {}", e))?;
+
         let key_file = keys_dir.join(format!("key_{}", session_id));
-        std::fs::write(&key_file, key_content).map_err(|e| format!("Failed to write private key: {}", e))?;
-        
+        std::fs::write(&key_file, key_content)
+            .map_err(|e| format!("Failed to write private key: {}", e))?;
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -147,7 +184,9 @@ pub fn connect_ssh(
 
         args.push("-i".to_string());
         args.push(key_file.to_string_lossy().to_string());
-        key_guard = Some(TempKeyGuard { path: Some(key_file.clone()) });
+        key_guard = Some(TempKeyGuard {
+            path: Some(key_file.clone()),
+        });
         temp_key_path = Some(key_file);
     }
 
@@ -174,14 +213,20 @@ pub fn connect_ssh(
     }
 
     // Spawn the SSH client process into the PTY
-    let mut child = pair.slave.spawn_command(cmd)
+    let mut child = pair
+        .slave
+        .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn SSH process: {} (Is ssh installed?)", e))?;
 
     // Setup I/O
-    let mut reader = pair.master.try_clone_reader()
+    let mut reader = pair
+        .master
+        .try_clone_reader()
         .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
-    
-    let writer = pair.master.take_writer()
+
+    let writer = pair
+        .master
+        .take_writer()
         .map_err(|e| format!("Failed to take PTY writer: {}", e))?;
 
     let writer_arc = Arc::new(Mutex::new(writer));
@@ -197,7 +242,9 @@ pub fn connect_ssh(
 
     // Spawn reader thread
     thread::spawn(move || {
-        let _thread_key_guard = TempKeyGuard { path: temp_key_path_for_thread };
+        let _thread_key_guard = TempKeyGuard {
+            path: temp_key_path_for_thread,
+        };
         let mut buf = [0u8; 8192];
         let mut password_sent = false;
         let mut passphrase_sent = false;
@@ -215,7 +262,7 @@ pub fn connect_ssh(
                 Ok(0) => break,
                 Ok(n) => {
                     let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                    
+
                     output_accumulated.push_str(&text);
                     let clean_lower = strip_ansi_codes(&output_accumulated).to_lowercase();
 
@@ -226,7 +273,8 @@ pub fn connect_ssh(
                                 || clean_lower.ends_with("password:")
                                 || clean_lower.ends_with("password: ")
                                 || clean_lower.contains("'s password:")
-                                || (clean_lower.contains("password") && !clean_lower.contains("new password"))
+                                || (clean_lower.contains("password")
+                                    && !clean_lower.contains("new password"))
                                 || clean_lower.contains("пароль:")
                                 || clean_lower.contains("verification code:");
                             if needs_pw {
@@ -318,20 +366,18 @@ pub fn connect_ssh(
 }
 
 /// Writes keypresses or commands to the active PTY session.
-pub fn write_ssh_input(
-    state: &SshState,
-    session_id: &str,
-    data: &str,
-) -> Result<(), String> {
+pub fn write_ssh_input(state: &SshState, session_id: &str, data: &str) -> Result<(), String> {
     let sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     let session = sessions
         .get(session_id)
         .ok_or_else(|| format!("SSH Session not found: {}", session_id))?;
 
     let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
-    writer.write_all(data.as_bytes())
+    writer
+        .write_all(data.as_bytes())
         .map_err(|e| format!("Failed to write to SSH session: {}", e))?;
-    writer.flush()
+    writer
+        .flush()
         .map_err(|e| format!("Failed to flush SSH session: {}", e))
 }
 
@@ -348,20 +394,18 @@ pub fn resize_ssh_pty(
         .ok_or_else(|| format!("SSH Session not found: {}", session_id))?;
 
     let master = session.master.lock().map_err(|e| e.to_string())?;
-    master.resize(PtySize {
-        rows: rows as u16,
-        cols: cols as u16,
-        pixel_width: 0,
-        pixel_height: 0,
-    })
-    .map_err(|e| format!("Failed to resize PTY: {}", e))
+    master
+        .resize(PtySize {
+            rows: rows as u16,
+            cols: cols as u16,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("Failed to resize PTY: {}", e))
 }
 
 /// Disconnects the SSH session.
-pub fn disconnect_ssh_session(
-    state: &SshState,
-    session_id: &str,
-) -> Result<(), String> {
+pub fn disconnect_ssh_session(state: &SshState, session_id: &str) -> Result<(), String> {
     let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
     if let Some(session) = sessions.remove(session_id) {
         drop(session.master);

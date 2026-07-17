@@ -59,13 +59,15 @@ pub struct RdpState {
 
 impl Drop for RdpState {
     fn drop(&mut self) {
-        // Kill orphaned mstsc/RdpHost processes when app exits
-        let _ = std::process::Command::new("taskkill")
-            .args(&["/f", "/im", "mstsc.exe"])
-            .output();
-        let _ = std::process::Command::new("taskkill")
-            .args(&["/f", "/im", "RdpHost.exe"])
-            .output();
+        // Kill only our spawned mstsc/RdpHost processes by PID
+        if let Ok(sessions) = self.sessions.lock() {
+            for (_, session) in sessions.iter() {
+                let pid = session.pid;
+                let _ = std::process::Command::new("taskkill")
+                    .args(&["/f", "/pid", &pid.to_string()])
+                    .output();
+            }
+        }
     }
 }
 

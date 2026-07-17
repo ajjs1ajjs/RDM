@@ -113,9 +113,12 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
         clearTimeout(timerRef.current);
       }
 
-      // Auto-clear clipboard after 15 seconds
+      // Auto-clear clipboard after 15 seconds — overwrite with garbage data
       timerRef.current = window.setTimeout(async () => {
-        await navigator.clipboard.writeText("").catch(() => {});
+        const garbage = Array.from({ length: 64 }, () =>
+          Math.random().toString(36).charAt(2)
+        ).join('');
+        await navigator.clipboard.writeText(garbage).catch(() => {});
         setCopyingPassword(false);
         timerRef.current = null;
       }, 15000);

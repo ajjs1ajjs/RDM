@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use std::fs;
-use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Server {
@@ -55,7 +55,7 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, r
     // Validate table name against whitelist to prevent SQL injection
     if table != "servers" {
         return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid table name")
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid table name"),
         )));
     }
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
@@ -71,14 +71,16 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, r
 
 pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     if !app_dir.exists() {
-        fs::create_dir_all(&app_dir).map_err(|e| format!("Failed to create app data dir: {}", e))?;
+        fs::create_dir_all(&app_dir)
+            .map_err(|e| format!("Failed to create app data dir: {}", e))?;
     }
-    
+
     let db_path = app_dir.join("rdm.db");
     let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
-    
+
     // Enable foreign keys
-    conn.execute("PRAGMA foreign_keys = ON;", []).map_err(|e| e.to_string())?;
+    conn.execute("PRAGMA foreign_keys = ON;", [])
+        .map_err(|e| e.to_string())?;
 
     // Create tables
     conn.execute(
@@ -87,7 +89,8 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             value TEXT NOT NULL
         );",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS credentials (
@@ -100,7 +103,8 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS servers (
@@ -131,7 +135,8 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             FOREIGN KEY(credential_id) REFERENCES credentials(id) ON DELETE SET NULL
         );",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS connection_history (
@@ -143,7 +148,8 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
             FOREIGN KEY(server_id) REFERENCES servers(id) ON DELETE CASCADE
         );",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     // Safe versioned schema migration
     let current_version: u32 = conn
@@ -168,11 +174,13 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
                 conn.execute(
                     &format!("ALTER TABLE servers ADD COLUMN {} {};", col_name, col_type),
                     [],
-                ).map_err(|e| e.to_string())?;
+                )
+                .map_err(|e| e.to_string())?;
             }
         }
 
-        conn.execute("PRAGMA user_version = 2;", []).map_err(|e| e.to_string())?;
+        conn.execute("PRAGMA user_version = 2;", [])
+            .map_err(|e| e.to_string())?;
     }
 
     if current_version < 3 {
@@ -186,11 +194,13 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
                 conn.execute(
                     &format!("ALTER TABLE servers ADD COLUMN {} {};", col_name, col_type),
                     [],
-                ).map_err(|e| e.to_string())?;
+                )
+                .map_err(|e| e.to_string())?;
             }
         }
 
-        conn.execute("PRAGMA user_version = 3;", []).map_err(|e| e.to_string())?;
+        conn.execute("PRAGMA user_version = 3;", [])
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(conn)
@@ -202,13 +212,19 @@ pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, Strin
         .prepare("SELECT value FROM settings WHERE key = ?1")
         .map_err(|e| e.to_string())?;
     let mut rows = stmt.query(params![key]).map_err(|e| e.to_string())?;
-    
+
     if let Some(row) = rows.next().map_err(|e| e.to_string())? {
         let value: String = row.get(0).map_err(|e| e.to_string())?;
         Ok(Some(value))
     } else {
         Ok(None)
     }
+}
+
+pub fn delete_setting(conn: &Connection, key: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", params![key])
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
@@ -249,7 +265,7 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
     let mut stmt = conn
         .prepare("SELECT id, name, type, username, encrypted_secret, created_at, updated_at FROM credentials ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
-    
+
     let rows = stmt
         .query_map([], |row| {
             Ok(Credential {
@@ -274,7 +290,7 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
 // Servers helpers
 pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon) 
+        "INSERT INTO servers (id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![srv.id, srv.name, srv.hostname, srv.ip, srv.port, srv.protocol, srv.os, srv.folder_path, srv.tags, srv.description, srv.credential_id, srv.username, srv.encrypted_password, srv.rdp_clipboard, srv.rdp_drives, srv.rdp_printers, srv.rdp_smart_sizing, srv.rdp_audio, srv.rdp_smartcards, srv.rdp_webauthn, srv.rdp_fullscreen, srv.rdp_multimon],
     )
@@ -301,7 +317,7 @@ pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
     let mut stmt = conn
         .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon FROM servers ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
-    
+
     let rows = stmt
         .query_map([], |row| {
             Ok(Server {
@@ -354,7 +370,7 @@ pub fn get_history(conn: &Connection, server_id: &str) -> Result<Vec<ConnectionH
     let mut stmt = conn
         .prepare("SELECT id, server_id, timestamp, status, log FROM connection_history WHERE server_id = ?1 ORDER BY timestamp DESC")
         .map_err(|e| e.to_string())?;
-    
+
     let rows = stmt
         .query_map(params![server_id], |row| {
             Ok(ConnectionHistory {
