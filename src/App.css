@@ -294,6 +294,7 @@ body {
 .tab-content {
   flex-grow: 1;
   display: flex;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -595,7 +596,7 @@ body {
 
 .terminal-body {
   flex-grow: 1;
-  padding: 10px;
+  padding: 8px 10px 0 10px;
   overflow: hidden;
   position: relative;
 }
