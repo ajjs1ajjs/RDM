@@ -46,7 +46,9 @@ unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOO
 }
 
 pub struct RdpSession {
+    #[allow(dead_code)]
     pub target_host: String,
+    #[allow(dead_code)]
     pub server_id: Option<String>,
     pub mstsc_hwnd: isize,
     pub pid: u32,
@@ -708,7 +710,7 @@ pub fn resize_rdp_embedded(
 pub fn disconnect_rdp_embedded(
     session_id: &str,
     state: &RdpState,
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
 ) -> Result<(), String> {
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};

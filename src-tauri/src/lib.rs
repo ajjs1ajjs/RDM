@@ -395,7 +395,6 @@ fn add_credential(
         updated_at: String::new(),
     };
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     db::add_credential(&conn, &cred)
 }
 

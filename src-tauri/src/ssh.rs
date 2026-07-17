@@ -19,7 +19,7 @@ fn strip_ansi_codes(s: &str) -> String {
                 // CSI: ESC [ params... terminator (0x40-0x7E)
                 Some('[') => {
                     while let Some(&ch) = chars.peek() {
-                        if (ch >= '\x40' && ch <= '\x7e') {
+                        if ch >= '\x40' && ch <= '\x7e' {
                             chars.next();
                             break;
                         }
