@@ -68,26 +68,53 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
-    fitAddon.fit();
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Listen for selection changes to update context menu state
+    // Safe fit helper that also notifies backend PTY of new dimensions
+    const handleFitAndResizePty = () => {
+      try {
+        fitAddon.fit();
+        term.scrollToBottom();
+        if (isConnectedRef.current) {
+          invoke("resize_ssh_pty", {
+            sessionId,
+            cols: term.cols,
+            rows: term.rows,
+          }).catch((e) => console.error("PTY resize error:", e));
+        }
+      } catch (e) {
+        // ignore error during unmount
+      }
+    };
+
+    // Auto-fit immediately after mount
+    setTimeout(() => handleFitAndResizePty(), 50);
+
+    // Listen for selection changes: update state and auto-copy selected text to clipboard
     const selectionSub = term.onSelectionChange(() => {
-      setHasSelection(term.hasSelection());
+      const selection = term.getSelection();
+      const hasSel = !!selection && selection.length > 0;
+      setHasSelection(hasSel);
+      if (hasSel) {
+        navigator.clipboard.writeText(selection).catch(() => {});
+      }
     });
 
-    // Custom keyboard handler for copy/paste
+    // Custom keyboard handler for copy/paste supporting all keyboard layouts (English, Ukrainian, etc.)
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type === "keydown") {
         const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+        const keyLower = event.key ? event.key.toLowerCase() : "";
 
-        // Copy: Ctrl+C / Cmd+C / Ctrl+Shift+C / Cmd+Shift+C / Ctrl+Insert
-        if (
-          (isCtrlOrCmd && (event.key === "c" || event.key === "C")) ||
-          (event.ctrlKey && event.key === "Insert")
-        ) {
+        // Copy: Code KeyC, Insert, or key 'c' / 'с' (Ukrainian es)
+        const isCopyKey =
+          (isCtrlOrCmd &&
+            (event.code === "KeyC" || keyLower === "c" || keyLower === "с")) ||
+          (event.ctrlKey && event.code === "Insert");
+
+        if (isCopyKey) {
           if (event.shiftKey || term.hasSelection()) {
             const selected = term.getSelection();
             if (selected) {
@@ -101,18 +128,19 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
           return true;
         }
 
-        // Paste: Ctrl+V / Cmd+V / Ctrl+Shift+V / Cmd+Shift+V / Shift+Insert
-        if (
-          (isCtrlOrCmd && (event.key === "v" || event.key === "V")) ||
-          (event.shiftKey && event.key === "Insert")
-        ) {
+        // Paste: Code KeyV, Insert, or key 'v' / 'м' (Ukrainian em)
+        const isPasteKey =
+          (isCtrlOrCmd &&
+            (event.code === "KeyV" || keyLower === "v" || keyLower === "м")) ||
+          (event.shiftKey && event.code === "Insert");
+
+        if (isPasteKey) {
           navigator.clipboard
             .readText()
             .then((text) => {
               if (text && isConnectedRef.current) {
-                invoke("write_ssh_input", { sessionId, data: text }).catch((e) =>
-                  console.error("SSH write error on paste:", e)
-                );
+                term.paste(text);
+                term.scrollToBottom();
               }
             })
             .catch((err) => {
@@ -126,23 +154,20 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
 
     term.writeln(`\r\n\x1b[1;36m[RDM] Connecting to ${username}@${host}:${port}...\x1b[0m\r\n`);
 
-    // Get final terminal size after fit
-    const dims = term;
-    const cols = dims.cols;
-    const rows = dims.rows;
-
     let isDestroyed = false;
     const unlisteners: (() => void)[] = [];
 
     // Setup Tauri Event Listeners
     const setupListeners = async () => {
       try {
-        // Listen for stdout data stream
+        // Listen for stdout data stream and auto-scroll to bottom after render
         const unlistenOutput = await listen<{ session_id: string; data: string }>(
           "ssh-output",
           (event) => {
             if (event.payload.session_id === sessionId) {
-              term.write(event.payload.data);
+              term.write(event.payload.data, () => {
+                term.scrollToBottom();
+              });
             }
           }
         );
@@ -175,11 +200,12 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
             username,
             credentialId: credentialId || null,
             serverId: serverId || null,
-            cols,
-            rows,
+            cols: term.cols,
+            rows: term.rows,
           });
           isConnectedRef.current = true;
           setStatus('connected');
+          handleFitAndResizePty();
         }
       } catch (err: any) {
         if (!isDestroyed) {
@@ -197,6 +223,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         invoke("write_ssh_input", { sessionId, data }).catch((e) =>
           console.error("SSH write error:", e)
         );
+        term.scrollToBottom();
       }
     });
 
@@ -215,15 +242,13 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       }
     });
 
-    // Resize handler for browser window changes
-    const handleResize = () => {
-      try {
-        fitAddon.fit();
-      } catch (e) {
-        console.warn("Resize fit failed:", e);
-      }
-    };
-    window.addEventListener("resize", handleResize);
+    // ResizeObserver on the container div to re-fit whenever the div changes size (sidebar toggle, tab switch, window resize)
+    const resizeObserver = new ResizeObserver(() => {
+      handleFitAndResizePty();
+    });
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
 
     // DOM paste & copy listeners on the container div
     const container = terminalRef.current;
@@ -231,9 +256,8 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       e.preventDefault();
       const text = e.clipboardData?.getData("text");
       if (text && isConnectedRef.current) {
-        invoke("write_ssh_input", { sessionId, data: text }).catch((e) =>
-          console.error("SSH paste error:", e)
-        );
+        term.paste(text);
+        term.scrollToBottom();
       }
     };
 
@@ -254,7 +278,10 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     return () => {
       isDestroyed = true;
       isConnectedRef.current = false;
-      window.removeEventListener("resize", handleResize);
+      if (terminalRef.current) {
+        resizeObserver.unobserve(terminalRef.current);
+      }
+      resizeObserver.disconnect();
       container.removeEventListener("paste", handleDomPaste);
       container.removeEventListener("copy", handleDomCopy);
       if (ptyResizeTimer) clearTimeout(ptyResizeTimer);
@@ -293,10 +320,9 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     navigator.clipboard
       .readText()
       .then((text) => {
-        if (text && isConnectedRef.current) {
-          invoke("write_ssh_input", { sessionId, data: text }).catch((e) =>
-            console.error("SSH paste error:", e)
-          );
+        if (text && isConnectedRef.current && xtermRef.current) {
+          xtermRef.current.paste(text);
+          xtermRef.current.scrollToBottom();
         }
       })
       .catch((err) => console.error("Clipboard read error:", err));
@@ -358,4 +384,5 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     </div>
   );
 };
+
 

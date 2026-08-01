@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.63
+
+- Fix SSH terminal bottom line clipping & auto-scroll to keep active prompt visible
+- Add ResizeObserver for dynamic terminal container fitting on tab switch & window resize
+- Fix multi-language layout copy/paste hotkeys (Ukrainian Ctrl+С / Ctrl+М & English layout support)
+- Add auto-copy on text selection in SSH terminal
+
 ## v0.1.62
 
 - Fix SSH terminal copy & paste (Ctrl+C, Ctrl+V, Ctrl+Shift+C/V, Cmd+C/V, Shift/Ctrl+Insert)
