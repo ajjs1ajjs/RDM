@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.62
+
+- Fix SSH terminal copy & paste (Ctrl+C, Ctrl+V, Ctrl+Shift+C/V, Cmd+C/V, Shift/Ctrl+Insert)
+- Add selection detection and right-click context menu in SSH terminal (Copy, Paste, Select All, Clear)
+
 ## v0.1.59
 
 - Reset Vault now wipes ALL data (servers, credentials, history, settings) for a completely clean start

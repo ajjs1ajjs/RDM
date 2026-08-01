@@ -601,6 +601,63 @@ body {
   position: relative;
 }
 
+/* Terminal Context Menu */
+.terminal-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(11, 15, 25, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glow);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminal-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: var(--transition-smooth);
+}
+
+.terminal-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--accent-cyan);
+}
+
+.terminal-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.menu-shortcut {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.terminal-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 2px 0;
+}
+
+
 /* Details Panel Item Row */
 .details-section-title {
   font-size: 0.8rem;
