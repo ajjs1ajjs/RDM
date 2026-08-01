@@ -45,9 +45,11 @@ New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
 # Copy the release exe
 Copy-Item "$releaseDir\$exeName" "$portableDir\" -Force
 
-# Copy WebView2 loader if it exists as a separate file
+# Copy WebView2 loader DLL (required for Windows WebView2)
 if (Test-Path "$releaseDir\WebView2Loader.dll") {
     Copy-Item "$releaseDir\WebView2Loader.dll" "$portableDir\" -Force
+} elseif (Test-Path "src-tauri\WebView2Loader.dll") {
+    Copy-Item "src-tauri\WebView2Loader.dll" "$portableDir\" -Force
 }
 
 # Copy icon as standalone .ico for the portable folder

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.65
+
+- Explicitly bundle `WebView2Loader.dll` in installer resources and portable packages to fix system error "WebView2Loader.dll was not found"
+
 ## v0.1.64
 
 - Add NSIS setup installer target (`_setup.exe`) to prevent WiX MSI UAC elevation hangs during installation/update
