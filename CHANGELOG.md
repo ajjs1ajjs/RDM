@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.64
+
+- Add NSIS setup installer target (`_setup.exe`) to prevent WiX MSI UAC elevation hangs during installation/update
+- Clean build bundle: NSIS installer (`.exe`), MSI (`.msi`), and Portable (`.zip`)
+
 ## v0.1.63
 
 - Fix SSH terminal bottom line clipping & auto-scroll to keep active prompt visible

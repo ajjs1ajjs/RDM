@@ -32,6 +32,12 @@ if (!(Test-Path $buildDest)) {
 }
 
 # Copy installers
+$nsisPath = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($nsisPath) {
+    Copy-Item $nsisPath.FullName "$buildDest\" -Force
+    Write-Host "  Copied NSIS installer to BUILD\" -ForegroundColor Gray
+}
+
 $msiPath = Get-ChildItem "src-tauri\target\release\bundle\msi\*.msi" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($msiPath) {
     Copy-Item $msiPath.FullName "$buildDest\" -Force

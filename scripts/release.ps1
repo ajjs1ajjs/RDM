@@ -49,11 +49,13 @@ if (-not $ReleaseNotes) {
     }
 }
 
-# Find build artifacts (MSI + portable ZIP only)
+# Find build artifacts (NSIS EXE + MSI + portable ZIP)
+$nsisPath = Get-ChildItem "$root/src-tauri/target/release/bundle/nsis/*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $msiPath = Get-ChildItem "$root/src-tauri/target/release/bundle/msi/*.msi" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $zipPath = Get-ChildItem "$root/dist-portable/*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
 $assets = @()
+if ($nsisPath) { $assets += "`"$($nsisPath.FullName)`"" }
 if ($msiPath) { $assets += "`"$($msiPath.FullName)`"" }
 if ($zipPath) { $assets += "`"$($zipPath.FullName)`"" }
 
