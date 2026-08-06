@@ -15,10 +15,19 @@ pub struct EncryptedData {
     pub nonce: String,      // Hex-encoded
 }
 
-/// Derives a 256-bit Key Encryption Key (KEK) from a master password and salt using PBKDF2-HMAC-SHA256 with 100,000 iterations.
+/// Derives a 256-bit Key Encryption Key (KEK) from a master password and salt
+/// using PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP-recommended).
 pub fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
     let mut key = [0u8; 32];
-    let _ = pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(password.as_bytes(), salt, 100000, &mut key);
+    let _ = pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(password.as_bytes(), salt, 600_000, &mut key);
+    Ok(key)
+}
+
+/// Legacy PBKDF2 with 100,000 iterations. Used ONLY to detect/migrate vaults
+/// that were created by older versions with the historical iteration count.
+pub fn derive_key_legacy(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
+    let mut key = [0u8; 32];
+    let _ = pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(password.as_bytes(), salt, 100_000, &mut key);
     Ok(key)
 }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.68
+
+- PBKDF2 iteration count for backup passwords raised to 600,000 (legacy 100k kept only for old-vault detection)
+- SSH passwords/passphrases are now zeroized in memory (Zeroizing) instead of lingering as plaintext
+- Temporary `.rdp` session files are cleaned up (startup purge + per-session removal)
+- Optimized credential/server lookups to indexed by-id SQL queries (removed full-table scans on connect/edit/decrypt)
+- Fixed high-severity npm advisory (postcss/nanoid, build-time dependency)
+
 ## v0.1.67
 
 - Security hardening per audit:

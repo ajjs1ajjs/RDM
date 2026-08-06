@@ -50,6 +50,8 @@ pub struct RdpSession {
     pub target_host: String,
     #[allow(dead_code)]
     pub server_id: Option<String>,
+    #[allow(dead_code)]
+    pub rdp_file: Option<PathBuf>,
     pub mstsc_hwnd: isize,
     pub pid: u32,
     pub visible: bool,
@@ -61,8 +63,8 @@ pub struct RdpState {
 
 impl Drop for RdpState {
     fn drop(&mut self) {
-        // Kill only our spawned mstsc/RdpHost processes by PID and clean up
-        // any stored RDP credentials so they never linger on disk.
+        // Kill only our spawned mstsc/RdpHost processes by PID, clean up any
+        // stored RDP credentials and temporary .rdp files so they never linger.
         if let Ok(sessions) = self.sessions.lock() {
             for (_, session) in sessions.iter() {
                 let pid = session.pid;
@@ -70,6 +72,9 @@ impl Drop for RdpState {
                     .args(&["/f", "/pid", &pid.to_string()])
                     .output();
                 delete_rdp_credential_secure(&session.target_host);
+                if let Some(ref f) = session.rdp_file {
+                    let _ = std::fs::remove_file(f);
+                }
             }
         }
     }
@@ -557,6 +562,7 @@ pub fn launch_rdp_embedded(
             RdpSession {
                 target_host: host.to_string(),
                 server_id,
+                rdp_file: Some(rdp_file_path.clone()),
                 mstsc_hwnd: hwnd.0 as isize,
                 pid,
                 visible: true,
@@ -618,10 +624,14 @@ pub fn launch_rdp_embedded(
                 }
             }
         }
-        // Cleanup stored credential via Windows Credential Manager
+        // Cleanup stored credential and temporary .rdp file
         delete_rdp_credential_secure(&host_clone);
         if let Ok(mut sessions) = app_clone.state::<RdpState>().sessions.lock() {
-            sessions.remove(&session_id_clone);
+            if let Some(sess) = sessions.remove(&session_id_clone) {
+                if let Some(ref f) = sess.rdp_file {
+                    let _ = std::fs::remove_file(f);
+                }
+            }
         }
         let _ = app_clone.emit("rdp-closed", &session_id_clone);
     });
@@ -708,8 +718,11 @@ pub fn disconnect_rdp_embedded(
             // Send WM_CLOSE to gracefully close the mstsc window
             let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
         }
-        // Remove the stored RDP credential for this host immediately
+        // Remove the stored RDP credential and temporary .rdp file for this host
         delete_rdp_credential_secure(&session.target_host);
+        if let Some(ref f) = session.rdp_file {
+            let _ = std::fs::remove_file(f);
+        }
     }
     Ok(())
 }

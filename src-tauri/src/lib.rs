@@ -64,7 +64,7 @@ fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
                 Ok(s) => s,
                 Err(_) => return Ok(true),
             };
-            let default_kek = match crypto::derive_key("default_rdm_key", &salt) {
+            let default_kek = match crypto::derive_key_legacy("default_rdm_key", &salt) {
                 Ok(k) => k,
                 Err(_) => return Ok(true),
             };
@@ -121,7 +121,7 @@ fn setup_master_password_impl(
             .ok_or_else(|| "Vault is corrupted: salt not found".to_string())?;
         let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
 
-        let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
+        let default_kek = crypto::derive_key_legacy("default_rdm_key", &salt)?;
         let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_str)
             .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
 
@@ -294,7 +294,7 @@ fn migrate_vault_to_default(
         .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
 
     // Verify old password against the sentinel
-    let old_kek = crypto::derive_key(&old_password, &salt)?;
+    let old_kek = crypto::derive_key_legacy(&old_password, &salt)?;
     match crypto::decrypt_secret(&old_kek, &encrypted_sentinel) {
         Ok(ref decrypted) if decrypted == crypto::AUTH_SENTINEL => {}
         _ => return Err("Incorrect vault password".to_string()),
@@ -430,12 +430,9 @@ fn update_credential(
             .map_err(|e| format!("Failed to serialize credential: {}", e))?
     } else {
         // Keep existing secret
-        let list = db::get_credentials(&conn)?;
-        let existing = list
-            .iter()
-            .find(|c| c.id == id)
+        let existing = db::get_credential_by_id(&conn, &id)?
             .ok_or_else(|| "Credential not found".to_string())?;
-        existing.encrypted_secret.clone()
+        existing.encrypted_secret
     };
 
     let cred = db::Credential {
@@ -476,10 +473,7 @@ fn decrypt_credential_secret(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-    let list = db::get_credentials(&conn)?;
-    let cred = list
-        .iter()
-        .find(|c| c.id == id)
+    let cred = db::get_credential_by_id(&conn, &id)?
         .ok_or_else(|| "Credential not found".to_string())?;
 
     let encrypted: crypto::EncryptedData = serde_json::from_str(&cred.encrypted_secret)
@@ -499,10 +493,7 @@ fn decrypt_server_password(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
     let kek = kek_guard.ok_or_else(|| "Vault is locked".to_string())?;
-    let list = db::get_servers(&conn)?;
-    let srv = list
-        .iter()
-        .find(|s| s.id == id)
+    let srv = db::get_server_by_id(&conn, &id)?
         .ok_or_else(|| "Server not found".to_string())?;
 
     let encrypted_json = srv
@@ -637,10 +628,7 @@ fn update_server(
             encrypted_password = Some(encrypted_json);
         } else if !password_changed {
             // Keep existing password unchanged
-            let list = db::get_servers(&conn)?;
-            let existing = list
-                .iter()
-                .find(|s| s.id == id)
+            let existing = db::get_server_by_id(&conn, &id)?
                 .ok_or_else(|| "Server not found".to_string())?;
             encrypted_password = existing.encrypted_password.clone();
         }
@@ -740,9 +728,9 @@ fn connect_ssh(
         &host,
         port,
         &final_username,
-        auth.password.as_deref(),
-        auth.private_key.as_deref(),
-        auth.passphrase.as_deref(),
+        zeroizing_opt_as_str(&auth.password),
+        zeroizing_opt_as_str(&auth.private_key),
+        zeroizing_opt_as_str(&auth.passphrase),
         cols,
         rows,
         server_id.clone(),
@@ -825,8 +813,7 @@ fn connect_rdp(
 
     // Check if server has manual credentials first
     if let Some(ref srv_id) = server_id {
-        let list = db::get_servers(&conn)?;
-        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+        if let Some(srv) = db::get_server_by_id(&conn, srv_id)? {
             rdp_multimon = srv.rdp_multimon.unwrap_or(0) != 0;
             rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
             rdp_drives = srv.rdp_drives.unwrap_or(0) != 0;
@@ -847,7 +834,7 @@ fn connect_rdp(
         port,
         fullscreen,
         auth.username.as_deref(),
-        auth.password.as_deref(),
+        zeroizing_opt_as_str(&auth.password),
         app_data_dir,
         server_id.clone(),
         rdp_clipboard,
@@ -921,8 +908,7 @@ fn connect_rdp_embedded(
     let mut rdp_multimon = false;
 
     if let Some(ref srv_id) = server_id {
-        let list = db::get_servers(&conn)?;
-        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+        if let Some(srv) = db::get_server_by_id(&conn, srv_id)? {
             rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
             rdp_drives = srv.rdp_drives.unwrap_or(0) != 0;
             rdp_printers = srv.rdp_printers.unwrap_or(0) != 0;
@@ -938,7 +924,9 @@ fn connect_rdp_embedded(
     let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
     // Manual credentials override stored ones (clone to avoid partial move)
     let rdp_username = manual_username.or(auth.username.clone());
-    let rdp_password = manual_password.or(auth.password.clone());
+    let rdp_password = manual_password
+        .map(zeroize::Zeroizing::new)
+        .or(auth.password.clone());
 
     // Get parent HWND from main window AND maximize via Win32 API directly
     let main_window = app
@@ -981,7 +969,7 @@ fn connect_rdp_embedded(
             port,
             rdp_fullscreen, // fullscreen parameter
             auth.username.as_deref(),
-            auth.password.as_deref(),
+            zeroizing_opt_as_str(&auth.password),
             app_data_dir,
             server_id.clone(),
             rdp_clipboard,
@@ -999,7 +987,7 @@ fn connect_rdp_embedded(
             &host,
             port,
             rdp_username.as_deref(),
-            rdp_password.as_deref(),
+            zeroizing_opt_as_str(&rdp_password),
             parent_hwnd,
             x,
             y,
@@ -1235,7 +1223,7 @@ fn auto_setup_vault(
     let sentinel_json = sentinel.as_ref().unwrap();
     let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_json)
         .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
-    let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
+    let default_kek = crypto::derive_key_legacy("default_rdm_key", &salt)?;
 
     match crypto::decrypt_secret(&default_kek, &encrypted) {
         Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
@@ -1970,9 +1958,14 @@ fn select_and_import_backup(
 // SFTP Commands
 struct ResolvedAuth {
     username: Option<String>,
-    password: Option<String>,
-    private_key: Option<String>,
-    passphrase: Option<String>,
+    password: Option<zeroize::Zeroizing<String>>,
+    private_key: Option<zeroize::Zeroizing<String>>,
+    passphrase: Option<zeroize::Zeroizing<String>>,
+}
+
+/// Borrows a Zeroizing-wrapped secret as `Option<&str>` for API boundaries.
+fn zeroizing_opt_as_str(v: &Option<zeroize::Zeroizing<String>>) -> Option<&str> {
+    v.as_deref().map(|s| s.as_str())
 }
 
 #[tauri::command]
@@ -1993,10 +1986,10 @@ fn save_server_from_connect(
         .ok_or_else(|| "Vault is locked".to_string())?;
 
     // Check if server already exists by hostname
-    let existing = db::get_servers(&conn)?;
-    let found = server_id
-        .as_ref()
-        .and_then(|id| existing.iter().find(|s| &s.id == id));
+    let found = match server_id {
+        Some(ref id) => db::get_server_by_id(&conn, id)?,
+        None => None,
+    };
 
     let server_name = host
         .trim_start_matches("http://")
@@ -2065,13 +2058,12 @@ fn resolve_auth(
     app_username: &str,
 ) -> Result<ResolvedAuth, String> {
     let mut final_username = app_username.to_string();
-    let mut decrypted_password: Option<String> = None;
-    let mut decrypted_key: Option<String> = None;
-    let mut passphrase: Option<String> = None;
+    let mut decrypted_password: Option<zeroize::Zeroizing<String>> = None;
+    let mut decrypted_key: Option<zeroize::Zeroizing<String>> = None;
+    let mut passphrase: Option<zeroize::Zeroizing<String>> = None;
 
     if let Some(ref srv_id) = server_id {
-        let list = db::get_servers(conn)?;
-        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
+        if let Some(srv) = db::get_server_by_id(conn, srv_id)? {
             if let Some(ref manual_user) = srv.username {
                 if !manual_user.is_empty() {
                     final_username = manual_user.clone();
@@ -2083,7 +2075,7 @@ fn resolve_auth(
                         serde_json::from_str::<crypto::EncryptedData>(encrypted_pass_json)
                     {
                         if let Ok(plain) = crypto::decrypt_secret(kek, &encrypted) {
-                            decrypted_password = Some(plain);
+                            decrypted_password = Some(zeroize::Zeroizing::new(plain));
                         }
                     }
                 }
@@ -2093,10 +2085,7 @@ fn resolve_auth(
 
     if decrypted_password.is_none() {
         if let Some(cred_id) = credential_id {
-            let list = db::get_credentials(conn)?;
-            let cred = list
-                .iter()
-                .find(|c| c.id == *cred_id)
+            let cred = db::get_credential_by_id(conn, cred_id)?
                 .ok_or_else(|| "Credential not found".to_string())?;
 
             if final_username == *app_username {
@@ -2140,7 +2129,7 @@ fn resolve_auth(
 
             match cred.r#type.as_str() {
                 "password" => {
-                    decrypted_password = Some(decrypted);
+                    decrypted_password = Some(zeroize::Zeroizing::new(decrypted));
                 }
                 "ssh_key" => {
                     if decrypted.starts_with('{') {
@@ -2150,13 +2139,14 @@ fn resolve_auth(
                             passphrase: Option<String>,
                         }
                         if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
-                            decrypted_key = Some(details.key);
-                            passphrase = details.passphrase;
+                            decrypted_key = Some(zeroize::Zeroizing::new(details.key));
+                            passphrase =
+                                details.passphrase.map(zeroize::Zeroizing::new);
                         } else {
-                            decrypted_key = Some(decrypted);
+                            decrypted_key = Some(zeroize::Zeroizing::new(decrypted));
                         }
                     } else {
-                        decrypted_key = Some(decrypted);
+                        decrypted_key = Some(zeroize::Zeroizing::new(decrypted));
                     }
                 }
                 _ => {}
@@ -2182,7 +2172,15 @@ fn get_ssh_creds(
     app_username: &str,
     state: &State<'_, SessionState>,
     db: &State<'_, DbState>,
-) -> Result<(String, Option<String>, Option<String>, Option<String>), String> {
+) -> Result<
+    (
+        String,
+        Option<zeroize::Zeroizing<String>>,
+        Option<zeroize::Zeroizing<String>>,
+        Option<zeroize::Zeroizing<String>>,
+    ),
+    String,
+> {
     // Single source of truth for credential resolution — same logic as connect_ssh.
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
@@ -2233,9 +2231,9 @@ fn sftp_ls(
         app_data,
         "ssh",
         &args,
-        pwd.as_deref(),
-        key.as_deref(),
-        passphrase.as_deref(),
+        zeroizing_opt_as_str(&pwd),
+        zeroizing_opt_as_str(&key),
+        zeroizing_opt_as_str(&passphrase),
     )
 }
 
@@ -2270,9 +2268,9 @@ fn sftp_download(
         app_data,
         "scp",
         &args,
-        pwd.as_deref(),
-        key.as_deref(),
-        passphrase.as_deref(),
+        zeroizing_opt_as_str(&pwd),
+        zeroizing_opt_as_str(&key),
+        zeroizing_opt_as_str(&passphrase),
     )
 }
 
@@ -2307,9 +2305,9 @@ fn sftp_upload(
         app_data,
         "scp",
         &args,
-        pwd.as_deref(),
-        key.as_deref(),
-        passphrase.as_deref(),
+        zeroizing_opt_as_str(&pwd),
+        zeroizing_opt_as_str(&key),
+        zeroizing_opt_as_str(&passphrase),
     )
 }
 
@@ -2323,8 +2321,10 @@ pub fn run() {
             let conn = db::init_db(app_dir.clone())?;
             let session_state = SessionState::new();
 
-            // Clean up orphaned temp SSH keys left by previous crashed sessions
+            // Clean up orphaned temp SSH keys and stale .rdp session files left by
+            // previous crashed sessions
             let _ = std::fs::remove_dir_all(app_dir.join("temp_keys"));
+            let _ = std::fs::remove_dir_all(app_dir.join("rdp_sessions"));
 
             // Auto-setup vault with a random DPAPI-protected key.
             // Password is only required for export/import operations.

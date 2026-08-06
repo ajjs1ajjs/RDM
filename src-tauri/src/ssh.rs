@@ -228,8 +228,8 @@ pub fn connect_ssh(
     let master_arc = Arc::new(Mutex::new(pair.master));
 
     let session_id_clone = session_id.clone();
-    let password_clone = password.map(|s| s.to_string());
-    let passphrase_clone = passphrase.map(|s| s.to_string());
+    let password_clone = password.map(|s| zeroize::Zeroizing::new(s.to_string()));
+    let passphrase_clone = passphrase.map(|s| zeroize::Zeroizing::new(s.to_string()));
     let app_clone = app.clone();
     let temp_key_path_for_thread = key_guard.as_mut().and_then(|g| g.path.take());
     let server_id_clone = server_id;
@@ -274,7 +274,7 @@ pub fn connect_ssh(
                             if needs_pw {
                                 thread::sleep(Duration::from_millis(250));
                                 if let Ok(mut wr) = writer_clone.lock() {
-                                    let _ = write!(wr, "{}\r", pass);
+                                    let _ = write!(wr, "{}\r", pass.as_str());
                                     let _ = wr.flush();
                                 }
                                 password_sent = true;
@@ -293,7 +293,7 @@ pub fn connect_ssh(
                             if needs_pp {
                                 thread::sleep(Duration::from_millis(250));
                                 if let Ok(mut wr) = writer_clone.lock() {
-                                    let _ = write!(wr, "{}\r", phrase);
+                                    let _ = write!(wr, "{}\r", phrase.as_str());
                                     let _ = wr.flush();
                                 }
                                 passphrase_sent = true;

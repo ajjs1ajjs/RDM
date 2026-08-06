@@ -287,6 +287,29 @@ pub fn get_credentials(conn: &Connection) -> Result<Vec<Credential>, String> {
     Ok(list)
 }
 
+pub fn get_credential_by_id(conn: &Connection, id: &str) -> Result<Option<Credential>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, type, username, encrypted_secret, created_at, updated_at FROM credentials WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt
+        .query_map(params![id], |row| {
+            Ok(Credential {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                r#type: row.get(2)?,
+                username: row.get(3)?,
+                encrypted_secret: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    match rows.next() {
+        Some(row) => Ok(Some(row.map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
 // Servers helpers
 pub fn add_server(conn: &Connection, srv: &Server) -> Result<(), String> {
     conn.execute(
@@ -354,6 +377,46 @@ pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
         list.push(item.map_err(|e| e.to_string())?);
     }
     Ok(list)
+}
+
+pub fn get_server_by_id(conn: &Connection, id: &str) -> Result<Option<Server>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon FROM servers WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt
+        .query_map(params![id], |row| {
+            Ok(Server {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                hostname: row.get(2)?,
+                ip: row.get(3)?,
+                port: row.get(4)?,
+                protocol: row.get(5)?,
+                os: row.get(6)?,
+                folder_path: row.get(7)?,
+                tags: row.get(8)?,
+                description: row.get(9)?,
+                credential_id: row.get(10)?,
+                username: row.get(11)?,
+                encrypted_password: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+                rdp_clipboard: row.get(15)?,
+                rdp_drives: row.get(16)?,
+                rdp_printers: row.get(17)?,
+                rdp_smart_sizing: row.get(18)?,
+                rdp_audio: row.get(19)?,
+                rdp_smartcards: row.get(20)?,
+                rdp_webauthn: row.get(21)?,
+                rdp_fullscreen: row.get(22)?,
+                rdp_multimon: row.get(23)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    match rows.next() {
+        Some(row) => Ok(Some(row.map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
 }
 
 // Connection History helpers
