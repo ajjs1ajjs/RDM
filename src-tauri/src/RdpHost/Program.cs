@@ -20,6 +20,23 @@ namespace RdpHost
             catch { }
         }
 
+        /// <summary>
+        /// Replaces the value of any sensitive argument (-pass) with "***" so
+        /// plaintext credentials never reach the log file.
+        /// </summary>
+        static string[] RedactArgs(string[] args)
+        {
+            string[] result = (string[])args.Clone();
+            for (int i = 0; i < result.Length; i++)
+            {
+                if (result[i] == "-pass" && i + 1 < result.Length)
+                {
+                    result[i + 1] = "***";
+                }
+            }
+            return result;
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -39,7 +56,7 @@ namespace RdpHost
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            Log("RdpHost starting. Args: " + string.Join(" ", args));
+            Log("RdpHost starting. Args: " + string.Join(" ", RedactArgs(args)));
 
             IntPtr parentHwnd = IntPtr.Zero;
             string host = "";

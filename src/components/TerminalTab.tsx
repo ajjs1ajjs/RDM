@@ -31,6 +31,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
 
+  // Strip control/escape sequences from untrusted text written into the terminal
+  // to prevent terminal escape-sequence injection (fake prompts, screen control).
+  const sanitizeTerminalText = (s: string) =>
+    s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u001B]/g, "");
+
   useEffect(() => {
     if (!terminalRef.current) return;
 
@@ -152,7 +157,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       return true;
     });
 
-    term.writeln(`\r\n\x1b[1;36m[RDM] Connecting to ${username}@${host}:${port}...\x1b[0m\r\n`);
+    term.writeln(`\r\n\x1b[1;36m[RDM] Connecting to ${sanitizeTerminalText(username)}@${sanitizeTerminalText(host)}:${port}...\x1b[0m\r\n`);
 
     let isDestroyed = false;
     const unlisteners: (() => void)[] = [];
@@ -209,7 +214,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         }
       } catch (err: any) {
         if (!isDestroyed) {
-          term.writeln(`\r\n\x1b[1;31m[RDM] Error: ${err}\x1b[0m`);
+          term.writeln(`\r\n\x1b[1;31m[RDM] Error: ${sanitizeTerminalText(typeof err === "string" ? err : err?.message || String(err))}\x1b[0m`);
           setStatus('disconnected');
         }
       }

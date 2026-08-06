@@ -30,7 +30,6 @@ pub fn run_ssh_command_sync(
     passphrase: Option<&str>,
 ) -> Result<String, String> {
     let keys_dir = app_data_dir.join("temp_keys");
-    let _ = std::fs::remove_dir_all(&keys_dir);
     let mut _key_guard = None;
     let mut actual_args = vec![];
 

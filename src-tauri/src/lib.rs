@@ -44,6 +44,12 @@ impl Drop for SessionState {
 #[tauri::command]
 fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Vault protected with a DPAPI-bound random KEK — no user action required
+    if db::get_setting(&conn, "kek_dpapi")?.is_some() {
+        return Ok(false);
+    }
+
     let sentinel = db::get_setting(&conn, "sentinel")?;
 
     match sentinel {
@@ -267,8 +273,9 @@ fn lock_vault(state: State<'_, SessionState>) -> Result<(), String> {
     Ok(())
 }
 
-/// Migrate a vault that was protected with a real master password to use default_rdm_key.
-/// Re-encrypts all credentials and server passwords with the new KEK.
+/// Migrate a vault that was protected with a real master password to a
+/// DPAPI-protected random KEK. Re-encrypts all credentials and server
+/// passwords with the new KEK.
 #[tauri::command]
 fn migrate_vault_to_default(
     old_password: String,
@@ -293,11 +300,14 @@ fn migrate_vault_to_default(
         _ => return Err("Incorrect vault password".to_string()),
     }
 
-    // Generate new salt and KEK from default_rdm_key
+    // Generate a new random KEK protected with Windows DPAPI
+    let new_kek = crypto::generate_random_kek();
+    let dpapi_blob = crypto::protect_kek(&new_kek)?;
+    let dpapi_blob_hex = hex::encode(&dpapi_blob);
+
     let mut new_salt = [0u8; 16];
     thread_rng().fill_bytes(&mut new_salt);
     let new_salt_hex = hex::encode(new_salt);
-    let new_kek = crypto::derive_key("default_rdm_key", &new_salt)?;
 
     // Re-encrypt sentinel with new KEK
     let new_encrypted_sentinel = crypto::encrypt_secret(&new_kek, crypto::AUTH_SENTINEL)?;
@@ -305,6 +315,7 @@ fn migrate_vault_to_default(
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
     db::set_setting(&conn, "salt", &new_salt_hex)?;
     db::set_setting(&conn, "sentinel", &new_sentinel_json)?;
+    db::set_setting(&conn, "kek_dpapi", &dpapi_blob_hex)?;
 
     // Re-encrypt all data with new KEK
     re_encrypt_table(
@@ -331,7 +342,7 @@ fn migrate_vault_to_default(
     Ok(())
 }
 
-/// Reset vault: clear sentinel and salt, reinitialize with default_rdm_key.
+/// Reset vault: wipe all data, then reinitialize a fresh DPAPI-protected vault.
 /// This will make all previously encrypted credentials unreadable.
 #[tauri::command]
 fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
@@ -1126,12 +1137,12 @@ pub struct UpdateInfo {
 }
 
 #[tauri::command]
-fn check_for_update() -> Result<UpdateInfo, String> {
+async fn check_for_update() -> Result<UpdateInfo, String> {
     let current = env!("CARGO_PKG_VERSION").to_string();
     let repo = "ajjs1ajjs/RDM";
     let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
 
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .user_agent("RDM-Manager")
         .build()
@@ -1140,8 +1151,10 @@ fn check_for_update() -> Result<UpdateInfo, String> {
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .send()
+        .await
         .map_err(|e| format!("Network error: {}", e))?
         .json()
+        .await
         .map_err(|e| format!("Parse error: {}", e))?;
 
     let tag = resp["tag_name"].as_str().unwrap_or("");
@@ -1183,15 +1196,26 @@ fn auto_setup_vault(
     conn: &rusqlite::Connection,
     session_state: &SessionState,
 ) -> Result<(), String> {
+    // 1) Vault already protected with a DPAPI-bound random KEK — just unlock it
+    if let Some(blob_hex) = db::get_setting(conn, "kek_dpapi")? {
+        let blob = hex::decode(&blob_hex).map_err(|e| format!("Invalid DPAPI blob: {}", e))?;
+        let kek = crypto::unprotect_kek(&blob)?;
+        let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
+        *session_kek = Some(kek);
+        return Ok(());
+    }
+
     let sentinel = db::get_setting(conn, "sentinel")?;
 
-    // Treat missing or empty sentinel as "not set up"
+    // 2) Fresh setup — create a random KEK, store it DPAPI-protected
     if sentinel.is_none() || sentinel.as_deref() == Some("") {
+        let kek = crypto::generate_random_kek();
+        let dpapi_blob = crypto::protect_kek(&kek)?;
+        db::set_setting(conn, "kek_dpapi", &hex::encode(&dpapi_blob))?;
+
         let mut salt = [0u8; 16];
         thread_rng().fill_bytes(&mut salt);
         let salt_hex = hex::encode(salt);
-        let kek = crypto::derive_key("default_rdm_key", &salt)?;
-
         let encrypted = crypto::encrypt_secret(&kek, crypto::AUTH_SENTINEL)?;
         let sentinel_json = serde_json::to_string(&encrypted)
             .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
@@ -1201,33 +1225,66 @@ fn auto_setup_vault(
 
         let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
         *session_kek = Some(kek);
-    } else {
-        let salt_hex =
-            db::get_setting(conn, "salt")?.ok_or_else(|| "Vault salt not found".to_string())?;
-        let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
-        let sentinel_json = sentinel.as_ref().unwrap();
-        let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_json)
-            .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
-        let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
-
-        match crypto::decrypt_secret(&default_kek, &encrypted) {
-            Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
-                // Vault uses default_rdm_key — auto-unlock
-                let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
-                *session_kek = Some(default_kek);
-            }
-            _ => {
-                // Vault was protected with a real master password — needs migration.
-                // Don't store a kek; frontend will detect via is_vault_setup and prompt user.
-                return Err("vault_migration_required".to_string());
-            }
-        }
+        return Ok(());
     }
 
-    Ok(())
+    // 3) Legacy vault created with the publicly-known "default_rdm_key" —
+    //    transparently migrate to a random DPAPI-protected KEK.
+    let salt_hex = db::get_setting(conn, "salt")?.ok_or_else(|| "Vault salt not found".to_string())?;
+    let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
+    let sentinel_json = sentinel.as_ref().unwrap();
+    let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_json)
+        .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
+    let default_kek = crypto::derive_key("default_rdm_key", &salt)?;
+
+    match crypto::decrypt_secret(&default_kek, &encrypted) {
+        Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
+            let new_kek = crypto::generate_random_kek();
+            let dpapi_blob = crypto::protect_kek(&new_kek)?;
+            db::set_setting(conn, "kek_dpapi", &hex::encode(&dpapi_blob))?;
+
+            let mut new_salt = [0u8; 16];
+            thread_rng().fill_bytes(&mut new_salt);
+            db::set_setting(conn, "salt", &hex::encode(new_salt))?;
+
+            let new_encrypted = crypto::encrypt_secret(&new_kek, crypto::AUTH_SENTINEL)?;
+            db::set_setting(
+                conn,
+                "sentinel",
+                &serde_json::to_string(&new_encrypted)
+                    .map_err(|e| format!("Failed to serialize sentinel: {}", e))?,
+            )?;
+
+            re_encrypt_table(
+                conn,
+                "credentials",
+                "encrypted_secret",
+                "1=1",
+                &default_kek,
+                &new_kek,
+            )?;
+            re_encrypt_table(
+                conn,
+                "servers",
+                "encrypted_password",
+                "encrypted_password IS NOT NULL AND encrypted_password != ''",
+                &default_kek,
+                &new_kek,
+            )?;
+
+            let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
+            *session_kek = Some(new_kek);
+            Ok(())
+        }
+        _ => {
+            // Vault was protected with a real master password — needs migration.
+            // Don't store a kek; frontend will detect via is_vault_setup and prompt user.
+            Err("vault_migration_required".to_string())
+        }
+    }
 }
 
-/// Re-encrypts a single column in a table from old_kek to new_kek.
+/// Re-encrypts a single column in a table from old_kek to new_kek (atomically).
 fn re_encrypt_table(
     conn: &rusqlite::Connection,
     table: &str,
@@ -1245,7 +1302,11 @@ fn re_encrypt_table(
         table, column
     );
 
-    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("Failed to begin re-encryption transaction: {}", e))?;
+
+    let mut stmt = tx.prepare(&query).map_err(|e| e.to_string())?;
     let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
 
     let mut to_update = Vec::new();
@@ -1265,9 +1326,11 @@ fn re_encrypt_table(
     drop(stmt);
 
     for (id, secret_json) in &to_update {
-        conn.execute(&update_query, [secret_json.as_str(), id.as_str()])
+        tx.execute(&update_query, [secret_json.as_str(), id.as_str()])
             .map_err(|e| e.to_string())?;
     }
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -1277,6 +1340,7 @@ fn re_encrypt_database(
     old_kek: &[u8; 32],
     new_kek: &[u8; 32],
     new_salt_hex: &str,
+    dpapi_blob_hex: Option<&str>,
 ) -> Result<(), String> {
     let conn = rusqlite::Connection::open(db_path)
         .map_err(|e| format!("Failed to open export database for re-encryption: {}", e))?;
@@ -1298,6 +1362,23 @@ fn re_encrypt_database(
         [&sentinel_json],
     )
     .map_err(|e| e.to_string())?;
+
+    // Manage the DPAPI-protected KEK row:
+    //  - Some(blob): overwrite with the new local blob (import path).
+    //  - None: strip any source blob so exports never carry a stale local key.
+    match dpapi_blob_hex {
+        Some(blob) => {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('kek_dpapi', ?1);",
+                [blob],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        None => {
+            conn.execute("DELETE FROM settings WHERE key = 'kek_dpapi';", [])
+                .map_err(|e| e.to_string())?;
+        }
+    }
 
     // Re-encrypt tables using shared helper
     re_encrypt_table(
@@ -1334,12 +1415,21 @@ fn export_database_backup(
         .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
     let db_path = app_dir.join("rdm.db");
 
+    if password.is_empty() {
+        return Err("Backup password cannot be empty".to_string());
+    }
+
     // Lock local connection
     let _conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Copy to destination
-    std::fs::copy(&db_path, &destination_path)
-        .map_err(|e| format!("Failed to export database: {}", e))?;
+    let dest = std::path::Path::new(&destination_path);
+    let temp = std::path::PathBuf::from(format!("{}.tmp", destination_path));
+    let _ = std::fs::remove_file(&temp);
+
+    // Copy to a temporary file first so a failed re-encryption never corrupts
+    // an existing backup at the destination.
+    std::fs::copy(&db_path, &temp)
+        .map_err(|e| format!("Failed to copy database for export: {}", e))?;
 
     // Derive KEKs
     let local_kek = state
@@ -1353,13 +1443,24 @@ fn export_database_backup(
     let export_salt_hex = hex::encode(export_salt);
     let export_kek = crypto::derive_key(&password, &export_salt)?;
 
-    // Re-encrypt the exported file
-    re_encrypt_database(
-        std::path::Path::new(&destination_path),
+    // Re-encrypt the temporary file (exports never carry the local DPAPI key)
+    if let Err(e) = re_encrypt_database(
+        &temp,
         &local_kek,
         &export_kek,
         &export_salt_hex,
-    )?;
+        None,
+    ) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
+    }
+
+    // Atomically move the finished temp file over the destination
+    std::fs::rename(&temp, dest).or_else(|_| {
+        std::fs::copy(&temp, dest)
+            .and_then(|_| std::fs::remove_file(&temp))
+            .map_err(|e| format!("Failed to finalize export: {}", e))
+    })?;
 
     Ok(())
 }
@@ -1411,44 +1512,68 @@ fn import_database_backup(
 
     drop(backup_conn); // Release handle to backup file
 
-    // 2. Prepare re-encryption to local_kek (derived from "default_rdm_key")
+    // 2. Prepare re-encryption to a fresh local KEK (protected via DPAPI)
     let app_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
     let db_path = app_dir.join("rdm.db");
     let temp_db_path = app_dir.join("rdm_import_temp.db");
+    let bak_db_path = app_dir.join("rdm_import_prev.db");
 
     if temp_db_path.exists() {
         let _ = std::fs::remove_file(&temp_db_path);
+    }
+    if bak_db_path.exists() {
+        let _ = std::fs::remove_file(&bak_db_path);
     }
 
     // Copy backup to temp
     std::fs::copy(&source_path, &temp_db_path)
         .map_err(|e| format!("Failed to create temporary import file: {}", e))?;
 
-    // Generate new local salt & KEK for rdm.db
+    // Generate new local salt, random KEK and its DPAPI-protected blob
     let mut local_salt = [0u8; 16];
     thread_rng().fill_bytes(&mut local_salt);
     let local_salt_hex = hex::encode(local_salt);
-    let local_kek = crypto::derive_key("default_rdm_key", &local_salt)?;
+    let local_kek = crypto::generate_random_kek();
+    let dpapi_blob = crypto::protect_kek(&local_kek)?;
+    let dpapi_blob_hex = hex::encode(&dpapi_blob);
 
-    // Re-encrypt temporary import file to local_kek
-    re_encrypt_database(&temp_db_path, &backup_kek, &local_kek, &local_salt_hex)?;
+    // Re-encrypt temporary import file to local_kek and store the DPAPI blob
+    re_encrypt_database(
+        &temp_db_path,
+        &backup_kek,
+        &local_kek,
+        &local_salt_hex,
+        Some(&dpapi_blob_hex),
+    )?;
 
-    // 3. Swap active connection to point to the imported file
+    // 3. Swap active connection to point to the imported file.
+    //    Keep a safety copy of the previous DB so a failed copy can be rolled back.
     let mut conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
 
+    let _ = std::fs::copy(&db_path, &bak_db_path);
+
     // Open in-memory temporary database to release locks on rdm.db
-    let temp_conn = rusqlite::Connection::open_in_memory().unwrap();
+    let temp_conn = rusqlite::Connection::open_in_memory()
+        .map_err(|e| format!("Failed to create in-memory connection: {}", e))?;
     let old_conn = std::mem::replace(&mut *conn_guard, temp_conn);
     drop(old_conn); // Closes rdm.db file handle
 
-    // Copy temp file over active database
-    std::fs::copy(&temp_db_path, &db_path)
-        .map_err(|e| format!("Failed to copy database file: {}", e))?;
+    // Copy temp file over active database; restore the previous DB on failure
+    if let Err(e) = std::fs::copy(&temp_db_path, &db_path) {
+        let _ = std::fs::copy(&bak_db_path, &db_path);
+        let restored = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("Failed to reopen database after restore: {}", e))?;
+        *conn_guard = restored;
+        let _ = std::fs::remove_file(&temp_db_path);
+        let _ = std::fs::remove_file(&bak_db_path);
+        return Err(format!("Failed to copy database file: {}", e));
+    }
 
     let _ = std::fs::remove_file(&temp_db_path);
+    let _ = std::fs::remove_file(&bak_db_path);
 
     // Reopen database connection
     let new_conn = rusqlite::Connection::open(&db_path)
@@ -1629,15 +1754,11 @@ fn import_devolutions_csv(
     }
 
     let mut imported_count = 0;
-    let mut debug_rows = Vec::new();
     let mut total_records = 0;
 
     for result in reader.records() {
         total_records += 1;
         let record = result.map_err(|e| format!("Error reading CSV row: {}", e))?;
-        if debug_rows.len() < 5 {
-            debug_rows.push(format!("{:?}", record));
-        }
 
         let name = record.get(name_idx).unwrap_or("").trim().to_string();
         let host = record.get(host_idx).unwrap_or("").trim().to_string();
@@ -1762,13 +1883,12 @@ fn import_devolutions_csv(
     if imported_count == 0 {
         let headers_str: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
         return Err(format!(
-            "Import failed: No records imported.\nDelimiter: {:?}\nHeaders: {:?}\nName Index: {}, Host Index: {}\nTotal rows in file: {}\nFirst 5 rows:\n{}",
+            "Import failed: No records imported.\nDelimiter: {:?}\nHeaders: {:?}\nName Index: {}, Host Index: {}\nTotal rows in file: {}",
             char::from(delimiter),
             headers_str,
             name_idx,
             host_idx,
             total_records,
-            debug_rows.join("\n")
         ));
     }
 
@@ -2063,80 +2183,19 @@ fn get_ssh_creds(
     state: &State<'_, SessionState>,
     db: &State<'_, DbState>,
 ) -> Result<(String, Option<String>, Option<String>, Option<String>), String> {
+    // Single source of truth for credential resolution — same logic as connect_ssh.
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut decrypted_password = None;
-    let mut decrypted_key = None;
-    let mut passphrase = None;
-    let mut final_username = app_username.to_string();
+    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
+    let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
 
-    if let Some(ref srv_id) = server_id {
-        let list = db::get_servers(&conn)?;
-        if let Some(srv) = list.iter().find(|s| s.id == *srv_id) {
-            if let Some(ref manual_user) = srv.username {
-                if !manual_user.is_empty() {
-                    final_username = manual_user.clone();
-                }
-            }
-            if let Some(ref encrypted_pass_json) = srv.encrypted_password {
-                if !encrypted_pass_json.is_empty() {
-                    let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
-                    let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
-                    let encrypted: crypto::EncryptedData =
-                        serde_json::from_str(encrypted_pass_json).map_err(|e| e.to_string())?;
-                    decrypted_password = Some(
-                        crypto::decrypt_secret(kek, &encrypted).map_err(|_| "Decryption error")?,
-                    );
-                }
-            }
-        }
-    }
-
-    if decrypted_password.is_none() {
-        if let Some(cred_id) = credential_id {
-            let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
-            let kek = kek_guard.as_ref().ok_or("Vault is locked.")?;
-            let list = db::get_credentials(&conn)?;
-            let cred = list
-                .iter()
-                .find(|c| c.id == *cred_id)
-                .ok_or("Credential not found")?;
-
-            if final_username == *app_username {
-                final_username = cred.username.clone();
-            }
-
-            let encrypted: crypto::EncryptedData =
-                serde_json::from_str(&cred.encrypted_secret).map_err(|e| e.to_string())?;
-            let decrypted =
-                crypto::decrypt_secret(kek, &encrypted).map_err(|_| "Decryption error")?;
-
-            if cred.r#type == "password" {
-                decrypted_password = Some(decrypted);
-            } else if cred.r#type == "ssh_key" {
-                if decrypted.starts_with('{') {
-                    #[derive(serde::Deserialize)]
-                    struct KeyDetails {
-                        key: String,
-                        passphrase: Option<String>,
-                    }
-                    if let Ok(details) = serde_json::from_str::<KeyDetails>(&decrypted) {
-                        decrypted_key = Some(details.key);
-                        passphrase = details.passphrase;
-                    } else {
-                        decrypted_key = Some(decrypted);
-                    }
-                } else {
-                    decrypted_key = Some(decrypted);
-                }
-            }
-        }
-    }
+    let auth = resolve_auth(&conn, kek, server_id, credential_id, app_username)?;
+    let final_username = auth.username.unwrap_or_else(|| app_username.to_string());
 
     Ok((
         final_username,
-        decrypted_password,
-        decrypted_key,
-        passphrase,
+        auth.password,
+        auth.private_key,
+        auth.passphrase,
     ))
 }
 
@@ -2159,12 +2218,8 @@ fn sftp_ls(
         .app_data_dir()
         .map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
 
-    if !path
-        .chars()
-        .all(|c| c.is_alphanumeric() || "/._-".contains(c))
-    {
-        return Err("Invalid characters in path".to_string());
-    }
+    // Path is passed as a single argv entry to ssh/scp (never through a shell),
+    // so spaces and special characters are safe — no injection surface here.
     let mut args = vec![
         "-p".to_string(),
         port.to_string(),
@@ -2265,10 +2320,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_dir = app.path().app_data_dir().unwrap();
-            let conn = db::init_db(app_dir)?;
+            let conn = db::init_db(app_dir.clone())?;
             let session_state = SessionState::new();
 
-            // Auto-setup vault with a default key — no master password prompt.
+            // Clean up orphaned temp SSH keys left by previous crashed sessions
+            let _ = std::fs::remove_dir_all(app_dir.join("temp_keys"));
+
+            // Auto-setup vault with a random DPAPI-protected key.
             // Password is only required for export/import operations.
             if let Err(e) = auto_setup_vault(&conn, &session_state) {
                 eprintln!("Auto-setup vault warning: {}", e);

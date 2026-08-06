@@ -61,13 +61,15 @@ pub struct RdpState {
 
 impl Drop for RdpState {
     fn drop(&mut self) {
-        // Kill only our spawned mstsc/RdpHost processes by PID
+        // Kill only our spawned mstsc/RdpHost processes by PID and clean up
+        // any stored RDP credentials so they never linger on disk.
         if let Ok(sessions) = self.sessions.lock() {
             for (_, session) in sessions.iter() {
                 let pid = session.pid;
                 let _ = std::process::Command::new("taskkill")
                     .args(&["/f", "/pid", &pid.to_string()])
                     .output();
+                delete_rdp_credential_secure(&session.target_host);
             }
         }
     }
@@ -152,7 +154,7 @@ extern "system" {
 }
 
 const CRED_TYPE_GENERIC: u32 = 1;
-const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
+const CRED_PERSIST_SESSION: u32 = 1;
 
 fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
     let target_name: Vec<u16> = format!("TERMSRV/{}\0", host).encode_utf16().collect();
@@ -173,7 +175,7 @@ fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
         last_written: 0,
         credential_blob_size: blob_size,
         credential_blob: password_bytes.as_ptr(),
-        persist: CRED_PERSIST_LOCAL_MACHINE,
+        persist: CRED_PERSIST_SESSION,
         attribute_count: 0,
         attributes: std::ptr::null(),
         target_alias: std::ptr::null(),
@@ -344,23 +346,7 @@ pub fn launch_rdp_embedded(
     let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
     let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
 
-    // 0. Bypass all RDP certificate warnings via registry
-    let _ = std::process::Command::new("reg")
-        .args(&[
-            "add",
-            "HKCU\\Software\\Microsoft\\Terminal Server Client",
-            "/v",
-            "AuthenticationLevelOverride",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "0",
-            "/f",
-        ])
-        .spawn()
-        .and_then(|mut c| c.wait());
-
-    // Store RDP credentials via Windows Credential Manager API (secure, no cmdline exposure)
+    // 0. Store RDP credentials via Windows Credential Manager API (secure, no cmdline exposure)
     if let (Some(user), Some(pass)) = (username, password) {
         log_debug(
             &app_data_dir,
@@ -722,6 +708,8 @@ pub fn disconnect_rdp_embedded(
             // Send WM_CLOSE to gracefully close the mstsc window
             let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
         }
+        // Remove the stored RDP credential for this host immediately
+        delete_rdp_credential_secure(&session.target_host);
     }
     Ok(())
 }

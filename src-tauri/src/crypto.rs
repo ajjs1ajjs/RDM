@@ -22,6 +22,90 @@ pub fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
     Ok(key)
 }
 
+/// Generates a fresh random 256-bit KEK from the OS CSPRNG.
+pub fn generate_random_kek() -> [u8; 32] {
+    let mut key = [0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    key
+}
+
+/// Protects the raw KEK with Windows DPAPI (tied to the current user & machine).
+pub fn protect_kek(kek: &[u8; 32]) -> Result<Vec<u8>, String> {
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows::Win32::Security::Cryptography::{
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    };
+
+    unsafe {
+        let mut input = CRYPT_INTEGER_BLOB {
+            cbData: kek.len() as u32,
+            pbData: kek.as_ptr() as *mut u8,
+        };
+        let mut out = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+
+        CryptProtectData(
+            &input,
+            windows::core::PCWSTR::null(),
+            None,
+            None,
+            None,
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out,
+        )
+        .map_err(|e| format!("Failed to protect vault key with DPAPI (error {})", e.code().0))?;
+
+        let bytes = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
+        let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
+        Ok(bytes)
+    }
+}
+
+/// Recovers the raw KEK from a DPAPI-protected blob.
+pub fn unprotect_kek(blob: &[u8]) -> Result<[u8; 32], String> {
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows::Win32::Security::Cryptography::{
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    };
+
+    unsafe {
+        let mut input = CRYPT_INTEGER_BLOB {
+            cbData: blob.len() as u32,
+            pbData: blob.as_ptr() as *mut u8,
+        };
+        let mut out = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+
+        CryptUnprotectData(
+            &input,
+            None,
+            None,
+            None,
+            None,
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out,
+        )
+        .map_err(|_| {
+            "Failed to unprotect vault key with DPAPI (vault may belong to another user/machine)"
+                .to_string()
+        })?;
+
+        if out.cbData as usize != 32 {
+            let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
+            return Err("Unexpected DPAPI key size".to_string());
+        }
+
+        let mut key = [0u8; 32];
+        std::ptr::copy_nonoverlapping(out.pbData, key.as_mut_ptr(), 32);
+        let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
+        Ok(key)
+    }
+}
+
 /// Encrypts the plaintext using AES-256-GCM and the derived key.
 pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<EncryptedData, String> {
     let cipher = Aes256Gcm::new_from_slice(key)

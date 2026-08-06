@@ -49,7 +49,7 @@ export function useServerForm(
       setSrvDesc(srv.description);
       setSrvCredId(srv.credential_id || "");
       setSrvUsername(srv.username || "");
-      setSrvPassword(srv.encrypted_password || "");
+      setSrvPassword("");
       setSrvPasswordChanged(false);
       setRdpClipboard(srv.rdp_clipboard !== undefined ? srv.rdp_clipboard !== 0 : true);
       setRdpDrives(srv.rdp_drives !== undefined ? srv.rdp_drives !== 0 : false);

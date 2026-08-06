@@ -126,19 +126,13 @@ pub fn connect_ssh(
         return Err("Username and hostname cannot contain spaces".to_string());
     }
 
-    // Clean up any stale temp keys from previous crashes
-    if let Ok(app_dir) = app.path().app_data_dir() {
-        let keys_dir = app_dir.join("temp_keys");
-        let _ = std::fs::remove_dir_all(&keys_dir);
-    }
-
     let mut key_guard = None;
     let mut temp_key_path = None;
     let app_data_dir = app.path().app_data_dir().unwrap();
     let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
         "-o".to_string(),
-        "StrictHostKeyChecking=accept-new".to_string(),
+        "StrictHostKeyChecking=yes".to_string(),
         "-o".to_string(),
         format!("UserKnownHostsFile={}", known_hosts.display()),
         "-o".to_string(),
