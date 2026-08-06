@@ -1,0 +1,8 @@
+# Exclude unused legacy WPF prototypes from GitHub language statistics.
+# The shipped product is a Tauri app (Rust + TypeScript); these C# folders
+# are dead code kept only for reference.
+src-csharp/** linguist-vendored
+src-tauri/src/RdpHost/** linguist-vendored
+
+# Normalize line endings
+* text=auto
