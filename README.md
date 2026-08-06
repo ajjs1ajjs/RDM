@@ -1,4 +1,4 @@
-# RDM Manager (SRE/DevOps Remote Connection Manager)
+# RDM Manager (Remote Connection Manager)
 
 Легкий, швидкий та безпечний менеджер віддалених підключень для SRE та DevOps інженерів. Є сучасною альтернативою Devolutions Remote Desktop Manager, але без Electron-пожирання пам'яті (RAM bloat). Побудований на базі Tauri v2, Rust, React та SQLite.
 
