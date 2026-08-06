@@ -168,6 +168,27 @@ fn setup_master_password_impl(
     Ok(())
 }
 
+/// Derives the vault/backup KEK from a password and salt, trying the current
+/// PBKDF2 iteration count (600k) first, then falling back to the legacy count
+/// (100k) used by older versions. Returns the key that successfully decrypts
+/// the given sentinel, or an error if the password is wrong.
+fn derive_kek_verify_sentinel(
+    password: &str,
+    salt: &[u8],
+    encrypted_sentinel: &crypto::EncryptedData,
+) -> Result<[u8; 32], String> {
+    for derive in [crypto::derive_key, crypto::derive_key_legacy] {
+        let kek = derive(password, salt)?;
+        if matches!(
+            crypto::decrypt_secret(&kek, encrypted_sentinel).as_deref(),
+            Ok(s) if s == crypto::AUTH_SENTINEL
+        ) {
+            return Ok(kek);
+        }
+    }
+    Err("Incorrect password".to_string())
+}
+
 fn unlock_vault_impl(
     conn: &rusqlite::Connection,
     session_kek_mutex: &Mutex<Option<[u8; 32]>>,
@@ -198,23 +219,13 @@ fn unlock_vault_impl(
 
     let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
 
-    let kek = crypto::derive_key(password, &salt)?;
-
     let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
         .map_err(|e| format!("Failed to parse sentinel data: {}", e))?;
 
-    // Try to decrypt sentinel
-    match crypto::decrypt_secret(&kek, &encrypted_sentinel) {
-        Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
-            // Success — reset failed attempts counter
-            let _ = db::set_setting(conn, "failed_attempts", "0");
-            let _ = db::delete_setting(conn, "lockout_until");
-            // Save KEK in session state
-            let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
-            *session_kek = Some(kek);
-            Ok(true)
-        }
-        _ => {
+    // Try to decrypt sentinel with the current or legacy PBKDF2 scheme
+    let kek = match derive_kek_verify_sentinel(password, &salt, &encrypted_sentinel) {
+        Ok(k) => k,
+        Err(_) => {
             // Failed attempt — increment counter
             let attempts = db::get_setting(conn, "failed_attempts")?
                 .and_then(|s| s.parse::<u32>().ok())
@@ -236,9 +247,17 @@ fn unlock_vault_impl(
                 ));
             }
 
-            Ok(false) // Incorrect password
+            return Ok(false); // Incorrect password
         }
-    }
+    };
+
+    // Success — reset failed attempts counter
+    let _ = db::set_setting(conn, "failed_attempts", "0");
+    let _ = db::delete_setting(conn, "lockout_until");
+    // Save KEK in session state
+    let mut session_kek = session_kek_mutex.lock().map_err(|e| e.to_string())?;
+    *session_kek = Some(kek);
+    Ok(true)
 }
 
 #[tauri::command]
@@ -293,12 +312,9 @@ fn migrate_vault_to_default(
     let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
         .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
 
-    // Verify old password against the sentinel
-    let old_kek = crypto::derive_key_legacy(&old_password, &salt)?;
-    match crypto::decrypt_secret(&old_kek, &encrypted_sentinel) {
-        Ok(ref decrypted) if decrypted == crypto::AUTH_SENTINEL => {}
-        _ => return Err("Incorrect vault password".to_string()),
-    }
+    // Verify old password against the sentinel (current or legacy scheme)
+    let old_kek = derive_kek_verify_sentinel(&old_password, &salt, &encrypted_sentinel)
+        .map_err(|_| "Incorrect vault password".to_string())?;
 
     // Generate a new random KEK protected with Windows DPAPI
     let new_kek = crypto::generate_random_kek();
@@ -1482,21 +1498,16 @@ fn import_database_backup(
     let backup_salt =
         hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding in backup: {}", e))?;
 
-    // Derive KEK for the backup database
-    let backup_kek = crypto::derive_key(&password, &backup_salt)?;
-
-    // Verify sentinel
     let encrypted_sentinel: crypto::EncryptedData = serde_json::from_str(&sentinel_json)
         .map_err(|e| format!("Failed to parse backup sentinel: {}", e))?;
 
-    let decrypted = crypto::decrypt_secret(&backup_kek, &encrypted_sentinel).map_err(|_| {
-        "Invalid backup password. Cannot restore. (Неправильний пароль резервної копії.)"
-            .to_string()
-    })?;
-
-    if decrypted != crypto::AUTH_SENTINEL {
-        return Err("Invalid sentinel inside backup database.".to_string());
-    }
+    // Derive KEK for the backup database, trying the current PBKDF2 scheme and
+    // falling back to the legacy one used by backups created before v0.1.68.
+    let backup_kek = derive_kek_verify_sentinel(&password, &backup_salt, &encrypted_sentinel)
+        .map_err(|_| {
+            "Invalid backup password. Cannot restore. (Неправильний пароль резервної копії.)"
+                .to_string()
+        })?;
 
     drop(backup_conn); // Release handle to backup file
 

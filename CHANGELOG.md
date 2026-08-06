@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.69
+
+- Fix "wrong password" on importing backups / unlocking legacy vaults after the PBKDF2 upgrade: derivation now falls back to the legacy 100k iteration scheme for data created before v0.1.68 (600k current + 100k legacy detection)
+- Bump version to v0.1.69
+
 ## v0.1.68
 
 - PBKDF2 iteration count for backup passwords raised to 600,000 (legacy 100k kept only for old-vault detection)
