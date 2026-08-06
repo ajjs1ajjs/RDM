@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.70
+
+- Fix SSH connections closing immediately: revert `StrictHostKeyChecking` to `accept-new` (the `yes` setting refused any host not yet in `known_hosts`)
+- Show SSH client errors (e.g. "Host key verification failed") in the terminal before the session closes instead of closing silently
+
 ## v0.1.69
 
 - Fix "wrong password" on importing backups / unlocking legacy vaults after the PBKDF2 upgrade: derivation now falls back to the legacy 100k iteration scheme for data created before v0.1.68 (600k current + 100k legacy detection)

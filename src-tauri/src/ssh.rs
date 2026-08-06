@@ -132,7 +132,7 @@ pub fn connect_ssh(
     let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
         "-o".to_string(),
-        "StrictHostKeyChecking=yes".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
         "-o".to_string(),
         format!("UserKnownHostsFile={}", known_hosts.display()),
         "-o".to_string(),
@@ -249,6 +249,22 @@ pub fn connect_ssh(
 
         loop {
             if let Ok(Some(_)) = child.try_wait() {
+                // Child exited — drain any buffered output so the user still sees
+                // errors (e.g. "Host key verification failed") instead of a silent close.
+                let mut last = [0u8; 8192];
+                loop {
+                    match reader.read(&mut last) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            let text = String::from_utf8_lossy(&last[..n]).to_string();
+                            let payload = SshOutputPayload {
+                                session_id: session_id_clone.clone(),
+                                data: text,
+                            };
+                            let _ = app_clone.emit("ssh-output", &payload);
+                        }
+                    }
+                }
                 break;
             }
 
