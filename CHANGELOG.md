@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.66
+
+- Release rebuild of v0.1.65 with identical changes (installer/portable bundle verification)
+
 ## v0.1.65
 
 - Explicitly bundle `WebView2Loader.dll` in installer resources and portable packages to fix system error "WebView2Loader.dll was not found"
