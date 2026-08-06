@@ -37,7 +37,7 @@ pub fn protect_kek(kek: &[u8; 32]) -> Result<Vec<u8>, String> {
     };
 
     unsafe {
-        let mut input = CRYPT_INTEGER_BLOB {
+        let input = CRYPT_INTEGER_BLOB {
             cbData: kek.len() as u32,
             pbData: kek.as_ptr() as *mut u8,
         };
@@ -71,7 +71,7 @@ pub fn unprotect_kek(blob: &[u8]) -> Result<[u8; 32], String> {
     };
 
     unsafe {
-        let mut input = CRYPT_INTEGER_BLOB {
+        let input = CRYPT_INTEGER_BLOB {
             cbData: blob.len() as u32,
             pbData: blob.as_ptr() as *mut u8,
         };

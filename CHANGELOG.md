@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.67
+
+- Security hardening per audit:
+  - Vault KEK is now a random key protected with Windows DPAPI (no more hardcoded `default_rdm_key`); legacy vaults auto-migrate on startup
+  - Removed automatic disabling of RDP certificate validation
+  - Redacted password from RdpHost log
+  - Async update check (no UI freeze)
+  - Transaction-safe re-encryption and atomic backup export/import
+  - CSV import no longer leaks passwords in error text
+  - SSH/SFTP no longer delete active sessions' temp keys
+  - Terminal escape-sequence injection sanitized
+  - RDP credentials use session persistence + cleanup on disconnect/exit
+  - StrictHostKeyChecking=yes for interactive SSH
+  - Removed dead code and unused dependencies
+
 ## v0.1.66
 
 - Release rebuild of v0.1.65 with identical changes (installer/portable bundle verification)
