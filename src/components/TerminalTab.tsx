@@ -282,6 +282,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       if (text && isConnectedRef.current) {
         term.paste(text);
         term.scrollToBottom();
+        // Short delay: let the remote echo arrive and then re-pin the viewport.
+        // Falls back to onWriteParsed for the final pin.
+        setTimeout(() => {
+          if (isConnectedRef.current) term.scrollToBottom();
+        }, 200);
       }
     };
 

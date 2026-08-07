@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.73
+
+- Fix terminal-pad sizing: use absolute positioning (`top/bottom/left/right`) instead of `height:100%` inside a flex item so FitAddon always measures the exact renderable area (fixes prompt hiding below the viewport)
+
 ## v0.1.72
 
 - Fix SSH terminal paste: paste now uses the DOM `paste` event (clipboardData) directly instead of the permission-gated async clipboard API; the key handler no longer blocks the browser paste event
