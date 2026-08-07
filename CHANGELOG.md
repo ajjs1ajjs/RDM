@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.72
+
+- Fix SSH terminal paste: paste now uses the DOM `paste` event (clipboardData) directly instead of the permission-gated async clipboard API; the key handler no longer blocks the browser paste event
+- Fix SSH terminal auto-scroll: viewport is now pinned to the latest output after the whole write queue is processed (`onWriteParsed`) plus `scrollOnUserInput`, so the prompt/cursor stays visible when output fills the screen
+
 ## v0.1.71
 
 - Fix SSH terminal auto-scroll when output reaches the bottom: terminal now sizes to the exact visible area (padding moved to a wrapper so FitAddon measures the renderable region) and keeps the prompt/cursor in view

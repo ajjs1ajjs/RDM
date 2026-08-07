@@ -43,6 +43,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     const term = new Terminal({
       cursorBlink: true,
       scrollback: 100000,
+      scrollOnUserInput: true,
       fontFamily: "var(--font-mono)",
       fontSize: 14,
       rightClickSelectsWord: true,
@@ -77,6 +78,14 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Keep the view pinned to the latest output after every batch of writes
+    // (fixes the prompt not staying visible when output fills the screen).
+    const writeParsedSub = term.onWriteParsed(() => {
+      if (isConnectedRef.current) {
+        term.scrollToBottom();
+      }
+    });
+
     // Safe fit helper that also notifies backend PTY of new dimensions
     const handleFitAndResizePty = () => {
       try {
@@ -108,6 +117,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     });
 
     // Custom keyboard handler for copy/paste supporting all keyboard layouts (English, Ukrainian, etc.)
+    let lastDomPasteTime = 0;
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type === "keydown") {
         const isCtrlOrCmd = event.ctrlKey || event.metaKey;
@@ -140,18 +150,25 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
           (event.shiftKey && event.code === "Insert");
 
         if (isPasteKey) {
+          // Primary paste path is the DOM "paste" event (reads clipboardData directly,
+          // no permission prompt). Fall back to the async clipboard API only if the
+          // DOM event didn't fire (guarded by timestamp to avoid double paste).
           navigator.clipboard
             .readText()
             .then((text) => {
-              if (text && isConnectedRef.current) {
+              if (
+                text &&
+                isConnectedRef.current &&
+                Date.now() - lastDomPasteTime > 300
+              ) {
                 term.paste(text);
                 term.scrollToBottom();
               }
             })
-            .catch((err) => {
-              console.error("Clipboard read error:", err);
+            .catch(() => {
+              // Ignore — the DOM paste handler is the primary path.
             });
-          return false; // Prevent sending \x16
+          return false; // Prevent sending \x16; let the browser fire the paste event
         }
       }
       return true;
@@ -258,8 +275,10 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     // DOM paste & copy listeners on the container div
     const container = terminalRef.current;
     const handleDomPaste = (e: ClipboardEvent) => {
+      lastDomPasteTime = Date.now();
+      e.stopImmediatePropagation();
       e.preventDefault();
-      const text = e.clipboardData?.getData("text");
+      const text = e.clipboardData?.getData("text/plain") || e.clipboardData?.getData("text");
       if (text && isConnectedRef.current) {
         term.paste(text);
         term.scrollToBottom();
@@ -276,7 +295,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       }
     };
 
-    container.addEventListener("paste", handleDomPaste);
+    container.addEventListener("paste", handleDomPaste, true);
     container.addEventListener("copy", handleDomCopy);
 
     // Component Cleanup
@@ -287,10 +306,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         resizeObserver.unobserve(terminalRef.current);
       }
       resizeObserver.disconnect();
-      container.removeEventListener("paste", handleDomPaste);
+      container.removeEventListener("paste", handleDomPaste, true);
       container.removeEventListener("copy", handleDomCopy);
       if (ptyResizeTimer) clearTimeout(ptyResizeTimer);
       selectionSub.dispose();
+      writeParsedSub.dispose();
       dataSubscription.dispose();
       resizeSubscription.dispose();
       term.dispose();
