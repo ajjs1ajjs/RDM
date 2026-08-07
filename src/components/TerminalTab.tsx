@@ -352,7 +352,9 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
 
   return (
     <div className="terminal-container" onContextMenu={handleContextMenu}>
-      <div className="terminal-body" ref={terminalRef} />
+      <div className="terminal-body">
+        <div className="terminal-pad" ref={terminalRef} />
+      </div>
       {contextMenu && (
         <div
           className="terminal-context-menu"

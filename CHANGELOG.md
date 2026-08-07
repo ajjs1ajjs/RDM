@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.71
+
+- Fix SSH terminal auto-scroll when output reaches the bottom: terminal now sizes to the exact visible area (padding moved to a wrapper so FitAddon measures the renderable region) and keeps the prompt/cursor in view
+
 ## v0.1.70
 
 - Fix SSH connections closing immediately: revert `StrictHostKeyChecking` to `accept-new` (the `yes` setting refused any host not yet in `known_hosts`)
