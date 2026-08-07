@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.74
+
+- SSH terminal page-scroll: when the cursor reaches near the bottom, the viewport jumps so the cursor sits a few rows below the top (new output starts from the top, history stays in the scrollbar)
+
 ## v0.1.73
 
 - Fix terminal-pad sizing: use absolute positioning (`top/bottom/left/right`) instead of `height:100%` inside a flex item so FitAddon always measures the exact renderable area (fixes prompt hiding below the viewport)
