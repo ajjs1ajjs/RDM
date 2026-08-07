@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.75
+
+- Revert page-scroll behavior; SSH terminal now always scrolls to bottom (fixes duplicated prompts when pasting via context menu)
+
 ## v0.1.74
 
 - SSH terminal page-scroll: when the cursor reaches near the bottom, the viewport jumps so the cursor sits a few rows below the top (new output starts from the top, history stays in the scrollbar)

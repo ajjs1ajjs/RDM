@@ -78,33 +78,18 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Page-scroll: when the cursor reaches near the bottom, jump the viewport
-    // so the cursor sits at the top + margin, making new output start from the
-    // top of the window. History stays in scrollback.
-    const SCROLL_MARGIN = 5; // rows of breathing room below the cursor
-    const pageScroll = () => {
-      if (!isConnectedRef.current) return;
-      try {
-        const buf = term.buffer.active;
-        const cursorY = buf.cursorY; // absolute position in buffer
-        const viewportY = buf.viewportY;
-        if (cursorY >= viewportY + term.rows - SCROLL_MARGIN) {
-          const target = Math.max(0, cursorY - SCROLL_MARGIN);
-          if (target > viewportY) {
-            term.scrollLines(target - viewportY);
-          }
-        }
-      } catch { /* ignore during unmount */ }
-    };
-
-    // After all queued writes drain, page-scroll to keep the prompt visible.
-    const writeParsedSub = term.onWriteParsed(() => pageScroll());
+    // After all queued writes drain, scroll to bottom to keep the prompt visible.
+    const writeParsedSub = term.onWriteParsed(() => {
+      if (isConnectedRef.current) {
+        term.scrollToBottom();
+      }
+    });
 
     // Safe fit helper that also notifies backend PTY of new dimensions
     const handleFitAndResizePty = () => {
       try {
         fitAddon.fit();
-        pageScroll();
+        term.scrollToBottom();
         if (isConnectedRef.current) {
           invoke("resize_ssh_pty", {
             sessionId,
@@ -176,7 +161,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
                 Date.now() - lastDomPasteTime > 300
               ) {
                 term.paste(text);
-                pageScroll();
+                term.scrollToBottom();
               }
             })
             .catch(() => {
@@ -202,7 +187,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
           (event) => {
             if (event.payload.session_id === sessionId) {
               term.write(event.payload.data, () => {
-                pageScroll();
+                term.scrollToBottom();
               });
             }
           }
@@ -259,7 +244,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         invoke("write_ssh_input", { sessionId, data }).catch((e) =>
           console.error("SSH write error:", e)
         );
-        pageScroll();
+        term.scrollToBottom();
       }
     });
 
@@ -295,11 +280,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       const text = e.clipboardData?.getData("text/plain") || e.clipboardData?.getData("text");
       if (text && isConnectedRef.current) {
         term.paste(text);
-        pageScroll();
+        term.scrollToBottom();
         // Short delay: let the remote echo arrive and then re-pin the viewport.
         // Falls back to onWriteParsed for the final pin.
         setTimeout(() => {
-          pageScroll();
+          term.scrollToBottom();
         }, 200);
       }
     };
