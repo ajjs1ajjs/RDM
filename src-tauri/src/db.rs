@@ -79,7 +79,9 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
     // WAL allows concurrent readers and is more crash-safe for the vault DB.
-    conn.execute("PRAGMA journal_mode=WAL;", [])
+    // pragma_update is required: `PRAGMA journal_mode` returns a result row, so
+    // conn.execute() would fail with "Execute returned results".
+    conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| format!("Failed to enable WAL: {}", e))?;
 
     // Enable foreign keys
