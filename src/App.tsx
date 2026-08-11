@@ -207,6 +207,13 @@ function App() {
   };
 
   const handleBypassWarnings = async () => {
+    // This writes a registry value that disables RDP certificate/authentication
+    // warnings for ALL Remote Desktop connections on this machine, not just RDM
+    // Manager — only proceed after an explicit confirmation.
+    const ok = await dialogs.confirm(
+      "This disables RDP server authentication warnings system-wide for ALL Remote Desktop connections on this machine (not only RDM Manager).\n\nЦе вимкне попередження автентифікації RDP для ВСІХ підключень Remote Desktop на цьому комп'ютері (не лише для RDM Manager).\n\nContinue? / Продовжити?"
+    );
+    if (!ok) return;
     try {
       await invoke("bypass_rdp_warnings");
       await dialogs.alert("Successfully configured Windows Registry. RDP warnings will now be reverted to legacy style. (Налаштування реєстру виконано успішно. Попередження RDP переведено в класичний режим.)");

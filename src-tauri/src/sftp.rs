@@ -3,23 +3,7 @@ use std::io::Read;
 use std::time::{Duration, Instant};
 use std::path::PathBuf;
 
-pub struct TempKeyGuard {
-    pub path: Option<PathBuf>,
-}
-
-impl Drop for TempKeyGuard {
-    fn drop(&mut self) {
-        if let Some(ref path) = self.path {
-            if path.exists() {
-                if let Ok(mut f) = std::fs::File::create(path) {
-                    use std::io::Write;
-                    let _ = f.write_all(&[0u8; 4096]);
-                }
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
-}
+pub use crate::tempkey::TempKeyGuard;
 
 pub fn run_ssh_command_sync(
     app_data_dir: PathBuf,

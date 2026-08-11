@@ -62,23 +62,7 @@ fn strip_ansi_codes(s: &str) -> String {
     out
 }
 
-pub struct TempKeyGuard {
-    pub path: Option<PathBuf>,
-}
-
-impl Drop for TempKeyGuard {
-    fn drop(&mut self) {
-        if let Some(ref path) = self.path {
-            if path.exists() {
-                if let Ok(mut f) = std::fs::File::create(path) {
-                    use std::io::Write;
-                    let _ = f.write_all(&[0u8; 4096]);
-                }
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
-}
+pub use crate::tempkey::TempKeyGuard;
 
 #[derive(Clone, Serialize)]
 pub struct SshOutputPayload {
@@ -128,7 +112,7 @@ pub fn connect_ssh(
 
     let mut key_guard = None;
     let mut temp_key_path = None;
-    let app_data_dir = app.path().app_data_dir().unwrap();
+    let app_data_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
     let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
         "-o".to_string(),
@@ -148,7 +132,7 @@ pub fn connect_ssh(
 
     // If private key is provided, write to secure temp file
     if let Some(key_content) = private_key {
-        let app_dir = app.path().app_data_dir().unwrap();
+        let app_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
         let keys_dir = app_dir.join("temp_keys");
         std::fs::create_dir_all(&keys_dir)
             .map_err(|e| format!("Failed to create temp key dir: {}", e))?;

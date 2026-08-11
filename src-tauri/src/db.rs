@@ -78,6 +78,10 @@ pub fn init_db(app_dir: PathBuf) -> Result<Connection, String> {
     let db_path = app_dir.join("rdm.db");
     let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
+    // WAL allows concurrent readers and is more crash-safe for the vault DB.
+    conn.execute("PRAGMA journal_mode=WAL;", [])
+        .map_err(|e| format!("Failed to enable WAL: {}", e))?;
+
     // Enable foreign keys
     conn.execute("PRAGMA foreign_keys = ON;", [])
         .map_err(|e| e.to_string())?;
@@ -338,7 +342,7 @@ pub fn delete_server(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn get_servers(conn: &Connection) -> Result<Vec<Server>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, encrypted_password, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon FROM servers ORDER BY name ASC")
+        .prepare("SELECT id, name, hostname, ip, port, protocol, os, folder_path, tags, description, credential_id, username, NULL, created_at, updated_at, rdp_clipboard, rdp_drives, rdp_printers, rdp_smart_sizing, rdp_audio, rdp_smartcards, rdp_webauthn, rdp_fullscreen, rdp_multimon FROM servers ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt

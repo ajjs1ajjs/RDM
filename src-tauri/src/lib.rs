@@ -3,6 +3,7 @@ mod db;
 mod rdp;
 mod sftp;
 mod ssh;
+mod tempkey;
 
 pub use windows_core;
 
@@ -2328,7 +2329,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let app_dir = app.path().app_data_dir().unwrap();
+            let app_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
             let conn = db::init_db(app_dir.clone())?;
             let session_state = SessionState::new();
 

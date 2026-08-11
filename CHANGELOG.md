@@ -86,7 +86,10 @@
 ## v0.1.58
 
 - Fix Windows Credential Manager: password blob must be UTF-16LE for mstsc
-- Change credential persistence to LOCAL_MACHINE
+- RDP credentials use session persistence (CRED_PERSIST_SESSION) — credentials
+  are removed when the user logs off, so they are not stored across reboots.
+  This is intentional for security. To persist across reboots, the value must
+  be CRED_PERSIST_LOCAL_MACHINE (2); the shipped build keeps session-only.
 
 ## v0.1.57
 

@@ -13,6 +13,9 @@ wpf_backup/
 src-tauri/src/RdpHost/bin/
 src-tauri/src/RdpHost/obj/
 src-tauri/bin/
+# Legacy C# WPF build artifacts (dead code kept only for reference)
+output/
+src-csharp/wwwroot.zip
 
 # AI editor
 .claude/
