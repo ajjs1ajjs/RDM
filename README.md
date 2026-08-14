@@ -1,6 +1,19 @@
 # RDM Manager (Remote Connection Manager)
 
+<p align="center">
+  <img src="docs/banner.svg" width="100%" alt="RDM Manager">
+</p>
+
 Легкий, швидкий та безпечний менеджер віддалених підключень для SRE та DevOps інженерів. Є сучасною альтернативою Devolutions Remote Desktop Manager, але без Electron-пожирання пам'яті (RAM bloat). Побудований на базі Tauri v2, Rust, React та SQLite.
+
+## 🖥️ Скріншоти
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="49%" alt="Connections Directory">
+  <img src="docs/screenshots/vault.png" width="49%" alt="Credential Vault">
+</p>
+
+---
 
 ## 🚀 Основний функціонал
 * **SSH-підключення (Linux)**: вбудований термінал на базі `xterm.js` із автоматичною підгонкою розміру сітки, що працює через системний PTY на Rust. Автозаповнення паролів/парольних фраз та робота з тимчасовими файлами приватних ключів (які безслідно видаляються з диска відразу після закриття сесії).

@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#060913"/>
+      <stop offset="0.5" stop-color="#0a0e1a"/>
+      <stop offset="1" stop-color="#060913"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00f2fe"/>
+      <stop offset="1" stop-color="#bf5af2"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="textGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+
+  <g opacity="0.06" stroke="#00f2fe" stroke-width="1">
+    <path d="M0 90H1280M0 180H1280M0 270H1280M320 0V360M640 0V360M960 0V360"/>
+  </g>
+
+  <g transform="translate(70,96)" filter="url(#glow)">
+    <rect x="0" y="8" width="96" height="150" rx="14" fill="none" stroke="url(#brand)" stroke-width="4"/>
+    <rect x="14" y="22" width="68" height="122" rx="8" fill="url(#brand)" opacity="0.18"/>
+    <circle cx="48" cy="60" r="7" fill="#00f2fe"/>
+    <circle cx="48" cy="112" r="7" fill="#bf5af2"/>
+    <path d="M48 67 V104" stroke="#00f2fe" stroke-width="4"/>
+    <rect x="108" y="4" width="30" height="40" rx="6" fill="#00f2fe" opacity="0.85"/>
+    <rect x="108" y="58" width="30" height="40" rx="6" fill="#bf5af2" opacity="0.85"/>
+    <rect x="108" y="112" width="30" height="40" rx="6" fill="#30d158" opacity="0.85"/>
+    <rect x="154" y="112" width="30" height="40" rx="6" fill="#ffd60a" opacity="0.7"/>
+    <rect x="154" y="58" width="30" height="40" rx="6" fill="#ff453a" opacity="0.7"/>
+    <rect x="200" y="0" width="22" height="158" rx="7" fill="url(#brand)" opacity="0.5"/>
+  </g>
+
+  <text x="300" y="152" font-family="Segoe UI, sans-serif" font-size="62" font-weight="700" fill="#ffffff" filter="url(#textGlow)">RDM <tspan fill="url(#brand)">Manager</tspan></text>
+  <text x="304" y="200" font-family="Segoe UI, sans-serif" font-size="23" fill="#9aa2b1">Remote Connection Manager для SRE та DevOps — без Electron-блота</text>
+
+  <g transform="translate(304,240)">
+    <rect x="0" y="0" width="146" height="34" rx="17" fill="#00f2fe" opacity="0.13" stroke="#00f2fe" stroke-width="1"/>
+    <text x="73" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#6ee7ff" text-anchor="middle">SSH Terminal</text>
+    <rect x="158" y="0" width="140" height="34" rx="17" fill="#bf5af2" opacity="0.14" stroke="#bf5af2" stroke-width="1"/>
+    <text x="228" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#d8b4fe" text-anchor="middle">RDP Embedded</text>
+    <rect x="310" y="0" width="180" height="34" rx="17" fill="#30d158" opacity="0.13" stroke="#30d158" stroke-width="1"/>
+    <text x="400" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#7ee787" text-anchor="middle">Credential Vault</text>
+    <rect x="502" y="0" width="186" height="34" rx="17" fill="#ffd60a" opacity="0.13" stroke="#ffd60a" stroke-width="1"/>
+    <text x="595" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#ffe14a" text-anchor="middle">AES-256-GCM · DPAPI</text>
+  </g>
+
+  <g transform="translate(1010,52)">
+    <rect x="0" y="0" width="120" height="52" rx="12" fill="#00f2fe" opacity="0.13" stroke="#00f2fe" stroke-width="2"/>
+    <text x="60" y="21" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800" fill="#6ee7ff" text-anchor="middle">18</text>
+    <text x="60" y="42" font-family="Segoe UI, sans-serif" font-size="12" fill="#9aa2b1" text-anchor="middle">серверів</text>
+  </g>
+  <g transform="translate(1146,52)">
+    <rect x="0" y="0" width="120" height="52" rx="12" fill="#bf5af2" opacity="0.14" stroke="#bf5af2" stroke-width="2"/>
+    <text x="60" y="21" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800" fill="#d8b4fe" text-anchor="middle">Ctrl+P</text>
+    <text x="60" y="42" font-family="Segoe UI, sans-serif" font-size="12" fill="#9aa2b1" text-anchor="middle">палітра</text>
+  </g>
+  <g transform="translate(1010,116)">
+    <rect x="0" y="0" width="120" height="52" rx="12" fill="#30d158" opacity="0.13" stroke="#30d158" stroke-width="2"/>
+    <text x="60" y="21" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800" fill="#7ee787" text-anchor="middle">SSH · RDP</text>
+    <text x="60" y="42" font-family="Segoe UI, sans-serif" font-size="12" fill="#9aa2b1" text-anchor="middle">протоколи</text>
+  </g>
+  <g transform="translate(1146,116)">
+    <rect x="0" y="0" width="120" height="52" rx="12" fill="#ffd60a" opacity="0.13" stroke="#ffd60a" stroke-width="2"/>
+    <text x="60" y="21" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800" fill="#ffe14a" text-anchor="middle">v0.1.77</text>
+    <text x="60" y="42" font-family="Segoe UI, sans-serif" font-size="12" fill="#9aa2b1" text-anchor="middle">release</text>
+  </g>
+
+  <path d="M0 322 Q64 310 128 320 T256 320 T384 320 T512 320 T640 320 T768 320 T896 320 T1024 320 T1152 320 T1280 320" fill="none" stroke="url(#brand)" stroke-width="2" opacity="0.4"/>
+</svg>
