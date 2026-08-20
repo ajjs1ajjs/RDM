@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.78
+
+- Cross-platform vault: the vault KEK is now stored in the OS keyring (Windows Credential Manager, macOS Keychain, Linux Secret Service) instead of Windows DPAPI, so the vault works on Linux/macOS too
+- Existing Windows vaults auto-migrate from DPAPI to the OS keyring on first launch
+- Backup export/import no longer depends on the local key store — only the backup password is required to move data between machines
+
 ## v0.1.75
 
 - Revert page-scroll behavior; SSH terminal now always scrolls to bottom (fixes duplicated prompts when pasting via context menu)

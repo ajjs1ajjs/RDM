@@ -38,41 +38,7 @@ pub fn generate_random_kek() -> [u8; 32] {
     key
 }
 
-/// Protects the raw KEK with Windows DPAPI (tied to the current user & machine).
-pub fn protect_kek(kek: &[u8; 32]) -> Result<Vec<u8>, String> {
-    use windows::Win32::Foundation::{LocalFree, HLOCAL};
-    use windows::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
-    };
-
-    unsafe {
-        let input = CRYPT_INTEGER_BLOB {
-            cbData: kek.len() as u32,
-            pbData: kek.as_ptr() as *mut u8,
-        };
-        let mut out = CRYPT_INTEGER_BLOB {
-            cbData: 0,
-            pbData: std::ptr::null_mut(),
-        };
-
-        CryptProtectData(
-            &input,
-            windows::core::PCWSTR::null(),
-            None,
-            None,
-            None,
-            CRYPTPROTECT_UI_FORBIDDEN,
-            &mut out,
-        )
-        .map_err(|e| format!("Failed to protect vault key with DPAPI (error {})", e.code().0))?;
-
-        let bytes = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
-        let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
-        Ok(bytes)
-    }
-}
-
-/// Recovers the raw KEK from a DPAPI-protected blob.
+/// Recovers the raw KEK from a DPAPI-protected blob (legacy Windows vaults).
 pub fn unprotect_kek(blob: &[u8]) -> Result<[u8; 32], String> {
     use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{
@@ -113,6 +79,44 @@ pub fn unprotect_kek(blob: &[u8]) -> Result<[u8; 32], String> {
         let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
         Ok(key)
     }
+}
+
+/// Service/account identifiers for the OS keyring entry that holds the raw KEK.
+pub const KEYRING_SERVICE: &str = "RDM-Manager";
+pub const KEYRING_ACCOUNT: &str = "vault-kek";
+
+/// Stores the raw KEK in the OS credential store:
+/// Windows Credential Manager, macOS Keychain, or the Linux Secret Service.
+pub fn store_kek_in_keyring(kek: &[u8; 32]) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+        .map_err(|e| format!("Failed to access the OS keyring: {}", e))?;
+    entry
+        .set_secret(kek)
+        .map_err(|e| format!("Failed to store the vault key in the OS keyring: {}", e))
+}
+
+/// Recovers the raw KEK from the OS credential store.
+pub fn get_kek_from_keyring() -> Result<[u8; 32], String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+        .map_err(|e| format!("Failed to access the OS keyring: {}", e))?;
+    let secret = entry
+        .get_secret()
+        .map_err(|e| format!("Vault key not found in the OS keyring: {}", e))?;
+    if secret.len() != 32 {
+        return Err("Unexpected vault key size in the OS keyring".to_string());
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&secret);
+    Ok(key)
+}
+
+/// Removes the KEK entry from the OS credential store.
+pub fn remove_kek_from_keyring() -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+        .map_err(|e| format!("Failed to access the OS keyring: {}", e))?;
+    entry
+        .delete_credential()
+        .map_err(|e| format!("Failed to remove the vault key from the OS keyring: {}", e))
 }
 
 /// Encrypts the plaintext using AES-256-GCM and the derived key.

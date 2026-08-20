@@ -51,6 +51,11 @@ fn is_vault_setup(db: State<'_, DbState>) -> Result<bool, String> {
         return Ok(false);
     }
 
+    // Vault protected with an OS-keyring-bound random KEK — no user action required
+    if matches!(db::get_setting(&conn, "kek_backend")?, Some(v) if v == "keyring") {
+        return Ok(false);
+    }
+
     let sentinel = db::get_setting(&conn, "sentinel")?;
 
     match sentinel {
@@ -294,7 +299,7 @@ fn lock_vault(state: State<'_, SessionState>) -> Result<(), String> {
 }
 
 /// Migrate a vault that was protected with a real master password to a
-/// DPAPI-protected random KEK. Re-encrypts all credentials and server
+/// random KEK bound to the OS keyring. Re-encrypts all credentials and server
 /// passwords with the new KEK.
 #[tauri::command]
 fn migrate_vault_to_default(
@@ -317,10 +322,9 @@ fn migrate_vault_to_default(
     let old_kek = derive_kek_verify_sentinel(&old_password, &salt, &encrypted_sentinel)
         .map_err(|_| "Incorrect vault password".to_string())?;
 
-    // Generate a new random KEK protected with Windows DPAPI
+    // Generate a new random KEK bound to the OS keyring
     let new_kek = crypto::generate_random_kek();
-    let dpapi_blob = crypto::protect_kek(&new_kek)?;
-    let dpapi_blob_hex = hex::encode(&dpapi_blob);
+    crypto::store_kek_in_keyring(&new_kek)?;
 
     let mut new_salt = [0u8; 16];
     thread_rng().fill_bytes(&mut new_salt);
@@ -332,7 +336,8 @@ fn migrate_vault_to_default(
         .map_err(|e| format!("Failed to serialize sentinel: {}", e))?;
     db::set_setting(&conn, "salt", &new_salt_hex)?;
     db::set_setting(&conn, "sentinel", &new_sentinel_json)?;
-    db::set_setting(&conn, "kek_dpapi", &dpapi_blob_hex)?;
+    db::set_setting(&conn, "kek_backend", "keyring")?;
+    db::delete_setting(&conn, "kek_dpapi")?;
 
     // Re-encrypt all data with new KEK
     re_encrypt_table(
@@ -359,7 +364,7 @@ fn migrate_vault_to_default(
     Ok(())
 }
 
-/// Reset vault: wipe all data, then reinitialize a fresh DPAPI-protected vault.
+/// Reset vault: wipe all data, then reinitialize a fresh keyring-bound vault.
 /// This will make all previously encrypted credentials unreadable.
 #[tauri::command]
 fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
@@ -370,6 +375,9 @@ fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result
     let _ = conn.execute("DELETE FROM servers", []);
     let _ = conn.execute("DELETE FROM credentials", []);
     let _ = conn.execute("DELETE FROM settings", []);
+
+    // Drop the old KEK from the OS keyring (best-effort)
+    let _ = crypto::remove_kek_from_keyring();
 
     // Drop old connection, reinit DB
     drop(conn);
@@ -1201,10 +1209,22 @@ fn auto_setup_vault(
     conn: &rusqlite::Connection,
     session_state: &SessionState,
 ) -> Result<(), String> {
-    // 1) Vault already protected with a DPAPI-bound random KEK — just unlock it
+    // 1) Legacy Windows vault protected with a DPAPI-bound random KEK —
+    //    transparently migrate it to the OS keyring, then unlock.
     if let Some(blob_hex) = db::get_setting(conn, "kek_dpapi")? {
         let blob = hex::decode(&blob_hex).map_err(|e| format!("Invalid DPAPI blob: {}", e))?;
         let kek = crypto::unprotect_kek(&blob)?;
+        crypto::store_kek_in_keyring(&kek)?;
+        db::set_setting(conn, "kek_backend", "keyring")?;
+        db::delete_setting(conn, "kek_dpapi")?;
+        let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
+        *session_kek = Some(kek);
+        return Ok(());
+    }
+
+    // 2) Vault already protected with an OS-keyring-bound KEK — just unlock it
+    if matches!(db::get_setting(conn, "kek_backend")?, Some(v) if v == "keyring") {
+        let kek = crypto::get_kek_from_keyring()?;
         let mut session_kek = session_state.kek.lock().map_err(|e| e.to_string())?;
         *session_kek = Some(kek);
         return Ok(());
@@ -1212,11 +1232,11 @@ fn auto_setup_vault(
 
     let sentinel = db::get_setting(conn, "sentinel")?;
 
-    // 2) Fresh setup — create a random KEK, store it DPAPI-protected
+    // 3) Fresh setup — create a random KEK, store it in the OS keyring
     if sentinel.is_none() || sentinel.as_deref() == Some("") {
         let kek = crypto::generate_random_kek();
-        let dpapi_blob = crypto::protect_kek(&kek)?;
-        db::set_setting(conn, "kek_dpapi", &hex::encode(&dpapi_blob))?;
+        crypto::store_kek_in_keyring(&kek)?;
+        db::set_setting(conn, "kek_backend", "keyring")?;
 
         let mut salt = [0u8; 16];
         thread_rng().fill_bytes(&mut salt);
@@ -1233,8 +1253,8 @@ fn auto_setup_vault(
         return Ok(());
     }
 
-    // 3) Legacy vault created with the publicly-known "default_rdm_key" —
-    //    transparently migrate to a random DPAPI-protected KEK.
+    // 4) Legacy vault created with the publicly-known "default_rdm_key" —
+    //    transparently migrate to a random keyring-bound KEK.
     let salt_hex = db::get_setting(conn, "salt")?.ok_or_else(|| "Vault salt not found".to_string())?;
     let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
     let sentinel_json = sentinel.as_ref().unwrap();
@@ -1245,8 +1265,8 @@ fn auto_setup_vault(
     match crypto::decrypt_secret(&default_kek, &encrypted) {
         Ok(decrypted) if decrypted == crypto::AUTH_SENTINEL => {
             let new_kek = crypto::generate_random_kek();
-            let dpapi_blob = crypto::protect_kek(&new_kek)?;
-            db::set_setting(conn, "kek_dpapi", &hex::encode(&dpapi_blob))?;
+            crypto::store_kek_in_keyring(&new_kek)?;
+            db::set_setting(conn, "kek_backend", "keyring")?;
 
             let mut new_salt = [0u8; 16];
             thread_rng().fill_bytes(&mut new_salt);
@@ -1345,7 +1365,7 @@ fn re_encrypt_database(
     old_kek: &[u8; 32],
     new_kek: &[u8; 32],
     new_salt_hex: &str,
-    dpapi_blob_hex: Option<&str>,
+    keyring_marker: bool,
 ) -> Result<(), String> {
     let conn = rusqlite::Connection::open(db_path)
         .map_err(|e| format!("Failed to open export database for re-encryption: {}", e))?;
@@ -1368,22 +1388,22 @@ fn re_encrypt_database(
     )
     .map_err(|e| e.to_string())?;
 
-    // Manage the DPAPI-protected KEK row:
-    //  - Some(blob): overwrite with the new local blob (import path).
-    //  - None: strip any source blob so exports never carry a stale local key.
-    match dpapi_blob_hex {
-        Some(blob) => {
-            conn.execute(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES ('kek_dpapi', ?1);",
-                [blob],
-            )
+    // Manage the local key markers:
+    //  - true: the imported vault's KEK lives in the OS keyring — write the marker.
+    //  - false: strip any local key markers so exports never carry a stale local key.
+    if keyring_marker {
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('kek_backend', 'keyring');",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    } else {
+        conn.execute("DELETE FROM settings WHERE key = 'kek_backend';", [])
             .map_err(|e| e.to_string())?;
-        }
-        None => {
-            conn.execute("DELETE FROM settings WHERE key = 'kek_dpapi';", [])
-                .map_err(|e| e.to_string())?;
-        }
     }
+
+    conn.execute("DELETE FROM settings WHERE key = 'kek_dpapi';", [])
+        .map_err(|e| e.to_string())?;
 
     // Re-encrypt tables using shared helper
     re_encrypt_table(
@@ -1448,13 +1468,13 @@ fn export_database_backup(
     let export_salt_hex = hex::encode(export_salt);
     let export_kek = crypto::derive_key(&password, &export_salt)?;
 
-    // Re-encrypt the temporary file (exports never carry the local DPAPI key)
+    // Re-encrypt the temporary file (exports never carry the local keyring key)
     if let Err(e) = re_encrypt_database(
         &temp,
         &local_kek,
         &export_kek,
         &export_salt_hex,
-        None,
+        false,
     ) {
         let _ = std::fs::remove_file(&temp);
         return Err(e);
@@ -1512,7 +1532,7 @@ fn import_database_backup(
 
     drop(backup_conn); // Release handle to backup file
 
-    // 2. Prepare re-encryption to a fresh local KEK (protected via DPAPI)
+    // 2. Prepare re-encryption to a fresh local KEK (bound to the OS keyring)
     let app_dir = app
         .path()
         .app_data_dir()
@@ -1532,21 +1552,20 @@ fn import_database_backup(
     std::fs::copy(&source_path, &temp_db_path)
         .map_err(|e| format!("Failed to create temporary import file: {}", e))?;
 
-    // Generate new local salt, random KEK and its DPAPI-protected blob
+    // Generate new local salt and a random KEK bound to the OS keyring
     let mut local_salt = [0u8; 16];
     thread_rng().fill_bytes(&mut local_salt);
     let local_salt_hex = hex::encode(local_salt);
     let local_kek = crypto::generate_random_kek();
-    let dpapi_blob = crypto::protect_kek(&local_kek)?;
-    let dpapi_blob_hex = hex::encode(&dpapi_blob);
+    crypto::store_kek_in_keyring(&local_kek)?;
 
-    // Re-encrypt temporary import file to local_kek and store the DPAPI blob
+    // Re-encrypt temporary import file to local_kek and mark the keyring backend
     re_encrypt_database(
         &temp_db_path,
         &backup_kek,
         &local_kek,
         &local_salt_hex,
-        Some(&dpapi_blob_hex),
+        true,
     )?;
 
     // 3. Swap active connection to point to the imported file.
@@ -2338,7 +2357,7 @@ pub fn run() {
             let _ = std::fs::remove_dir_all(app_dir.join("temp_keys"));
             let _ = std::fs::remove_dir_all(app_dir.join("rdp_sessions"));
 
-            // Auto-setup vault with a random DPAPI-protected key.
+            // Auto-setup vault with a random OS-keyring-protected key.
             // Password is only required for export/import operations.
             if let Err(e) = auto_setup_vault(&conn, &session_state) {
                 eprintln!("Auto-setup vault warning: {}", e);

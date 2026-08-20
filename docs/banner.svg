@@ -50,7 +50,7 @@
     <rect x="310" y="0" width="180" height="34" rx="17" fill="#30d158" opacity="0.13" stroke="#30d158" stroke-width="1"/>
     <text x="400" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#7ee787" text-anchor="middle">Credential Vault</text>
     <rect x="502" y="0" width="186" height="34" rx="17" fill="#ffd60a" opacity="0.13" stroke="#ffd60a" stroke-width="1"/>
-    <text x="595" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#ffe14a" text-anchor="middle">AES-256-GCM · DPAPI</text>
+    <text x="595" y="23" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#ffe14a" text-anchor="middle">AES-256-GCM · OS Keyring</text>
   </g>
 
   <g transform="translate(1010,52)">
