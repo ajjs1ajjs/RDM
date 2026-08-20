@@ -28,10 +28,15 @@ Write-Host "Building all targets..." -ForegroundColor Cyan
 & "$PSScriptRoot/build-all.ps1"
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
-# Check for uncommitted changes
-$dirty = git status --porcelain
-if ($dirty) {
+# Check for uncommitted changes (ignore whitespace/line-ending-only diffs,
+# e.g. the build normalizing CRLF in Cargo.toml — content is unchanged)
+$dirty = git diff --name-only --ignore-space-at-eol
+$untracked = git ls-files --others --exclude-standard
+if ($dirty -or $untracked) {
+    Write-Host "Modified (tracked):"
     Write-Host $dirty
+    Write-Host "Untracked:"
+    Write-Host $untracked
     throw "Uncommitted changes found (see above). Commit them manually before release."
 }
 

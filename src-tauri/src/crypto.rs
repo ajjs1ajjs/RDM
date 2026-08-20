@@ -39,6 +39,7 @@ pub fn generate_random_kek() -> [u8; 32] {
 }
 
 /// Recovers the raw KEK from a DPAPI-protected blob (legacy Windows vaults).
+#[cfg(target_os = "windows")]
 pub fn unprotect_kek(blob: &[u8]) -> Result<[u8; 32], String> {
     use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.79
+
+- Cross-platform release: builds for Linux (.deb, AppImage) and macOS (.dmg) in addition to Windows (NSIS/MSI); GitHub Actions attaches Linux/macOS artifacts to each tag release automatically
+- Code is now portable to non-Windows: Win32-only modules (native RDP embed, DPAPI vault migration) are behind `cfg(target_os = "windows")`, SSH/SFTP/vault work everywhere
+- RDP UI (embedded sessions, quick connect, redirection settings, "Bypass RDP Warnings") is hidden on Linux/macOS where only SSH/SFTP connections are available
+- Vault keys are stored in the OS keyring on every platform (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+
 ## v0.1.78
 
 - Cross-platform vault: the vault KEK is now stored in the OS keyring (Windows Credential Manager, macOS Keychain, Linux Secret Service) instead of Windows DPAPI, so the vault works on Linux/macOS too

@@ -27,6 +27,18 @@
 
 ---
 
+## 🖥️ Підтримка платформ
+
+| Платформа | SSH / SFTP | Credential Vault | RDP |
+|-----------|-----------|------------------|-----|
+| Windows   | ✅         | ✅ (Credential Manager) | ✅ |
+| Linux     | ✅         | ✅ (Secret Service / gnome-keyring / KWallet) | ❌ |
+| macOS     | ✅         | ✅ (Keychain) | ❌ |
+
+RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. На Linux/macOS інтерфейс RDP автоматично приховується, а SSH/SFTP та сейф облікових записів повністю функціонують. Розповсюдження: Windows (NSIS/MSI), Linux (.deb / AppImage), macOS (.dmg).
+
+---
+
 ## 🔒 Архітектура безпеки
 1. **KEK (Key Encryption Key)**: Випадковий 256-бітний ключ шифрування генерується локально (OS CSPRNG) і **зберігається в системному сховищі ключів ОС (OS keyring)** — Windows Credential Manager, macOS Keychain або Linux Secret Service (gnome-keyring/KWallet). У базі даних зберігається лише маркер використання сховища, а не сам ключ. Існуючі сейфи, створені з Windows DPAPI, автоматично мігруються в ключове сховище при першому запуску.
 2. **AES-256-GCM**: Облікові дані шифруються за допомогою симетричного алгоритму AES-256-GCM із випадковим 12-байтовим nonce.

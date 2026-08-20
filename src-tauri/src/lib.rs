@@ -1,5 +1,6 @@
 mod crypto;
 mod db;
+#[cfg(target_os = "windows")]
 mod rdp;
 mod sftp;
 mod ssh;
@@ -810,6 +811,7 @@ fn disconnect_ssh(session_id: String, ssh_state: State<'_, ssh::SshState>) -> Re
     ssh::disconnect_ssh_session(&ssh_state, &session_id)
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn connect_rdp(
     host: String,
@@ -897,6 +899,7 @@ fn connect_rdp(
     res
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn connect_rdp_embedded(
     session_id: String,
@@ -1057,6 +1060,7 @@ fn connect_rdp_embedded(
     res
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn resize_rdp_embedded(
     session_id: String,
@@ -1080,6 +1084,7 @@ fn resize_rdp_embedded(
     )
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn disconnect_rdp_embedded(
     session_id: String,
@@ -1089,6 +1094,7 @@ fn disconnect_rdp_embedded(
     rdp::disconnect_rdp_embedded(&session_id, rdp_state.inner(), &app)
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn send_rdp_mouse(
     session_id: String,
@@ -1110,6 +1116,7 @@ fn send_rdp_mouse(
     )
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn send_rdp_key(
     session_id: String,
@@ -1120,6 +1127,7 @@ fn send_rdp_key(
     rdp::send_rdp_key(&session_id, vk, key_up, rdp_state.inner())
 }
 
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn bypass_rdp_warnings() -> Result<(), String> {
     // Write to HKCU — no admin required
@@ -1211,6 +1219,7 @@ fn auto_setup_vault(
 ) -> Result<(), String> {
     // 1) Legacy Windows vault protected with a DPAPI-bound random KEK —
     //    transparently migrate it to the OS keyring, then unlock.
+    #[cfg(target_os = "windows")]
     if let Some(blob_hex) = db::get_setting(conn, "kek_dpapi")? {
         let blob = hex::decode(&blob_hex).map_err(|e| format!("Invalid DPAPI blob: {}", e))?;
         let kek = crypto::unprotect_kek(&blob)?;
@@ -2342,6 +2351,104 @@ fn sftp_upload(
     )
 }
 
+#[tauri::command]
+fn get_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
+#[cfg(target_os = "windows")]
+fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        is_vault_setup,
+        get_setting,
+        set_setting,
+        is_vault_unlocked,
+        setup_master_password,
+        unlock_vault,
+        lock_vault,
+        get_credentials,
+        add_credential,
+        update_credential,
+        delete_credential,
+        decrypt_credential_secret,
+        get_servers,
+        add_server,
+        update_server,
+        delete_server,
+        get_connection_history,
+        add_connection_history,
+        connect_ssh,
+        write_ssh_input,
+        resize_ssh_pty,
+        disconnect_ssh,
+        connect_rdp,
+        connect_rdp_embedded,
+        resize_rdp_embedded,
+        disconnect_rdp_embedded,
+        send_rdp_mouse,
+        send_rdp_key,
+        export_database_backup,
+        import_database_backup,
+        import_devolutions_csv,
+        select_and_import_devolutions_csv,
+        sftp_ls,
+        sftp_download,
+        sftp_upload,
+        select_and_export_backup,
+        select_and_import_backup,
+        decrypt_server_password,
+        bypass_rdp_warnings,
+        save_server_from_connect,
+        check_for_update,
+        migrate_vault_to_default,
+        reset_vault,
+        get_platform
+    ]
+}
+
+#[cfg(not(target_os = "windows"))]
+fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        is_vault_setup,
+        get_setting,
+        set_setting,
+        is_vault_unlocked,
+        setup_master_password,
+        unlock_vault,
+        lock_vault,
+        get_credentials,
+        add_credential,
+        update_credential,
+        delete_credential,
+        decrypt_credential_secret,
+        get_servers,
+        add_server,
+        update_server,
+        delete_server,
+        get_connection_history,
+        add_connection_history,
+        connect_ssh,
+        write_ssh_input,
+        resize_ssh_pty,
+        disconnect_ssh,
+        export_database_backup,
+        import_database_backup,
+        import_devolutions_csv,
+        select_and_import_devolutions_csv,
+        sftp_ls,
+        sftp_download,
+        sftp_upload,
+        select_and_export_backup,
+        select_and_import_backup,
+        decrypt_server_password,
+        save_server_from_connect,
+        check_for_update,
+        migrate_vault_to_default,
+        reset_vault,
+        get_platform
+    ]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2368,54 +2475,11 @@ pub fn run() {
             });
             app.manage(session_state);
             app.manage(ssh::SshState::new());
+            #[cfg(target_os = "windows")]
             app.manage(rdp::RdpState::new());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            is_vault_setup,
-            get_setting,
-            set_setting,
-            is_vault_unlocked,
-            setup_master_password,
-            unlock_vault,
-            lock_vault,
-            get_credentials,
-            add_credential,
-            update_credential,
-            delete_credential,
-            decrypt_credential_secret,
-            get_servers,
-            add_server,
-            update_server,
-            delete_server,
-            get_connection_history,
-            add_connection_history,
-            connect_ssh,
-            write_ssh_input,
-            resize_ssh_pty,
-            disconnect_ssh,
-            connect_rdp,
-            connect_rdp_embedded,
-            resize_rdp_embedded,
-            disconnect_rdp_embedded,
-            send_rdp_mouse,
-            send_rdp_key,
-            export_database_backup,
-            import_database_backup,
-            import_devolutions_csv,
-            select_and_import_devolutions_csv,
-            sftp_ls,
-            sftp_download,
-            sftp_upload,
-            select_and_export_backup,
-            select_and_import_backup,
-            decrypt_server_password,
-            bypass_rdp_warnings,
-            save_server_from_connect,
-            check_for_update,
-            migrate_vault_to_default,
-            reset_vault
-        ])
+        .invoke_handler(build_invoke_handler())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

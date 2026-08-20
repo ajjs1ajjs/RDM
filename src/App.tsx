@@ -4,6 +4,7 @@ import { useVault } from "./hooks/useVault";
 import { useServers } from "./hooks/useServers";
 import { useCredentials } from "./hooks/useCredentials";
 import { useConnectionTabs } from "./hooks/useConnectionTabs";
+import { useIsWindows } from "./hooks/usePlatform";
 import { useServerForm } from "./hooks/useServerForm";
 import { useCredForm } from "./hooks/useCredForm";
 import { useFolderModal } from "./hooks/useFolderModal";
@@ -116,6 +117,7 @@ function App() {
   const serversCtrl = useServers();
   const credentialsCtrl = useCredentials();
   const tabs = useConnectionTabs();
+  const isWindows = useIsWindows();
 
   const serverForm = useServerForm(
     serversCtrl.selectedFolder,
@@ -260,6 +262,7 @@ function App() {
                 onToggleFavorite={serversCtrl.toggleFavorite}
                 onConnectSFTP={tabs.handleConnectSFTP}
                 onQuickConnect={tabs.handleQuickConnect}
+                isWindows={isWindows}
               />
             </main>
             <DetailsPanel
@@ -267,6 +270,7 @@ function App() {
               credentials={credentialsCtrl.credentials}
               onConnect={tabs.handleConnect}
               onEdit={serverForm.openServerForm}
+              isWindows={isWindows}
             />
           </div>
         </div>
@@ -332,15 +336,17 @@ function App() {
                   <button className="btn btn-secondary" onClick={handleImportBackup}>Restore Backup</button>
                 </div>
               </div>
-              <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
-                <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Bypass RDP Warnings / Обхід попереджень RDP</h3>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
-                  Reverts Windows RDP connection prompts to legacy behavior.
-                </p>
-                <button className="btn btn-primary" onClick={handleBypassWarnings}>
-                  Suppress Warnings / Вимкнути попередження
-                </button>
-              </div>
+              {isWindows && (
+                <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
+                  <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Bypass RDP Warnings / Обхід попереджень RDP</h3>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
+                    Reverts Windows RDP connection prompts to legacy behavior.
+                  </p>
+                  <button className="btn btn-primary" onClick={handleBypassWarnings}>
+                    Suppress Warnings / Вимкнути попередження
+                  </button>
+                </div>
+              )}
               <div>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>About</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
@@ -376,11 +382,17 @@ function App() {
           if (tab.type === "rdp") {
             return (
               <div key={tab.id} style={{ display: isCurrent ? "flex" : "none", flexDirection: "column", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
-                <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
-                  host={tab.hostname || "127.0.0.1"} port={server?.port || 3389}
-                  credentialId={server?.credential_id}
-                  serverUsername={server?.username || ""}
-                  isActive={isCurrent} />
+                {isWindows ? (
+                  <RdpTab sessionId={tab.id} serverId={tab.serverId || ""}
+                    host={tab.hostname || "127.0.0.1"} port={server?.port || 3389}
+                    credentialId={server?.credential_id}
+                    serverUsername={server?.username || ""}
+                    isActive={isCurrent} />
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-secondary)", fontSize: "0.95rem", textAlign: "center", padding: "20px" }}>
+                    RDP connections are only supported on Windows. Use SSH or SFTP to reach this host from this platform.
+                  </div>
+                )}
               </div>
             );
           }
@@ -566,7 +578,7 @@ function App() {
                     serverForm.setSrvPort(val === 'ssh' ? 22 : 3389);
                   }}>
                     <option value="ssh">SSH</option>
-                    <option value="rdp">RDP</option>
+                    <option value="rdp" disabled={!isWindows}>RDP{!isWindows ? " (Windows only)" : ""}</option>
                   </select>
                 </div>
               </div>
@@ -616,7 +628,7 @@ function App() {
                   </div>
                 </div>
               )}
-              {serverForm.srvProto === 'rdp' && (
+              {isWindows && serverForm.srvProto === 'rdp' && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "12px", backgroundColor: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-color)", borderRadius: "6px", marginTop: "5px", marginBottom: "5px" }}>
                   <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--accent-purple)" }}>RDP Connection Settings (Devolutions style)</span>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>

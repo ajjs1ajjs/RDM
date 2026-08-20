@@ -17,6 +17,7 @@ interface ServerTableProps {
   onToggleFavorite: (id: string) => void;
   onConnectSFTP: (server: Server) => void;
   onQuickConnect?: (host: string, protocol: string) => void;
+  isWindows?: boolean;
 }
 
 export const ServerTable: React.FC<ServerTableProps> = ({
@@ -34,6 +35,7 @@ export const ServerTable: React.FC<ServerTableProps> = ({
   onToggleFavorite,
   onConnectSFTP,
   onQuickConnect,
+  isWindows = true,
 }) => {
   const [search, setSearch] = useState<string>("");
 
@@ -89,9 +91,11 @@ export const ServerTable: React.FC<ServerTableProps> = ({
         {search.trim() !== "" && onQuickConnect && (
           <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: "10px", backgroundColor: "rgba(0, 0, 0, 0.2)" }}>
             <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>Quick connect to <strong>{search}</strong>:</span>
-            <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "0.85rem" }} onClick={() => onQuickConnect(search, "rdp")}>
-              <Monitor size={14} style={{ marginRight: "4px" }}/> RDP
-            </button>
+            {isWindows && (
+              <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "0.85rem" }} onClick={() => onQuickConnect(search, "rdp")}>
+                <Monitor size={14} style={{ marginRight: "4px" }}/> RDP
+              </button>
+            )}
             <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "0.85rem" }} onClick={() => onQuickConnect(search, "ssh")}>
               <Terminal size={14} style={{ marginRight: "4px" }}/> SSH
             </button>

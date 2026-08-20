@@ -1,0 +1,81 @@
+name: RDM Cross-Platform Release
+
+# Кроссплатформенні збірки RDM Manager (Linux/macOS) — артефакти прив'язуються
+# до GitHub-релізу того ж тега (Windows-версію збирає і заливає release.ps1: exe+MSI).
+# RDP працює лише на Windows; SSH/SFTP/vault — усюди.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux (deb + AppImage)
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: npm
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install frontend dependencies
+      run: npm ci
+
+    - name: Build bundles
+      run: npm run tauri build -- --config src-tauri/tauri.linux.conf.json
+
+    - name: Attach Linux artifacts to release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          src-tauri/target/release/bundle/deb/*.deb
+          src-tauri/target/release/bundle/appimage/*.AppImage
+
+  build-macos:
+    name: Build macOS (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-latest, macos-13 ]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: npm
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install frontend dependencies
+      run: npm ci
+
+    - name: Build bundles
+      run: npm run tauri build -- --config src-tauri/tauri.macos.conf.json
+
+    - name: Attach macOS artifacts to release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          src-tauri/target/release/bundle/macos/*.app
+          src-tauri/target/release/bundle/dmg/*.dmg

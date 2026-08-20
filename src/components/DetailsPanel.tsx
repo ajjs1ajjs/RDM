@@ -9,6 +9,7 @@ interface DetailsPanelProps {
   credentials: Credential[];
   onConnect: (server: Server) => void;
   onEdit: (server: Server) => void;
+  isWindows?: boolean;
 }
 
 export const DetailsPanel: React.FC<DetailsPanelProps> = ({
@@ -16,6 +17,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
   credentials,
   onConnect,
   onEdit,
+  isWindows = true,
 }) => {
   const dialogs = useDialogs();
   const [history, setHistory] = useState<ConnectionHistory[]>([]);
@@ -167,7 +169,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
         </div>
       </div>
 
-      {server.protocol === 'rdp' && (
+      {isWindows && server.protocol === 'rdp' && (
         <div>
           <div className="details-section-title">RDP Redirection Settings</div>
           <div className="details-row">
@@ -268,9 +270,9 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({
       <div>
         <div className="details-section-title">Quick Tasks</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <button className="btn btn-primary" onClick={() => onConnect(server)}>
+          <button className="btn btn-primary" disabled={!isWindows && server.protocol === 'rdp'} onClick={() => onConnect(server)}>
             <Terminal size={14} />
-            <span>Connect Shell / Session</span>
+            <span>{server.protocol === 'rdp' && !isWindows ? "RDP requires Windows" : "Connect Shell / Session"}</span>
           </button>
           <button className="btn btn-secondary" onClick={() => onEdit(server)}>
             <span>Edit Configuration</span>
