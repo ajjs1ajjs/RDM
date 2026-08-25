@@ -1,12 +1,21 @@
-# RDM Manager (Remote Connection Manager)
+<div align="center">
 
-<p align="center">
-  <img src="docs/banner.svg" width="100%" alt="RDM Manager">
-</p>
+# RDM Manager
 
-Легкий, швидкий та безпечний менеджер віддалених підключень для SRE та DevOps інженерів. Є сучасною альтернативою Devolutions Remote Desktop Manager, але без Electron-пожирання пам'яті (RAM bloat). Побудований на базі Tauri v2, Rust, React та SQLite.
+### Remote Connection Manager for SRE and DevOps
 
-## 🖥️ Скріншоти
+<img src="docs/banner.svg" width="100%" alt="RDM Manager">
+
+Легкий, швидкий та безпечний менеджер віддалених підключень для SRE та DevOps інженерів. Побудований на базі Tauri v2, Rust, React та SQLite.
+
+[![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-stable-111827?logo=rust)](https://www.rust-lang.org/)
+[![React](https://img.shields.io/badge/React-19-20232a?logo=react)](https://react.dev/)
+[![License](https://img.shields.io/badge/license-MIT-26A69A)](LICENSE)
+
+</div>
+
+## 🖼️ Screenshots
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" width="49%" alt="Connections Directory">
