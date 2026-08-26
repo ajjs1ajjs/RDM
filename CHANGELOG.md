@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.80
+
+- CI: новий workflow `ci.yml` на push/PR — type-check та збірка фронтенду (tsc + vite), `cargo check`, `cargo clippy` на ubuntu і windows
+- Windows тепер збирається в CI: реліз-тег автоматично публікує NSIS-інсталятор, MSI та portable ZIP (раніше Windows-збірка робилась лише локально)
+- GitHub Actions закріплені на повні commit SHA (supply-chain безпека)
+- У всіх jobs релізу додано кеш Rust (`Swatinem/rust-cache`) — помітно швидші повторні збірки
+
 ## v0.1.79
 
 - Cross-platform release: builds for Linux (.deb, AppImage) and macOS (.dmg) in addition to Windows (NSIS/MSI); GitHub Actions attaches Linux/macOS artifacts to each tag release automatically
