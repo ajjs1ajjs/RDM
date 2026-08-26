@@ -100,12 +100,8 @@ jobs:
           src-tauri/target/release/bundle/appimage/*.AppImage
 
   build-macos:
-    name: Build macOS (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ macos-latest, macos-13 ]
-    runs-on: ${{ matrix.os }}
+    name: Build macOS
+    runs-on: macos-latest
     permissions:
       contents: write
 
