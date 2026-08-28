@@ -55,6 +55,8 @@ jobs:
     - name: Attach Windows artifacts to release
       uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
       with:
+        repository: ajjs1ajjs/RDM
+        token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         files: |
           src-tauri/target/release/bundle/nsis/*.exe
           src-tauri/target/release/bundle/msi/*.msi
@@ -95,6 +97,8 @@ jobs:
     - name: Attach Linux artifacts to release
       uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
       with:
+        repository: ajjs1ajjs/RDM
+        token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         files: |
           src-tauri/target/release/bundle/deb/*.deb
           src-tauri/target/release/bundle/appimage/*.AppImage
@@ -129,6 +133,8 @@ jobs:
     - name: Attach macOS artifacts to release
       uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
       with:
+        repository: ajjs1ajjs/RDM
+        token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         files: |
           src-tauri/target/release/bundle/macos/*.app
           src-tauri/target/release/bundle/dmg/*.dmg
