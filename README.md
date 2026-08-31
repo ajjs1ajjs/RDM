@@ -1,4 +1,15 @@
-<div align="center">
+﻿<div align="center">
+
+# RDM Manager — Source Code
+
+[![Deployed to](https://img.shields.io/badge/Deployed_to-RDM-blue)](https://github.com/ajjs1ajjs/RDM)
+[![Website](https://img.shields.io/badge/Website-ajjs1ajjs.github.io%2FRDM-green)](https://ajjs1ajjs.github.io/RDM/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/ajjs1ajjs/RDM-source/ci.yml?label=CI)](https://github.com/ajjs1ajjs/RDM-source/actions)
+
+> **Це репозиторій з вихідним кодом RDM Manager remote connection manager.**
+> Готовий продукт деплоїться в: **https://github.com/ajjs1ajjs/RDM**
+> Офіційний сайт: **https://ajjs1ajjs.github.io/RDM/**
 
 # RDM Manager
 
@@ -11,10 +22,9 @@
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-stable-111827?logo=rust)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/React-19-20232a?logo=react)](https://react.dev/)
-[![License](https://img.shields.io/badge/license-MIT-26A69A)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-26A69A)](LICENSE)
 
 </div>
-
 ## 🖼️ Screenshots
 
 <p align="center">
@@ -26,7 +36,7 @@
 
 ## 🚀 Основний функціонал
 * **SSH-підключення (Linux)**: вбудований термінал на базі `xterm.js` із автоматичною підгонкою розміру сітки, що працює через системний PTY на Rust. Автозаповнення паролів/парольних фраз та робота з тимчасовими файлами приватних ключів (які безслідно видаляються з диска відразу після закриття сесії).
-* **RDP-підключення (Windows)**: вбудовані у вкладки додатка RDP-сесії на базі нативного клієнта `mstsc`. Завдяки Win32 reparenting та маніпулюванню стилями вікон, сесія інтегрується безпосередньо у вікно RDM Manager (як у Devolutions RDM) та підтримує плавне масштабування (`smart sizing`) при зміні розмірів вкладки чи приховуванні бічного сайдбара.
+* **RDP-підключення (Windows)**: вбудовані у вкладки додатку RDP-сесії на базі нативного клієнта `mstsc`. Завдяки Win32 reparenting та маніпулюванню стилями вікон, сесія інтегрується безпосередньо у вікно RDM Manager (як у Devolutions RDM) та підтримує плавне масштабування (`smart sizing`) при зміні розмірів вкладки чи приховуванні бічного сайдбара.
 * **Сейф облікових записів (Credential Vault)**: безпечне зберігання логінів, паролів та SSH-ключів із AES-256-GCM шифруванням.
 * **Командна палітра (Ctrl+P / Ctrl+K)**: швидкий пошук та підключення до будь-якого сервера без миші.
 * **Групування та теги**: ієрархічне дерево папок (наприклад, `Production/Linux`) та швидке фільтрування за смарт-тегами.
