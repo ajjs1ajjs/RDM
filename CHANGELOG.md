@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.83
+
+- **Платформи:** збірки лише для Windows (NSIS/MSI) та macOS (DMG); видалено Ubuntu/Linux з CI та релізу
+- Оновлено README: прибрано Linux з таблиці платформ та описів безпеки
+
 ## v0.1.80
 
 - CI: новий workflow `ci.yml` на push/PR — type-check та збірка фронтенду (tsc + vite), `cargo check`, `cargo clippy` на ubuntu і windows

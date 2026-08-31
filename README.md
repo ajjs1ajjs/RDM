@@ -51,15 +51,14 @@
 | Платформа | SSH / SFTP | Credential Vault | RDP |
 |-----------|-----------|------------------|-----|
 | Windows   | ✅         | ✅ (Credential Manager) | ✅ |
-| Linux     | ✅         | ✅ (Secret Service / gnome-keyring / KWallet) | ❌ |
 | macOS     | ✅         | ✅ (Keychain) | ❌ |
 
-RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. На Linux/macOS інтерфейс RDP автоматично приховується, а SSH/SFTP та сейф облікових записів повністю функціонують. Розповсюдження: Windows (NSIS/MSI), Linux (.deb / AppImage), macOS (.dmg).
+RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. На macOS інтерфейс RDP автоматично приховується, а SSH/SFTP та сейф облікових записів повністю функціонують. Розповсюдження: Windows (NSIS/MSI), macOS (.dmg).
 
 ---
 
 ## 🔒 Архітектура безпеки
-1. **KEK (Key Encryption Key)**: Випадковий 256-бітний ключ шифрування генерується локально (OS CSPRNG) і **зберігається в системному сховищі ключів ОС (OS keyring)** — Windows Credential Manager, macOS Keychain або Linux Secret Service (gnome-keyring/KWallet). У базі даних зберігається лише маркер використання сховища, а не сам ключ. Існуючі сейфи, створені з Windows DPAPI, автоматично мігруються в ключове сховище при першому запуску.
+1. **KEK (Key Encryption Key)**: Випадковий 256-бітний ключ шифрування генерується локально (OS CSPRNG) і **зберігається в системному сховищі ключів ОС (OS keyring)** — Windows Credential Manager або macOS Keychain. У базі даних зберігається лише маркер використання сховища, а не сам ключ. Існуючі сейфи, створені з Windows DPAPI, автоматично мігруються в ключове сховище при першому запуску.
 2. **AES-256-GCM**: Облікові дані шифруються за допомогою симетричного алгоритму AES-256-GCM із випадковим 12-байтовим nonce.
 3. **Безпека пам'яті**: Ключ дешифрування тримається виключно в оперативній пам'яті бекенду Rust та миттєво занулюється (zeroized) при виході або блокуванні сейфа.
 4. **Sentinel**: Контрольний рядок (`rdm-auth-sentinel`) використовується для перевірки цілісності ключа. База даних не зберігає жодного пароля у відкритому вигляді.
@@ -72,7 +71,7 @@ RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюют�
 * **Frontend**: React (TypeScript), CSS
 * **Database**: SQLite (через `rusqlite` з `bundled` збіркою)
 * **Crypto**: PBKDF2-HMAC-SHA256, AES-256-GCM
-* **PTY & Terminal**: `portable-pty` (ConPTY / `/dev/ptmx`), `xterm.js` + `fit-addon`
+* **PTY & Terminal**: `portable-pty` (ConPTY), `xterm.js` + `fit-addon`
 * **Utilities**: `rfd` (Rust File Dialogs), `csv`
 
 ---
