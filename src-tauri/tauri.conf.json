@@ -24,7 +24,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": "windows",
     "resources": ["WebView2Loader.dll"],
     "icon": [
       "icons/32x32.png",
