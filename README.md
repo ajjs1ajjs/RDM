@@ -51,9 +51,8 @@
 | Платформа | SSH / SFTP | Credential Vault | RDP |
 |-----------|-----------|------------------|-----|
 | Windows   | ✅         | ✅ (Credential Manager) | ✅ |
-| macOS     | ✅         | ✅ (Keychain) | ❌ |
 
-RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. На macOS інтерфейс RDP автоматично приховується, а SSH/SFTP та сейф облікових записів повністю функціонують. Розповсюдження: Windows (NSIS/MSI), macOS (.dmg).
+RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. Розповсюдження: Windows (NSIS/MSI/portable).
 
 ---
 
