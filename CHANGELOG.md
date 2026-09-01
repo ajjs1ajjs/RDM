@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.85
+
+- **Виправлено Windows-збірку:** повернуто `bundle.targets = ["nsis", "msi"]` у `tauri.conf.json` (у v0.1.84 було створено хибне невалідне значення `"windows"`, яке ламало `cargo check`/`tauri build` і залишало реліз без Windows-інсталятора). Тепер NSIS+MSI збираються коректно.
+- Відкочено хибні артефакти релізу v0.1.84; нова версія — v0.1.85.
+- Виправлено шлях до бази даних у README (`com.admin.rdm-manager` замість застарілого `com.admin.tauri-app`)
+- Прибрано застарілий конфіг збірки `src-tauri/tauri.linux.conf.json` (Linux повністю видалено в 0.1.83)
+
 ## v0.1.83
 
 - **Платформи:** збірки лише для Windows (NSIS/MSI) та macOS (DMG); видалено Ubuntu/Linux з CI та релізу

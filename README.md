@@ -5,7 +5,7 @@
 [![Deployed to](https://img.shields.io/badge/Deployed_to-RDM-blue)](https://github.com/ajjs1ajjs/RDM)
 [![Website](https://img.shields.io/badge/Website-ajjs1ajjs.github.io%2FRDM-green)](https://ajjs1ajjs.github.io/RDM/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/ajjs1ajjs/RDM-source/ci.yml?label=CI)](https://github.com/ajjs1ajjs/RDM-source/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/ajjs1ajjs/RDM/ci.yml?label=CI)](https://github.com/ajjs1ajjs/RDM/actions)
 
 > **Це репозиторій з вихідним кодом RDM Manager remote connection manager.**
 > Готовий продукт деплоїться в: **https://github.com/ajjs1ajjs/RDM**
@@ -100,6 +100,6 @@ npm run tauri build
 
 ### Де зберігається база даних?
 Локальний файл бази даних зберігається за шляхом:
-`C:\Users\<Ваш_Користувач>\AppData\Roaming\com.admin.tauri-app\rdm.db`
+`C:\Users\<Ваш_Користувач>\AppData\Roaming\com.admin.rdm-manager\rdm.db`
 
 Увага: файл бази прив'язаний до поточного користувача через **системне сховище ключів ОС (keyring)**. Копіювання файлу працює як бекап на тій самій машині, але для перенесення/синхронізації між пристроями використовуйте **Експорт/Імпорт резервної копії** (Settings → Backup & Restore) — він захищається паролем і не залежить від локального сховища ключів.
