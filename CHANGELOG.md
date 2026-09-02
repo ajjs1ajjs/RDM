@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.86
+
+- **Виправлено GitHub Pages:** змінено `path: '.'` на `path: './dist'` у `pages.yml` — раніше весь репозиторій деплоївся на GitHub Pages замість лише зібраного `dist/`
+- **Додано structured logging:** додано `tracing` та `tracing-subscriber` до Rust бекенду для покращеної спостережувальності
+- **Оновлено README:** додано примітку про macOS підтримку (код підтримує Keychain, але CI збірка наразі лише для Windows)
+- **Додано логування SSH з'єднань:** тепер ініціація SSH підключень логується з деталями (host, port, username)
+
 ## v0.1.85
 
 - **Виправлено Windows-збірку:** повернуто `bundle.targets = ["nsis", "msi"]` у `tauri.conf.json` (у v0.1.84 було створено хибне невалідне значення `"windows"`, яке ламало `cargo check`/`tauri build` і залишало реліз без Windows-інсталятора). Тепер NSIS+MSI збираються коректно.

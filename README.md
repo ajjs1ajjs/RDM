@@ -48,11 +48,13 @@
 
 ## 🖥️ Підтримка платформ
 
-| Платформа | SSH / SFTP | Credential Vault | RDP |
-|-----------|-----------|------------------|-----|
-| Windows   | ✅         | ✅ (Credential Manager) | ✅ |
+| Платформа | SSH / SFTP | Credential Vault | RDP | CI збірка |
+|-----------|-----------|------------------|-----|-----------|
+| Windows   | ✅         | ✅ (Credential Manager) | ✅ | ✅ (NSIS/MSI/portable) |
 
 RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows. Розповсюдження: Windows (NSIS/MSI/portable).
+
+**Примітка:** Код має підтримку macOS Keychain (через `keyring` crate), але CI збірка для macOS наразі налаштована лише для Windows. macOS збірка може бути додана в майбутньому.
 
 ---
 

@@ -15,6 +15,20 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
+/// Initialize tracing subscriber for structured logging
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
+}
+
 // State definitions
 pub struct DbState {
     pub conn: Mutex<rusqlite::Connection>,
@@ -747,6 +761,8 @@ fn connect_ssh(
 
     let auth = resolve_auth(&conn, kek, &server_id, &credential_id, &username)?;
     let final_username = auth.username.unwrap_or(username);
+
+    tracing::info!(host = %host, port = %port, username = %final_username, "Initiating SSH connection");
 
     let res = ssh::connect_ssh(
         app,
@@ -2451,11 +2467,15 @@ fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_tracing();
+    tracing::info!("RDM Manager starting up");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
+            tracing::debug!(app_dir = %app_dir.display(), "Initializing database");
             let conn = db::init_db(app_dir.clone())?;
             let session_state = SessionState::new();
 
@@ -2467,7 +2487,7 @@ pub fn run() {
             // Auto-setup vault with a random OS-keyring-protected key.
             // Password is only required for export/import operations.
             if let Err(e) = auto_setup_vault(&conn, &session_state) {
-                eprintln!("Auto-setup vault warning: {}", e);
+                tracing::warn!("Auto-setup vault warning: {}", e);
             }
 
             app.manage(DbState {
