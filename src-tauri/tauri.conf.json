@@ -25,6 +25,9 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
+    "signing": {
+      "key": null
+    },
     "resources": ["WebView2Loader.dll"],
     "icon": [
       "icons/32x32.png",
