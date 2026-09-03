@@ -153,7 +153,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
             oldSettings.selectionBackground !== newSettings.selectionBackground ||
             oldSettings.selectionForeground !== newSettings.selectionForeground
           ) {
-            t.options.theme = {
+            (t.options as any).theme = {
               background: newSettings.background,
               foreground: newSettings.foreground,
               cursor: newSettings.cursor,
@@ -179,10 +179,10 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
             };
           }
           if (oldSettings.cursorStyle !== newSettings.cursorStyle) {
-            t.setOption("cursorStyle", newSettings.cursorStyle);
+            (t.options as any).cursorStyle = newSettings.cursorStyle;
           }
           if (oldSettings.cursorBlink !== newSettings.cursorBlink) {
-            t.setOption("cursorBlink", newSettings.cursorBlink);
+            (t.options as any).cursorBlink = newSettings.cursorBlink;
           }
         } catch {}
       }
