@@ -133,14 +133,18 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       const t = xtermRef.current;
       if (!t) return;
 
-      const fontChanged =
+      const fontSizeChanged =
         oldSettings.fontSize !== newSettings.fontSize ||
-        oldSettings.fontFamily !== newSettings.fontFamily ||
-        oldSettings.lineHeight !== newSettings.lineHeight;
+        oldSettings.fontFamily !== newSettings.fontFamily;
+      const lineHeightChanged = oldSettings.lineHeight !== newSettings.lineHeight;
 
-      if (fontChanged) {
+      if (fontSizeChanged) {
         window.location.reload();
         return;
+      }
+
+      if (lineHeightChanged) {
+        (t.options as any).lineHeight = newSettings.lineHeight;
       }
 
       if (
