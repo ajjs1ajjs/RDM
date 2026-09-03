@@ -636,6 +636,17 @@ body {
   background-color: #0b0f19 !important;
 }
 
+/* Make selection highly visible — xterm draws it on canvas, but reinforce via DOM */
+.terminal-pad .xterm .xterm-selection {
+  background-color: #00f2fe !important;
+  opacity: 1 !important;
+}
+
+.terminal-pad .xterm ::selection {
+  background: #00f2fe !important;
+  color: #000 !important;
+}
+
 /* Make cursor clearly visible (xterm draws cursor on a canvas, but selection highlights are DOM) */
 .terminal-pad .xterm .xterm-helper-textarea {
   caret-color: #00f2fe;

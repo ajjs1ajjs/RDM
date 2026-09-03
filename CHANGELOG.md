@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.91
+
+- **Виділення тексту тепер чітко видно:** `selectionBackground` тепер суцільний бірюзовий `#00f2fe` (був `rgba(0,242,254,0.45)` — на темному фоні зливався з foreground). `selectionForeground: #000` — чорний текст на бірюзовому фоні, максимальний контраст. Додано `selectionInactiveBackground` для випадку, коли виділення втрачає фокус
+- **Зменшено шрифт терміналу** з 15 до 13, `lineHeight: 1.25 → 1.2` — щільніше, більше рядків поміщається
+- **CSS-посилення виділення:** `.xterm .xterm-selection` і `::selection` тепер мають `background: #00f2fe !important; color: #000 !important` — навіть якщо WebView2 погано рендерить alpha
+
 ## v0.1.90
 
 - **Виправлено TypeScript build:** прибрано `fontWeightLight` — це не валідна опція xterm.js v5 (наявні тільки `fontWeight` і `fontWeightBold`). Ця помилка ламала `tsc && vite build` у релізі v0.1.89
