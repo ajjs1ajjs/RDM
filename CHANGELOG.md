@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.89
+
+- **Виправлено шрифт терміналу:** xterm не підхоплював `var(--font-mono)` (CSS-змінна визначена на `:root`, а xterm передає fontFamily у свій canvas без резолву). Тепер прямий fallback-ланцюжок `'JetBrains Mono', Consolas, 'Courier New', monospace`
+- **Виправлено CSP:** `font-src` і `style-src` тепер дозволяють `fonts.googleapis.com` / `fonts.gstatic.com`. Без цього JetBrains Mono з `@import` у `App.css` блокувався WebView2, і весь UI рендерився дефолтним шрифтом
+- **Виправлено білий фон у xterm:** додано `background-color: #0b0f19 !important` для `.xterm-viewport`, `.xterm-screen` і `.xterm canvas` — на світлій WebView2-підкладці канва рендерився з білим тлом
+
 ## v0.1.88
 
 - **Покращено видимість терміналу (xterm):** курсор тепер суцільний бірюзовий блок з контрастним "вікном" під символом — добре видно де саме курсор і що пишеш
