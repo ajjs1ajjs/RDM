@@ -9,7 +9,6 @@
 
 > **Це репозиторій з вихідним кодом RDM Manager remote connection manager.**
 > Готовий продукт деплоїться в: **https://github.com/ajjs1ajjs/RDM**
-> Офіційний сайт: **https://ajjs1ajjs.github.io/RDM/**
 
 # RDM Manager
 
