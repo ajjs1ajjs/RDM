@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.87
+
+- **Security audit & hardening:** проведено повний production-grade аудит коду та виправлено критичні вразливості
+  - **AES-256-GCM:** покращено документацію щодо управління nonce
+  - **Vault reset:** додано попередження про втрату даних у документацію функції
+  - **SSH private key permissions:** покращено обробку помилок icacls на Windows з fallback механізмом
+  - **RDP credentials:** додано перевірку повернення значень CredWriteW/CredDeleteW та логування помилок
+  - **CSP:** додано `frame-ancestors`, `base-uri`, `form-action`, `upgrade-insecure-requests` директиви
+  - **Rate limiting:** додано exponential backoff для невдалих спроб розблокування сейфу
+  - **SFTP parsing:** переписано парсинг `ls` виводу з підтримкою різних форматів та імен файлів з пробілами
+  - **Type validation:** додано валідацію протоколу (ssh/rdp) при створенні сервера
+  - **Error messages:** замінено детальні повідомлення про помилки на generic повідомлення
+  - **Tauri 2.11.5:** оновлено залежності, виправлено `tauri.conf.json` (видалено deprecated `signing` поле)
+
 ## v0.1.86
 
 - **Виправлено GitHub Pages:** змінено `path: '.'` на `path: './dist'` у `pages.yml` — раніше весь репозиторій деплоївся на GitHub Pages замість лише зібраного `dist/`
