@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.90
+
+- **Виправлено TypeScript build:** прибрано `fontWeightLight` — це не валідна опція xterm.js v5 (наявні тільки `fontWeight` і `fontWeightBold`). Ця помилка ламала `tsc && vite build` у релізі v0.1.89
+
 ## v0.1.89
 
 - **Виправлено шрифт терміналу:** xterm не підхоплював `var(--font-mono)` (CSS-змінна визначена на `:root`, а xterm передає fontFamily у свій canvas без резолву). Тепер прямий fallback-ланцюжок `'JetBrains Mono', Consolas, 'Courier New', monospace`

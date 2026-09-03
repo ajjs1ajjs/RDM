@@ -50,7 +50,6 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       fontSize: 15,
       fontWeight: 400,
       fontWeightBold: 700,
-      fontWeightLight: 300,
       lineHeight: 1.25,
       letterSpacing: 0,
       allowProposedApi: true,
