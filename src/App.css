@@ -579,7 +579,10 @@ body {
   width: 100%;
   height: 100%;
   min-height: 0;
-  background-color: #000;
+  background-color: #0b0f19;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .terminal-header {
@@ -600,23 +603,41 @@ body {
   min-height: 0;
   overflow: hidden;
   position: relative;
+  background-color: #0b0f19;
 }
 
 .terminal-pad {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: 8px;
-  right: 8px;
+  top: 10px;
+  bottom: 10px;
+  left: 12px;
+  right: 12px;
   overflow: hidden;
 }
 
 .terminal-pad .xterm {
   height: 100%;
+  padding: 2px;
 }
 
 .terminal-pad .xterm-viewport {
-  border-radius: 4px;
+  background-color: #0b0f19 !important;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.terminal-pad .xterm-screen {
+  border-radius: 6px;
+}
+
+/* Make cursor clearly visible (xterm draws cursor on a canvas, but selection highlights are DOM) */
+.terminal-pad .xterm .xterm-helper-textarea {
+  caret-color: #00f2fe;
+}
+
+.terminal-pad ::selection {
+  background: rgba(0, 242, 254, 0.45);
+  color: #ffffff;
 }
 
 /* Terminal Context Menu */
