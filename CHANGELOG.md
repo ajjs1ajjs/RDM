@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.92
+
+- **Виправлено TypeScript build:** прибрано `selectionBackgroundOpaque` — це не валідна опція xterm.js (наявні тільки `selectionBackground`, `selectionForeground`, `selectionInactiveBackground`, `selectionInactiveForeground`). Ця помилка ламала `tsc && vite build` у релізі v0.1.91
+
 ## v0.1.91
 
 - **Виділення тексту тепер чітко видно:** `selectionBackground` тепер суцільний бірюзовий `#00f2fe` (був `rgba(0,242,254,0.45)` — на темному фоні зливався з foreground). `selectionForeground: #000` — чорний текст на бірюзовому фоні, максимальний контраст. Додано `selectionInactiveBackground` для випадку, коли виділення втрачає фокус

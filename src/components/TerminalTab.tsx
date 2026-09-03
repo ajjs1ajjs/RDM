@@ -60,7 +60,6 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         cursor: "#00f2fe",
         cursorAccent: "#0b0f19",
         selectionBackground: "#00f2fe",
-        selectionBackgroundOpaque: "#00f2fe",
         selectionForeground: "#000000",
         selectionInactiveBackground: "#3a4150",
         selectionInactiveForeground: "#e6e9ef",
