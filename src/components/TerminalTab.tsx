@@ -130,8 +130,60 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       if (e.key === STORAGE_KEY && e.newValue && xtermRef.current) {
         try {
           const newSettings = JSON.parse(e.newValue);
+          const oldSettings = settingsRef.current;
           settingsRef.current = newSettings;
-          xtermRef.current.updateOptions(buildXtermOptions(newSettings));
+
+          const term = xtermRef.current;
+          const fontChanged =
+            oldSettings.fontSize !== newSettings.fontSize ||
+            oldSettings.fontFamily !== newSettings.fontFamily ||
+            oldSettings.lineHeight !== newSettings.lineHeight;
+
+          if (fontChanged) {
+            window.location.reload();
+            return;
+          }
+
+          const t = term;
+          if (
+            oldSettings.background !== newSettings.background ||
+            oldSettings.foreground !== newSettings.foreground ||
+            oldSettings.cursor !== newSettings.cursor ||
+            oldSettings.cursorAccent !== newSettings.cursorAccent ||
+            oldSettings.selectionBackground !== newSettings.selectionBackground ||
+            oldSettings.selectionForeground !== newSettings.selectionForeground
+          ) {
+            t.options.theme = {
+              background: newSettings.background,
+              foreground: newSettings.foreground,
+              cursor: newSettings.cursor,
+              cursorAccent: newSettings.cursorAccent,
+              selectionBackground: newSettings.selectionBackground,
+              selectionForeground: newSettings.selectionForeground,
+              black: newSettings.black,
+              red: newSettings.red,
+              green: newSettings.green,
+              yellow: newSettings.yellow,
+              blue: newSettings.blue,
+              magenta: newSettings.magenta,
+              cyan: newSettings.cyan,
+              white: newSettings.white,
+              brightBlack: newSettings.brightBlack,
+              brightRed: newSettings.brightRed,
+              brightGreen: newSettings.brightGreen,
+              brightYellow: newSettings.brightYellow,
+              brightBlue: newSettings.brightBlue,
+              brightMagenta: newSettings.brightMagenta,
+              brightCyan: newSettings.brightCyan,
+              brightWhite: newSettings.brightWhite,
+            };
+          }
+          if (oldSettings.cursorStyle !== newSettings.cursorStyle) {
+            t.setOption("cursorStyle", newSettings.cursorStyle);
+          }
+          if (oldSettings.cursorBlink !== newSettings.cursorBlink) {
+            t.setOption("cursorBlink", newSettings.cursorBlink);
+          }
         } catch {}
       }
     };
