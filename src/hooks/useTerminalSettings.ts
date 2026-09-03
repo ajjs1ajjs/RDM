@@ -62,6 +62,8 @@ const DEFAULTS: TerminalSettings = {
 
 const STORAGE_KEY = "rdm_terminal_settings";
 
+export const TERMINAL_SETTINGS_EVENT = "rdm_terminal_settings_changed";
+
 export const useTerminalSettings = () => {
   const [settings, setSettings] = useState<TerminalSettings>(() => {
     try {
@@ -72,8 +74,6 @@ export const useTerminalSettings = () => {
     } catch {}
     return DEFAULTS;
   });
-
-  export const TERMINAL_SETTINGS_EVENT = "rdm_terminal_settings_changed";
 
   useEffect(() => {
     try {
