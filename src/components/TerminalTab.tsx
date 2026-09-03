@@ -1,10 +1,51 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Terminal } from "xterm";
+import { Terminal, ITerminalOptions } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Copy, Clipboard } from "lucide-react";
 import "xterm/css/xterm.css";
+import { TerminalSettings } from "../hooks/useTerminalSettings";
+
+const STORAGE_KEY = "rdm_terminal_settings";
+
+const DEFAULT_SETTINGS: TerminalSettings = {
+  fontSize: 14,
+  fontFamily: "var(--font-mono)",
+  lineHeight: 1.2,
+  cursorStyle: "block",
+  cursorBlink: true,
+  background: "#05070d",
+  foreground: "#f5f6f9",
+  cursor: "var(--accent-cyan)",
+  cursorAccent: "#05070d",
+  selectionBackground: "rgba(0, 242, 254, 0.35)",
+  selectionForeground: "#ffffff",
+  black: "#000000",
+  red: "#ff453a",
+  green: "#30d158",
+  yellow: "#ffd60a",
+  blue: "#0a84ff",
+  magenta: "#bf5af2",
+  cyan: "#5ffd6b",
+  white: "#f5f6f9",
+  brightBlack: "#5e6675",
+  brightRed: "#ff6961",
+  brightGreen: "#30d158",
+  brightYellow: "#ffd60a",
+  brightBlue: "#409cff",
+  brightMagenta: "#da8eff",
+  brightCyan: "#00f2fe",
+  brightWhite: "#ffffff",
+};
+
+const loadSettings = (): TerminalSettings => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+  } catch {}
+  return DEFAULT_SETTINGS;
+};
 
 interface TerminalTabProps {
   sessionId: string;
@@ -27,50 +68,55 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isConnectedRef = useRef(false);
+  const settingsRef = useRef<TerminalSettings>(loadSettings());
   const [, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
 
+  const buildXtermOptions = (s: TerminalSettings): ITerminalOptions => ({
+    cursorBlink: s.cursorBlink,
+    cursorStyle: s.cursorStyle as "block" | "underline" | "bar",
+    scrollback: 100000,
+    scrollOnUserInput: true,
+    fontFamily: s.fontFamily,
+    fontSize: s.fontSize,
+    lineHeight: s.lineHeight,
+    rightClickSelectsWord: true,
+    theme: {
+      background: s.background,
+      foreground: s.foreground,
+      cursor: s.cursor,
+      cursorAccent: s.cursorAccent,
+      selectionBackground: s.selectionBackground,
+      selectionForeground: s.selectionForeground,
+      black: s.black,
+      red: s.red,
+      green: s.green,
+      yellow: s.yellow,
+      blue: s.blue,
+      magenta: s.magenta,
+      cyan: s.cyan,
+      white: s.white,
+      brightBlack: s.brightBlack,
+      brightRed: s.brightRed,
+      brightGreen: s.brightGreen,
+      brightYellow: s.brightYellow,
+      brightBlue: s.brightBlue,
+      brightMagenta: s.brightMagenta,
+      brightCyan: s.brightCyan,
+      brightWhite: s.brightWhite,
+    },
+  });
+
   // Strip control/escape sequences from untrusted text written into the terminal
-  // to prevent terminal escape-sequence injection (fake prompts, screen control).
   const sanitizeTerminalText = (s: string) =>
     s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u001B]/g, "");
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    // Initialize xterm.js
-    const term = new Terminal({
-      cursorBlink: true,
-      scrollback: 100000,
-      scrollOnUserInput: true,
-      fontFamily: "var(--font-mono)",
-      fontSize: 14,
-      rightClickSelectsWord: true,
-      theme: {
-        background: "#05070d",
-        foreground: "#f5f6f9",
-        cursor: "var(--accent-cyan)",
-        selectionBackground: "rgba(0, 242, 254, 0.65)",
-        selectionForeground: "#ffffff",
-        black: "#000000",
-        red: "#ff453a",
-        green: "#30d158",
-        yellow: "#ffd60a",
-        blue: "#0a84ff",
-        magenta: "#bf5af2",
-        cyan: "#5ffd6b",
-        white: "#f5f6f9",
-        brightBlack: "#5e6675",
-        brightRed: "#ff6961",
-        brightGreen: "#30d158",
-        brightYellow: "#ffd60a",
-        brightBlue: "#409cff",
-        brightMagenta: "#da8eff",
-        brightCyan: "#00f2fe",
-        brightWhite: "#ffffff",
-      },
-    });
+    const s = settingsRef.current;
+    const term = new Terminal(buildXtermOptions(s));
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -78,6 +124,18 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
+
+    // Listen for settings changes from the settings panel (live update)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue && xtermRef.current) {
+        try {
+          const newSettings = JSON.parse(e.newValue);
+          settingsRef.current = newSettings;
+          xtermRef.current.updateOptions(buildXtermOptions(newSettings));
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
 
     // After all queued writes drain, scroll to bottom to keep the prompt visible.
     const writeParsedSub = term.onWriteParsed(() => {
@@ -307,6 +365,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     return () => {
       isDestroyed = true;
       isConnectedRef.current = false;
+      window.removeEventListener("storage", handleStorageChange);
       if (terminalRef.current) {
         resizeObserver.unobserve(terminalRef.current);
       }

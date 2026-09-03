@@ -18,6 +18,8 @@ import { SftpTab } from "./components/SftpTab";
 import { CommandPalette } from "./components/CommandPalette";
 import { Taskbar } from "./components/Taskbar";
 import { useDialogs } from "./components/AppDialogs";
+import { useTerminalSettings } from "./hooks/useTerminalSettings";
+import { TerminalSettingsPanel } from "./components/TerminalSettingsPanel";
 import { Terminal, X } from "lucide-react";
 import "./App.css";
 
@@ -118,6 +120,7 @@ function App() {
   const credentialsCtrl = useCredentials();
   const tabs = useConnectionTabs();
   const isWindows = useIsWindows();
+  const terminalSettings = useTerminalSettings();
 
   const serverForm = useServerForm(
     serversCtrl.selectedFolder,
@@ -323,9 +326,16 @@ function App() {
         </div>
 
         <div style={{ display: tabs.activeTabType === "settings" ? "block" : "none", width: "100%", height: "100%", overflowY: "auto", padding: "20px" }}>
-          <div style={{ padding: "30px", maxWidth: "600px", margin: "0 auto" }} className="glass-card">
+          <div style={{ padding: "30px", maxWidth: "700px", margin: "0 auto" }} className="glass-card">
             <h2 style={{ marginBottom: "20px" }}>Application Settings</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
+              <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
+                <TerminalSettingsPanel
+                  settings={terminalSettings.settings}
+                  onUpdate={terminalSettings.updateSetting}
+                  onReset={terminalSettings.resetToDefaults}
+                />
+              </div>
               <div style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "15px" }}>
                 <h3 style={{ fontSize: "1rem", marginBottom: "8px" }}>Backup & Restore</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "15px" }}>
