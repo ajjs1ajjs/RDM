@@ -125,68 +125,79 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Listen for settings changes from the settings panel (live update)
+    // Apply updated settings to the terminal (used by both storage and custom event)
+    const applySettings = (newSettings: TerminalSettings) => {
+      const oldSettings = settingsRef.current;
+      settingsRef.current = newSettings;
+
+      const t = xtermRef.current;
+      if (!t) return;
+
+      const fontChanged =
+        oldSettings.fontSize !== newSettings.fontSize ||
+        oldSettings.fontFamily !== newSettings.fontFamily ||
+        oldSettings.lineHeight !== newSettings.lineHeight;
+
+      if (fontChanged) {
+        window.location.reload();
+        return;
+      }
+
+      if (
+        oldSettings.background !== newSettings.background ||
+        oldSettings.foreground !== newSettings.foreground ||
+        oldSettings.cursor !== newSettings.cursor ||
+        oldSettings.cursorAccent !== newSettings.cursorAccent ||
+        oldSettings.selectionBackground !== newSettings.selectionBackground ||
+        oldSettings.selectionForeground !== newSettings.selectionForeground
+      ) {
+        (t.options as any).theme = {
+          background: newSettings.background,
+          foreground: newSettings.foreground,
+          cursor: newSettings.cursor,
+          cursorAccent: newSettings.cursorAccent,
+          selectionBackground: newSettings.selectionBackground,
+          selectionForeground: newSettings.selectionForeground,
+          black: newSettings.black,
+          red: newSettings.red,
+          green: newSettings.green,
+          yellow: newSettings.yellow,
+          blue: newSettings.blue,
+          magenta: newSettings.magenta,
+          cyan: newSettings.cyan,
+          white: newSettings.white,
+          brightBlack: newSettings.brightBlack,
+          brightRed: newSettings.brightRed,
+          brightGreen: newSettings.brightGreen,
+          brightYellow: newSettings.brightYellow,
+          brightBlue: newSettings.brightBlue,
+          brightMagenta: newSettings.brightMagenta,
+          brightCyan: newSettings.brightCyan,
+          brightWhite: newSettings.brightWhite,
+        };
+      }
+      if (oldSettings.cursorStyle !== newSettings.cursorStyle) {
+        (t.options as any).cursorStyle = newSettings.cursorStyle;
+      }
+      if (oldSettings.cursorBlink !== newSettings.cursorBlink) {
+        (t.options as any).cursorBlink = newSettings.cursorBlink;
+      }
+    };
+
+    // Listen for settings changes from the settings panel (same window)
+    const handleCustomEvent = (e: Event) => {
+      const ce = e as CustomEvent<TerminalSettings>;
+      if (ce.detail) applySettings(ce.detail);
+    };
+    // Listen for cross-window changes
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue && xtermRef.current) {
+      if (e.key === STORAGE_KEY && e.newValue) {
         try {
-          const newSettings = JSON.parse(e.newValue);
-          const oldSettings = settingsRef.current;
-          settingsRef.current = newSettings;
-
-          const term = xtermRef.current;
-          const fontChanged =
-            oldSettings.fontSize !== newSettings.fontSize ||
-            oldSettings.fontFamily !== newSettings.fontFamily ||
-            oldSettings.lineHeight !== newSettings.lineHeight;
-
-          if (fontChanged) {
-            window.location.reload();
-            return;
-          }
-
-          const t = term;
-          if (
-            oldSettings.background !== newSettings.background ||
-            oldSettings.foreground !== newSettings.foreground ||
-            oldSettings.cursor !== newSettings.cursor ||
-            oldSettings.cursorAccent !== newSettings.cursorAccent ||
-            oldSettings.selectionBackground !== newSettings.selectionBackground ||
-            oldSettings.selectionForeground !== newSettings.selectionForeground
-          ) {
-            (t.options as any).theme = {
-              background: newSettings.background,
-              foreground: newSettings.foreground,
-              cursor: newSettings.cursor,
-              cursorAccent: newSettings.cursorAccent,
-              selectionBackground: newSettings.selectionBackground,
-              selectionForeground: newSettings.selectionForeground,
-              black: newSettings.black,
-              red: newSettings.red,
-              green: newSettings.green,
-              yellow: newSettings.yellow,
-              blue: newSettings.blue,
-              magenta: newSettings.magenta,
-              cyan: newSettings.cyan,
-              white: newSettings.white,
-              brightBlack: newSettings.brightBlack,
-              brightRed: newSettings.brightRed,
-              brightGreen: newSettings.brightGreen,
-              brightYellow: newSettings.brightYellow,
-              brightBlue: newSettings.brightBlue,
-              brightMagenta: newSettings.brightMagenta,
-              brightCyan: newSettings.brightCyan,
-              brightWhite: newSettings.brightWhite,
-            };
-          }
-          if (oldSettings.cursorStyle !== newSettings.cursorStyle) {
-            (t.options as any).cursorStyle = newSettings.cursorStyle;
-          }
-          if (oldSettings.cursorBlink !== newSettings.cursorBlink) {
-            (t.options as any).cursorBlink = newSettings.cursorBlink;
-          }
+          applySettings(JSON.parse(e.newValue));
         } catch {}
       }
     };
+    window.addEventListener("rdm_terminal_settings_changed", handleCustomEvent);
     window.addEventListener("storage", handleStorageChange);
 
     // After all queued writes drain, scroll to bottom to keep the prompt visible.
@@ -418,6 +429,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       isDestroyed = true;
       isConnectedRef.current = false;
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("rdm_terminal_settings_changed", handleCustomEvent);
       if (terminalRef.current) {
         resizeObserver.unobserve(terminalRef.current);
       }

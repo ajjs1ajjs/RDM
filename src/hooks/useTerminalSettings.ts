@@ -73,9 +73,12 @@ export const useTerminalSettings = () => {
     return DEFAULTS;
   });
 
+  export const TERMINAL_SETTINGS_EVENT = "rdm_terminal_settings_changed";
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      window.dispatchEvent(new CustomEvent(TERMINAL_SETTINGS_EVENT, { detail: settings }));
     } catch {}
   }, [settings]);
 
