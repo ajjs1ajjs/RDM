@@ -32,6 +32,9 @@ jobs:
     - name: Install frontend dependencies
       run: npm ci
 
+    - name: Clean Rust build artifacts
+      run: cargo clean --manifest-path src-tauri/Cargo.toml
+
     - name: Build installers
       env:
         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
