@@ -33,7 +33,7 @@ export const SftpTab: React.FC<SftpTabProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFiles = async (path: string) => {
+const fetchFiles = async (path: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -50,27 +50,76 @@ export const SftpTab: React.FC<SftpTabProps> = ({
       const parsedFiles: FileItem[] = [];
 
       for (const line of lines) {
-        // Simple regex to parse `ls -la` output:
-        // drwxr-xr-x 2 root root 4096 Jan 1 00:00 filename
-        const parts = line.split(/\s+/);
-        if (parts.length >= 8 && parts[0].length >= 10 && (parts[0].startsWith('d') || parts[0].startsWith('-'))) {
-          const isDirectory = parts[0].startsWith('d');
-          const permissions = parts[0];
-          const size = parts[4];
-          
-          // Reconstruct the name which might contain spaces
-          const nameIndex = line.indexOf(parts[7], line.indexOf(parts[6]));
-          const name = line.substring(nameIndex).trim();
+        // Skip empty lines
+        if (!line.trim()) continue;
 
-          if (name !== "." && name !== "..") {
-            parsedFiles.push({
-              name,
-              isDirectory,
-              size,
-              date: `${parts[5]} ${parts[6]} ${parts[7]}`, // Roughly works for full-time
-              permissions
-            });
-          }
+        // Parse `ls -la` output format:
+        // -drwxr-xr-x 2 root root 4096 Jan 1 00:00 filename
+        // -rw-r--r-- 1 root root 1234 Jan 1 00:00 filename
+        // Files can have spaces in names, so we need robust parsing
+        
+        // Check if line starts with 'd' (directory) or '-' (file) followed by 9 permission chars
+        const permissionMatch = line.match(/^([d-]{10})\s/);
+        if (!permissionMatch) continue;
+        const isDirectory = permissionMatch[1].startsWith('d');
+        const permissions = permissionMatch[1];
+
+        // After permissions (index 1), we have: n link-count owner group size month day time filename
+        // The filename is everything after the last space-separated component before the line ends
+        // Structure: permissions links owner group size month day time filename
+        
+        // Split carefully - the name might contain spaces
+        const parts = line.split(/\s+/);
+        
+        // Minimum: permission(10) + links(1) + owner + group + size + month(3) + day + time + name
+        // We need at least 8 parts to have valid data
+        if (parts.length < 8) continue;
+        
+        // Verify first part looks like permissions
+        if (parts[0].length < 10) continue;
+        
+        const size = parts[4];
+        
+        // Reconstruct filename from remaining parts
+        // The name starts at different positions depending on how many spaces:
+        // For standard ls: permission links owner group size month day time name
+        // For our format, name is everything after the time field
+        
+        // Find where the name starts - it's after the time (parts[7] should be time or name index varies)
+        // Standard format: drwxr-xr-x 2 root root 4096 Jan 1 00:00 filename
+        // parts: [0]=permissions, [1]=links, [2]=owner, [3]=group, [4]=size, [5]=Jan, [6]=1, [7]=00:00, [8+]=filename
+        
+        // But some formats may have: drwxr-xr-x 2 root root 4096 2024-01-01 00:00 filename
+        // So we need to be flexible
+        
+        // Let's use a simpler approach: find the name by looking for the first part that doesn't look like a number/datetime
+        let nameStartIndex = 8; // Default: parts[8] is the start of filename
+        
+        // Check if parts[5] looks like a month (3 chars) and parts[6] is a number (day)
+        if (parts.length >= 9 && parts[5].length === 3 && !isNaN(Number(parts[6]))) {
+            // Standard format: permissions links owner group size month day time name
+            nameStartIndex = 8;
+        } else if (parts.length >= 8 && parts[5].length === 4 && parts[6].length === 2) {
+            // Alternative format with year: permissions links owner group size year month day time name  
+            // Or: permissions links owner group size month day time name (no year)
+            nameStartIndex = 7;
+        } else {
+            nameStartIndex = 7;
+        }
+        
+        // Handle case where name might start earlier if there's no size field etc.
+        if (nameStartIndex >= parts.length) continue;
+        
+        const name = parts.slice(nameStartIndex).join(' ').trim();
+        
+        if (name !== "." && name !== "..") {
+          parsedFiles.push({
+            name,
+            isDirectory,
+            size,
+            date: `${parts[5]} ${parts[6]} ${parts[7]}`, // Roughly works for full-time
+            permissions
+          });
         }
       }
 

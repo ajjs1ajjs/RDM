@@ -19,15 +19,12 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.github.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
-    "signing": {
-      "key": null
-    },
     "resources": ["WebView2Loader.dll"],
     "icon": [
       "icons/32x32.png",

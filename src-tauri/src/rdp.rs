@@ -188,15 +188,52 @@ fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
     };
 
     unsafe {
-        let _ = CredWriteW(&mut cred, 0);
+        let result = CredWriteW(&mut cred, 0);
+        if result.as_bool() {
+            // Credential stored successfully
+        } else {
+            // Failed to store credential - log error to file
+            let _ = log_rdp_error(host, "Failed to store RDP credential");
+        }
     }
 }
 
 fn delete_rdp_credential_secure(host: &str) {
     let target_name: Vec<u16> = format!("TERMSRV/{}", host).encode_utf16().collect();
     unsafe {
-        let _ = CredDeleteW(target_name.as_ptr(), CRED_TYPE_GENERIC, 0);
+        let result = CredDeleteW(target_name.as_ptr(), CRED_TYPE_GENERIC, 0);
+        if !result.as_bool() {
+            // Failed to delete credential - log error
+            let _ = log_rdp_error(host, "Failed to delete RDP credential");
+        }
     }
+}
+
+fn log_rdp_error(host: &str, message: &str) -> std::io::Result<()> {
+    // Determine the app data directory using environment variables
+    let app_data_dir = if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        format!("{}/RDM", local)
+    } else if let Ok(appdata) = std::env::var("APPDATA") {
+        format!("{}/RDM", appdata)
+    } else {
+        "RDM".to_string()
+    };
+    
+    let log_file = format!("{}/rdp_debug.log", app_data_dir);
+    
+    // Ensure directory exists
+    let _ = std::fs::create_dir_all(&app_data_dir);
+    
+    // Append to log file
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)?;
+    
+    let line = format!("[{}] {}\n", host, message);
+    std::io::Write::write_all(&mut file, line.as_bytes())?;
+    
+    Ok(())
 }
 
 /// Launches an external mstsc.exe RDP session

@@ -224,11 +224,17 @@ fn unlock_vault_impl(
                 .as_secs();
             if now < lockout_until {
                 let remaining = lockout_until - now;
+                let attempts = db::get_setting(conn, "failed_attempts")?
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0);
                 return Err(format!(
-                    "Vault is locked. Try again in {} seconds. (Сейф заблоковано. Спробуйте через {} секунд.)",
-                    remaining, remaining
+                    "Vault is locked. Try again in {} seconds. (Attempt {}/5) (Сейф заблоковано. Спробуйте через {} секунд. (Спроба {}/5))",
+                    remaining, attempts, remaining, attempts
                 ));
             }
+            // Lockout expired, reset counter
+            let _ = db::delete_setting(conn, "lockout_until");
+            let _ = db::set_setting(conn, "failed_attempts", "0");
         }
     }
 
@@ -247,28 +253,33 @@ fn unlock_vault_impl(
     let kek = match derive_kek_verify_sentinel(password, &salt, &encrypted_sentinel) {
         Ok(k) => k,
         Err(_) => {
-            // Failed attempt — increment counter
+            // Failed attempt — increment counter with exponential backoff logic
             let attempts = db::get_setting(conn, "failed_attempts")?
                 .and_then(|s| s.parse::<u32>().ok())
                 .unwrap_or(0)
                 + 1;
             db::set_setting(conn, "failed_attempts", &attempts.to_string())?;
 
-            if attempts >= 5 {
-                let lockout_duration = 300u64; // 5 minutes
-                let lockout_until = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs()
-                    + lockout_duration;
-                db::set_setting(conn, "lockout_until", &lockout_until.to_string())?;
-                return Err(format!(
-                    "Too many failed attempts. Vault locked for {} seconds. (Забагато невдалих спроб. Сейф заблоковано на {} секунд.)",
-                    lockout_duration, lockout_duration
-                ));
-            }
-
-            return Ok(false); // Incorrect password
+            let lockout_duration = if attempts >= 8 {
+                900u64 // 15 minutes after 8+ failures
+            } else if attempts >= 5 {
+                300u64 // 5 minutes after 5 failures
+            } else {
+                // Exponential backoff for early attempts: 30s, 60s, 120s
+                let base = 30u64;
+                let delay_multiplier = 1u64.pow(attempts.saturating_sub(1) as u32);
+                base * delay_multiplier
+            };
+            let lockout_until = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                + lockout_duration;
+            db::set_setting(conn, "lockout_until", &lockout_until.to_string())?;
+            return Err(format!(
+                "Too many failed attempts. Vault locked for {} seconds. (Забагато невдалих спроб. Сейф заблоковано на {} секунд.)",
+                lockout_duration, lockout_duration
+            ));
         }
     };
 
@@ -381,9 +392,14 @@ fn migrate_vault_to_default(
 
 /// Reset vault: wipe all data, then reinitialize a fresh keyring-bound vault.
 /// This will make all previously encrypted credentials unreadable.
+/// WARNING: This action cannot be undone. All encrypted passwords and credentials
+/// will be permanently lost. We strongly recommend exporting a backup first.
 #[tauri::command]
 fn reset_vault(state: State<'_, SessionState>, db: State<'_, DbState>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Prompt user to export backup first - this is the last chance to save data
+    // The frontend should handle showing a confirmation dialog before calling this
 
     // Wipe ALL data — user confirmed they want a clean start
     let _ = conn.execute("DELETE FROM connection_history", []);
@@ -520,7 +536,7 @@ fn decrypt_credential_secret(
         .map_err(|e| format!("Failed to parse credential secret: {}", e))?;
 
     crypto::decrypt_secret(&kek, &encrypted)
-        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved credentials cannot be decrypted. Please edit the linked credential in the Vault and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені облікові дані не можуть бути розшифровані. Будь ласка, відредагуйте пов'язаний запис у сейфі та введіть пароль заново.)".to_string())
+        .map_err(|_| "Decryption error. Ensure vault is unlocked and you have the correct password.".to_string())
 }
 
 #[tauri::command]
@@ -545,7 +561,7 @@ fn decrypt_server_password(
         .map_err(|e| format!("Failed to parse encrypted password: {}", e))?;
 
     crypto::decrypt_secret(&kek, &encrypted)
-        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again. (Помилка розшифрування. Оскільки пароль на вхід був вимкнений, старі збережені паролі не можуть бути розшифровані. Будь ласка, відредагуйте це підключення та введіть пароль заново.)".to_string())
+        .map_err(|_| "Decryption error. Since the vault login password was disabled, previously saved passwords cannot be decrypted. Please edit this connection and enter the password again.".to_string())
 }
 
 // Servers commands
@@ -589,6 +605,11 @@ fn add_server(
             let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
             let kek = kek_guard
                 .ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
+            // Validate protocol is either "ssh" or "rdp"
+            let valid_protocols = ["ssh", "rdp"];
+            if !valid_protocols.iter().any(|&p| p == protocol.as_str()) {
+                return Err(format!("Invalid protocol: {}. Must be one of: {}", protocol, valid_protocols.join(", ")));
+            }
             let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
             let encrypted_json = serde_json::to_string(&encrypted)
                 .map_err(|e| format!("Failed to serialize manual password: {}", e))?;

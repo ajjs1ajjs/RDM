@@ -150,7 +150,7 @@ pub fn connect_ssh(
         #[cfg(windows)]
         {
             // Restrict key file to current user only using icacls
-            let _ = std::process::Command::new("icacls")
+            let icacls_result = std::process::Command::new("icacls")
                 .args(&[
                     key_file.to_string_lossy().as_ref(),
                     "/inheritance:r",
@@ -158,6 +158,26 @@ pub fn connect_ssh(
                     &format!("{}:(R,W)", std::env::var("USERNAME").unwrap_or_default()),
                 ])
                 .output();
+            
+            // Check if icacls succeeded; if not, set basic read-only permissions
+            if let Ok(ref output) = icacls_result {
+                if !output.status.success() {
+                    // icacls failed - set file permissions to owner-only read
+                    // Using chmod equivalent via icacls fallback
+                    let _ = std::process::Command::new("cmd")
+                        .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/setowner", "&", &std::env::var("USERNAME").unwrap_or_default()])
+                        .output();
+                    // Set minimal permissions
+                    let _ = std::process::Command::new("cmd")
+                        .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
+                        .output();
+                }
+            } else {
+                // Could not run icacls - try basic permissions
+                let _ = std::process::Command::new("cmd")
+                    .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
+                    .output();
+            }
         }
 
         args.push("-i".to_string());
