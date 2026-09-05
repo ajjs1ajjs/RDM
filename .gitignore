@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+cargo_check.*
+
+# Build output
+BUILD/
+dist-portable/
+bin/
+obj/
+backup/
+wpf_backup/
+src-tauri/src/RdpHost/bin/
+src-tauri/src/RdpHost/obj/
+src-tauri/bin/
+# Legacy C# WPF build artifacts (dead code kept only for reference)
+output/
+src-csharp/wwwroot.zip
+
+# AI editor
+.claude/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+dist-portable
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

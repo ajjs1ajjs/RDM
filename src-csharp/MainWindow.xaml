@@ -1,0 +1,21 @@
+<Window x:Class="RDM.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        mc:Ignorable="d"
+        Title="RDM Manager" Height="768" Width="1024"
+        Background="#0a0a0f"
+        Icon="icon.ico"
+        WindowStartupLocation="CenterScreen">
+    
+    <Grid>
+        <!-- The WebView2 control that renders the React UI -->
+        <wv2:WebView2 Name="webView" 
+                       DefaultBackgroundColor="Transparent" />
+        
+        <!-- Canvas for overlaying native RDP ActiveX controls -->
+        <Canvas Name="rdpCanvas" IsItemsHost="False" Background="Transparent" IsHitTestVisible="True" />
+    </Grid>
+</Window>

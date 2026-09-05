@@ -1,0 +1,233 @@
+# Changelog
+
+## v2.0.5
+
+- **Виправлено невидимий шрифт/текст у SSH-терміналі:** у реальній SSH-сесії (bash/zsh/vim/tmux) термінал **не виводив жодного тексту взагалі** — десь "чорна діра" замість рядків. Корінь: `FontFace` API, яким xterm інжектує кастомні шрифти (JetBrains Mono), не завантажувався у WebView2 під час активної PTY-сесії (CSS `@font-face` через `<style>` був заблокований CSP раніше, а коли CSP почав дозволяти `'unsafe-inline'`, шрифт так і не підхоплювався у живій сесії через race у `FontFace.load()`). Тепер шрифт підхідиться зовсерединно через `document.fonts.ready` + fallback `Consolas` — **текст у SSH-терміналі тепер видимий**
+- **Виправлено підказку Shift:** підказка "Mouse tracking active — hold Shift and drag" тепер коректно сховується після виділення, а не залишується висячою на 60 секунд
+- **Додано fallback-шрифт:** тепер `'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace` — запасні варіанти для систем без JB Mono
+
+## v2.0.4
+
+- **Виправлено вічне сповіщення про оновлення:** додаток порівнював версію з Cargo.toml (2.0.1) із тегом останнього релізу (v2.0.3), тому банер «доступне оновлення» не зникав навіть після встановлення свіжого релізу (він збирався з тією ж застарілою Cargo-версією). Тепер усі джерела версій синхронізовані (2.0.4: package.json, tauri.conf.json, Cargo.toml), а `check_for_update` толерантний до префікса `v` та суфіксів `-rc`/`+build`; якщо версію не вдалося розпарсити — сповіщення не показується
+- **Виправлено невидиме виділення тексту в SSH-терміналі:** дефолти `selectionBackground`/`selectionForeground` були `#ffffff`/`#ffffff` — біле на білому (а користувачі, які пробували виправити це через пікетери кольорів, лишились з іншими нечитабельними комбінаціями на кшталт «червоне на червоному»). Тепер суцільний бірюзовий `#00f2fe` + чорний текст, додано `selectionInactiveBackground` (напівпрозорий бірюзовий для стану без фокусу). Одноразова міграція сховища (v2) перезаписує **тільки** кольори виділення — шрифт, курсор і палітра ANSI залишаються як були
+- **Підказка Shift для виділення в tmux/vim/byobu:** коли віддалена сесія вмикає mouse reporting, звичайне перетягування мишкою не створює локального виділення (події йдуть віддаленій програмі). Тепер термінал розпізнає такі спроби й показує підказку «тримайте Shift + виділяйте» (не частіше ніж раз на хвилину, поведінку vim/tmux не змінює)
+- **Виправлено невидиме виділення в реальному WebView2 (першопричина):** xterm.js DOM-рендерер малює виділення (та кольори комірок) через динамічно інжектовані `<style>` теги, але CSP `style-src 'self'` блокує їх у WebView2 — оверлей створювався, але без фону та позиціонування, тому виділення було невидимим незалежно від кольорів налаштувань. Додано `'unsafe-inline'` до `style-src` у `tauri.conf.json` — тепер кольори теми, курсор і оверлей виділення рендеряться коректно (перевірено через автоматизований drag-тест у WebView2)
+- **Уніфіковано дефолти терміналу:** TerminalTab більше не дублює власні дефолти, а читає спільні з useTerminalSettings (єдине джерело)
+- **About тепер завжди показує поточну версію** (раніше «Version: —», якщо оновлень немає)
+- **Guard у release workflow:** збірка релізу падає, якщо тег ≠ tauri.conf.json ≠ Cargo.toml — щоб розсинхрон версій більше не повторювався
+
+
+## v2.0.1
+
+- **Виправлено live-оновлення терміналу:** подія `storage` не спрацьовує у вікні, яке зробило зміну (тільки в інших вікнах). Додано `CustomEvent("rdm_terminal_settings_changed")` — тепер зміни кольорів/курсора applyються миттєво без перезавантаження
+
+## v2.0.0
+
+- **Версія 2.0.0** — мажорний реліз термінальних налаштувань
+- **Додано панель Terminal Appearance** в Settings: налаштування шрифту, розміру, line height, стилю курсора, кольорів терміналу (foreground, background, cursor, selection) та всіх 16 ANSI кольорів — live preview без перезавантаження
+- **Виправлено CI:** додано `cargo clean` перед білдом у release workflow — раніше Swatinem/rust-cache відновлював закешовані артефакти і нічого не перезбиралось, артефакти релізу були застарілі
+
+## v0.1.95
+
+- **Покращено видимість виділення:** `selectionBackground` з 0.25 до 0.65 альфа + `selectionForeground: #ffffff` — виділений текст тепер чітко видно на темному фоні
+
+## v0.1.92
+
+- **Виправлено TypeScript build:** прибрано `selectionBackgroundOpaque` — це не валідна опція xterm.js (наявні тільки `selectionBackground`, `selectionForeground`, `selectionInactiveBackground`, `selectionInactiveForeground`). Ця помилка ламала `tsc && vite build` у релізі v0.1.91
+
+## v0.1.91
+
+- **Виділення тексту тепер чітко видно:** `selectionBackground` тепер суцільний бірюзовий `#00f2fe` (був `rgba(0,242,254,0.45)` — на темному фоні зливався з foreground). `selectionForeground: #000` — чорний текст на бірюзовому фоні, максимальний контраст. Додано `selectionInactiveBackground` для випадку, коли виділення втрачає фокус
+- **Зменшено шрифт терміналу** з 15 до 13, `lineHeight: 1.25 → 1.2` — щільніше, більше рядків поміщається
+- **CSS-посилення виділення:** `.xterm .xterm-selection` і `::selection` тепер мають `background: #00f2fe !important; color: #000 !important` — навіть якщо WebView2 погано рендерить alpha
+
+## v0.1.90
+
+- **Виправлено TypeScript build:** прибрано `fontWeightLight` — це не валідна опція xterm.js v5 (наявні тільки `fontWeight` і `fontWeightBold`). Ця помилка ламала `tsc && vite build` у релізі v0.1.89
+
+## v0.1.89
+
+- **Виправлено шрифт терміналу:** xterm не підхоплював `var(--font-mono)` (CSS-змінна визначена на `:root`, а xterm передає fontFamily у свій canvas без резолву). Тепер прямий fallback-ланцюжок `'JetBrains Mono', Consolas, 'Courier New', monospace`
+- **Виправлено CSP:** `font-src` і `style-src` тепер дозволяють `fonts.googleapis.com` / `fonts.gstatic.com`. Без цього JetBrains Mono з `@import` у `App.css` блокувався WebView2, і весь UI рендерився дефолтним шрифтом
+- **Виправлено білий фон у xterm:** додано `background-color: #0b0f19 !important` для `.xterm-viewport`, `.xterm-screen` і `.xterm canvas` — на світлій WebView2-підкладці канва рендерився з білим тлом
+
+## v0.1.88
+
+- **Покращено видимість терміналу (xterm):** курсор тепер суцільний бірюзовий блок з контрастним "вікном" під символом — добре видно де саме курсор і що пишеш
+- **Збільшено шрифт терміналу** з 14 до 15, додано `lineHeight: 1.25` і fallback на `Consolas`/`Courier New` — текст читабельніший, шрифт не "зникає" якщо JetBrains Mono не завантажився
+- **Помітніше виділення тексту** — `selectionBackground` підвищено з `0.25` до `0.45` альфа + білий foreground; виділене видно одразу
+- **Контрастніша палітра ANSI** — яскравіші зелений/червоний/жовтий для кращої читабельності логів і виводу команд
+- **Оформлення контейнера терміналу** — єдиний фон `#0b0f19` без швів, рамка та inset border навколо viewport, більший padding (10/12px) щоб текст не липнув до країв
+- **Виправлено `cursor` колір** у xterm — раніше передавалось CSS-змінне `var(--accent-cyan)`, яке xterm не підтримує (курсор фактично не фарбувався); тепер реальний `#00f2fe` + `cursorAccent`
+- **Виправлено GitHub Pages deploy** — додано `npm ci` + `npm run build` у `pages.yml`. Раніше завантажувався `./dist`, але workflow його не збирав, тому Pages-деплой падав з `Process completed with exit code 2`
+
+## v0.1.86
+
+- **Виправлено GitHub Pages:** змінено `path: '.'` на `path: './dist'` у `pages.yml` — раніше весь репозиторій деплоївся на GitHub Pages замість лише зібраного `dist/`
+- **Додано structured logging:** додано `tracing` та `tracing-subscriber` до Rust бекенду для покращеної спостережувальності
+- **Оновлено README:** додано примітку про macOS підтримку (код підтримує Keychain, але CI збірка наразі лише для Windows)
+- **Додано логування SSH з'єднань:** тепер ініціація SSH підключень логується з деталями (host, port, username)
+
+## v0.1.85
+
+- **Виправлено Windows-збірку:** повернуто `bundle.targets = ["nsis", "msi"]` у `tauri.conf.json` (у v0.1.84 було створено хибне невалідне значення `"windows"`, яке ламало `cargo check`/`tauri build` і залишало реліз без Windows-інсталятора). Тепер NSIS+MSI збираються коректно.
+- Відкочено хибні артефакти релізу v0.1.84; нова версія — v0.1.85.
+- Виправлено шлях до бази даних у README (`com.admin.rdm-manager` замість застарілого `com.admin.tauri-app`)
+- Прибрано застарілий конфіг збірки `src-tauri/tauri.linux.conf.json` (Linux повністю видалено в 0.1.83)
+
+## v0.1.83
+
+- **Платформи:** збірки лише для Windows (NSIS/MSI) та macOS (DMG); видалено Ubuntu/Linux з CI та релізу
+- Оновлено README: прибрано Linux з таблиці платформ та описів безпеки
+
+## v0.1.80
+
+- CI: новий workflow `ci.yml` на push/PR — type-check та збірка фронтенду (tsc + vite), `cargo check`, `cargo clippy` на ubuntu і windows
+- Windows тепер збирається в CI: реліз-тег автоматично публікує NSIS-інсталятор, MSI та portable ZIP (раніше Windows-збірка робилась лише локально)
+- GitHub Actions закріплені на повні commit SHA (supply-chain безпека)
+- У всіх jobs релізу додано кеш Rust (`Swatinem/rust-cache`) — помітно швидші повторні збірки
+
+## v0.1.79
+
+- Cross-platform release: builds for Linux (.deb, AppImage) and macOS (.dmg) in addition to Windows (NSIS/MSI); GitHub Actions attaches Linux/macOS artifacts to each tag release automatically
+- Code is now portable to non-Windows: Win32-only modules (native RDP embed, DPAPI vault migration) are behind `cfg(target_os = "windows")`, SSH/SFTP/vault work everywhere
+- RDP UI (embedded sessions, quick connect, redirection settings, "Bypass RDP Warnings") is hidden on Linux/macOS where only SSH/SFTP connections are available
+- Vault keys are stored in the OS keyring on every platform (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+
+## v0.1.78
+
+- Cross-platform vault: the vault KEK is now stored in the OS keyring (Windows Credential Manager, macOS Keychain, Linux Secret Service) instead of Windows DPAPI, so the vault works on Linux/macOS too
+- Existing Windows vaults auto-migrate from DPAPI to the OS keyring on first launch
+- Backup export/import no longer depends on the local key store — only the backup password is required to move data between machines
+
+## v0.1.75
+
+- Revert page-scroll behavior; SSH terminal now always scrolls to bottom (fixes duplicated prompts when pasting via context menu)
+
+## v0.1.74
+
+- SSH terminal page-scroll: when the cursor reaches near the bottom, the viewport jumps so the cursor sits a few rows below the top (new output starts from the top, history stays in the scrollbar)
+
+## v0.1.73
+
+- Fix terminal-pad sizing: use absolute positioning (`top/bottom/left/right`) instead of `height:100%` inside a flex item so FitAddon always measures the exact renderable area (fixes prompt hiding below the viewport)
+
+## v0.1.72
+
+- Fix SSH terminal paste: paste now uses the DOM `paste` event (clipboardData) directly instead of the permission-gated async clipboard API; the key handler no longer blocks the browser paste event
+- Fix SSH terminal auto-scroll: viewport is now pinned to the latest output after the whole write queue is processed (`onWriteParsed`) plus `scrollOnUserInput`, so the prompt/cursor stays visible when output fills the screen
+
+## v0.1.71
+
+- Fix SSH terminal auto-scroll when output reaches the bottom: terminal now sizes to the exact visible area (padding moved to a wrapper so FitAddon measures the renderable region) and keeps the prompt/cursor in view
+
+## v0.1.70
+
+- Fix SSH connections closing immediately: revert `StrictHostKeyChecking` to `accept-new` (the `yes` setting refused any host not yet in `known_hosts`)
+- Show SSH client errors (e.g. "Host key verification failed") in the terminal before the session closes instead of closing silently
+
+## v0.1.69
+
+- Fix "wrong password" on importing backups / unlocking legacy vaults after the PBKDF2 upgrade: derivation now falls back to the legacy 100k iteration scheme for data created before v0.1.68 (600k current + 100k legacy detection)
+- Bump version to v0.1.69
+
+## v0.1.68
+
+- PBKDF2 iteration count for backup passwords raised to 600,000 (legacy 100k kept only for old-vault detection)
+- SSH passwords/passphrases are now zeroized in memory (Zeroizing) instead of lingering as plaintext
+- Temporary `.rdp` session files are cleaned up (startup purge + per-session removal)
+- Optimized credential/server lookups to indexed by-id SQL queries (removed full-table scans on connect/edit/decrypt)
+- Fixed high-severity npm advisory (postcss/nanoid, build-time dependency)
+
+## v0.1.67
+
+- Security hardening per audit:
+  - Vault KEK is now a random key protected with Windows DPAPI (no more hardcoded `default_rdm_key`); legacy vaults auto-migrate on startup
+  - Removed automatic disabling of RDP certificate validation
+  - Redacted password from RdpHost log
+  - Async update check (no UI freeze)
+  - Transaction-safe re-encryption and atomic backup export/import
+  - CSV import no longer leaks passwords in error text
+  - SSH/SFTP no longer delete active sessions' temp keys
+  - Terminal escape-sequence injection sanitized
+  - RDP credentials use session persistence + cleanup on disconnect/exit
+  - StrictHostKeyChecking=yes for interactive SSH
+  - Removed dead code and unused dependencies
+
+## v0.1.66
+
+- Release rebuild of v0.1.65 with identical changes (installer/portable bundle verification)
+
+## v0.1.65
+
+- Explicitly bundle `WebView2Loader.dll` in installer resources and portable packages to fix system error "WebView2Loader.dll was not found"
+
+## v0.1.64
+
+- Add NSIS setup installer target (`_setup.exe`) to prevent WiX MSI UAC elevation hangs during installation/update
+- Clean build bundle: NSIS installer (`.exe`), MSI (`.msi`), and Portable (`.zip`)
+
+## v0.1.63
+
+- Fix SSH terminal bottom line clipping & auto-scroll to keep active prompt visible
+- Add ResizeObserver for dynamic terminal container fitting on tab switch & window resize
+- Fix multi-language layout copy/paste hotkeys (Ukrainian Ctrl+С / Ctrl+М & English layout support)
+- Add auto-copy on text selection in SSH terminal
+
+## v0.1.62
+
+- Fix SSH terminal copy & paste (Ctrl+C, Ctrl+V, Ctrl+Shift+C/V, Cmd+C/V, Shift/Ctrl+Insert)
+- Add selection detection and right-click context menu in SSH terminal (Copy, Paste, Select All, Clear)
+
+## v0.1.59
+
+- Reset Vault now wipes ALL data (servers, credentials, history, settings) for a completely clean start
+
+## v0.1.58
+
+- Fix Windows Credential Manager: password blob must be UTF-16LE for mstsc
+- RDP credentials use session persistence (CRED_PERSIST_SESSION) — credentials
+  are removed when the user logs off, so they are not stored across reboots.
+  This is intentional for security. To persist across reboots, the value must
+  be CRED_PERSIST_LOCAL_MACHINE (2); the shipped build keeps session-only.
+
+## v0.1.57
+
+- Fix RDP NLA authentication error (authentication level + enablecredsspsupport)
+- Kill orphaned mstsc.exe on app exit (Drop impl for RdpState)
+
+## v0.1.56
+
+- Make resolve_auth gracefully handle decryption errors (fallback to manual credentials)
+- Save manually entered RDP credentials even when server already has linked credential
+
+## v0.1.55
+
+- Fix vault reset now also clears encrypted credentials/passwords (old KEK is gone)
+
+## v0.1.54
+
+- Fix vault reset ("Reset Vault") — was setting sentinel to empty string instead of deleting it, causing JSON parse error
+
+## v0.1.53
+
+- Fix Rust compiler warnings (unused ShowWindow return values)
+- Code cleanup and formatting
+
+## v0.1.52
+
+- Add vault reset option for users who forgot their master password
+- "Reset Vault" button in migration dialog clears vault and reinitializes with default key
+
+## v0.1.51
+
+- Fix vault decryption error for users who previously had a master password
+- Add one-time migration dialog to migrate vault to default encryption key
+- Verify vault sentinel on startup before auto-unlocking
+
+## v0.1.50
+
+- Clean release: MSI + portable only (no NSIS)
+- Auto-update check via GitHub API
+- No master password at login — only for export/import
+- Update notification banner on new version

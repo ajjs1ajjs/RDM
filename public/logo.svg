@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0%" stop-color="#00f2fe"/>
+      <stop offset="100%" stop-color="#bf5af2"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0%" stop-color="#0a0e1a"/>
+      <stop offset="100%" stop-color="#060913"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#g2)" stroke="url(#g1)" stroke-width="8"/>
+  <text x="256" y="220" font-family="'Courier New', monospace" font-size="180" font-weight="900" fill="url(#g1)" text-anchor="middle" dominant-baseline="central">RDM</text>
+  <rect x="80" y="300" width="352" height="100" rx="12" fill="none" stroke="url(#g1)" stroke-width="6" stroke-dasharray="20 8" opacity="0.5"/>
+  <circle cx="128" cy="350" r="12" fill="#30d158">
+    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="196" cy="350" r="8" fill="#00f2fe"/>
+  <circle cx="244" cy="350" r="8" fill="#bf5af2"/>
+  <circle cx="292" cy="350" r="8" fill="#00f2fe"/>
+  <circle cx="340" cy="350" r="8" fill="#bf5af2"/>
+  <text x="380" y="356" font-family="'Courier New', monospace" font-size="28" fill="url(#g1)" text-anchor="end">_</text>
+</svg>
