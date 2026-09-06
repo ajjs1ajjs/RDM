@@ -1241,7 +1241,7 @@ async fn check_for_update() -> Result<UpdateInfo, String> {
 
 #[tauri::command]
 async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo, String> {
-    let updater = app_handle.updater()?;
+    let updater = app_handle.updater().map_err(|e| format!("Updater init failed: {}", e))?;
     let update = updater.check().await.map_err(|e| format!("Update check failed: {}", e))?;
     
     Ok(UpdateInfo {
@@ -1254,13 +1254,19 @@ async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo,
 
 #[tauri::command]
 async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let updater = app_handle.updater()?;
+    let updater = app_handle.updater().map_err(|e| format!("Updater init failed: {}", e))?;
     
     if let Some(update) = updater.check().await.map_err(|e| format!("Update check failed: {}", e))? {
-        update.download_and_install(|chunk_length, content_length| {
-            // Progress callback - could emit event to frontend
-            tracing::debug!("Downloaded {} of {} bytes", chunk_length, content_length.unwrap_or(0));
-        }).await.map_err(|e| format!("Update install failed: {}", e))?;
+        update.download_and_install(
+            |chunk_length, content_length| {
+                // Progress callback
+                tracing::debug!("Downloaded {} of {} bytes", chunk_length, content_length.unwrap_or(0));
+            },
+            || {
+                // Called when download completes
+                tracing::info!("Update download complete, installing...");
+            }
+        ).await.map_err(|e| format!("Update install failed: {}", e))?;
         
         // The updater will restart the app automatically
         // We just need to exit
