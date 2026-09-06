@@ -39,7 +39,7 @@
         "installerIcon": "icons/icon.ico",
         "displayLanguageSelector": true,
         "languages": ["English", "Ukrainian"],
-        "webviewInstallMode": "download"
+        "minimumWebview2Version": "126.0.2592.68"
       },
       "wix": {
         "language": "en-US",
