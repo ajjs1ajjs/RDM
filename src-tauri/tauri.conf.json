@@ -59,8 +59,7 @@
       "frameworks": [],
       "minimumSystemVersion": "10.15",
       "signingIdentity": null,
-      "providerShortName": null,
-      "info": {}
+      "providerShortName": null
     }
   },
   "plugins": {
