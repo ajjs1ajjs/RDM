@@ -1241,7 +1241,7 @@ async fn check_for_update() -> Result<UpdateInfo, String> {
 
 #[tauri::command]
 async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo, String> {
-    let updater = app_handle.updater();
+    let updater = app_handle.updater()?;
     let update = updater.check().await.map_err(|e| format!("Update check failed: {}", e))?;
     
     Ok(UpdateInfo {
@@ -1254,7 +1254,7 @@ async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo,
 
 #[tauri::command]
 async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let updater = app_handle.updater();
+    let updater = app_handle.updater()?;
     
     if let Some(update) = updater.check().await.map_err(|e| format!("Update check failed: {}", e))? {
         update.download_and_install(|chunk_length, content_length| {
