@@ -13,6 +13,7 @@ use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_updater::UpdaterExt;
 use uuid::Uuid;
 
 /// Initialize tracing subscriber for structured logging
@@ -1238,6 +1239,39 @@ async fn check_for_update() -> Result<UpdateInfo, String> {
     })
 }
 
+#[tauri::command]
+async fn check_update_status() -> Result<UpdateInfo, String> {
+    let app_handle = tauri::AppHandle::try_from(tauri::Manager::try_get_webview_window("main", &()).unwrap());
+    let updater = app_handle.updater();
+    let update = updater.check().await.map_err(|e| format!("Update check failed: {}", e))?;
+    
+    Ok(UpdateInfo {
+        available: update.is_some(),
+        latest_version: update.as_ref().map(|u| u.version.clone()).unwrap_or_default(),
+        current_version: env!("CARGO_PKG_VERSION").to_string(),
+        download_url: String::new(),
+    })
+}
+
+#[tauri::command]
+async fn install_update() -> Result<(), String> {
+    let app_handle = tauri::AppHandle::try_from(tauri::Manager::try_get_webview_window("main", &()).unwrap());
+    let updater = app_handle.updater();
+    
+    if let Some(update) = updater.check().await.map_err(|e| format!("Update check failed: {}", e))? {
+        update.download_and_install(|chunk_length, content_length| {
+            // Progress callback - could emit event to frontend
+            tracing::debug!("Downloaded {} of {} bytes", chunk_length, content_length.unwrap_or(0));
+        }).await.map_err(|e| format!("Update install failed: {}", e))?;
+        
+        // The updater will restart the app automatically
+        // We just need to exit
+        std::process::exit(0);
+    }
+    
+    Ok(())
+}
+
 fn semver_parse(v: &str) -> Option<(u32, u32, u32)> {
     let parts: Vec<&str> = v.splitn(3, '.').collect();
     if parts.len() < 3 {
@@ -2437,6 +2471,8 @@ fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + S
         bypass_rdp_warnings,
         save_server_from_connect,
         check_for_update,
+        check_update_status,
+        install_update,
         migrate_vault_to_default,
         reset_vault,
         get_platform
@@ -2480,6 +2516,8 @@ fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + S
         decrypt_server_password,
         save_server_from_connect,
         check_for_update,
+        check_update_status,
+        install_update,
         migrate_vault_to_default,
         reset_vault,
         get_platform
@@ -2494,6 +2532,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
             tracing::debug!(app_dir = %app_dir.display(), "Initializing database");
