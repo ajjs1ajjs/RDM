@@ -57,10 +57,17 @@ jobs:
         $portableDir = "dist-portable\$appName Portable"
         New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
         Copy-Item "src-tauri\target\release\rdm-manager.exe" "$portableDir\" -Force
+        # Copy WebView2Loader.dll if present in build output
         if (Test-Path "src-tauri\target\release\WebView2Loader.dll") {
           Copy-Item "src-tauri\target\release\WebView2Loader.dll" "$portableDir\" -Force
         } elseif (Test-Path "src-tauri\WebView2Loader.dll") {
           Copy-Item "src-tauri\WebView2Loader.dll" "$portableDir\" -Force
+        }
+        # If still not found, download it
+        if (-not (Test-Path "$portableDir\WebView2Loader.dll")) {
+          Write-Host "Downloading WebView2Loader.dll..."
+          $wc = New-Object System.Net.WebClient
+          $wc.DownloadFile("https://github.com/tauri-apps/wry/raw/main/wry-webview2/src/WebView2Loader.dll", "$portableDir\WebView2Loader.dll")
         }
         Compress-Archive -Path "$portableDir\*" -DestinationPath "dist-portable\$appName v${version} Portable.zip" -Force
 
