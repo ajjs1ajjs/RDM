@@ -8,6 +8,7 @@ import { useIsWindows } from "./hooks/usePlatform";
 import { useServerForm } from "./hooks/useServerForm";
 import { useCredForm } from "./hooks/useCredForm";
 import { useFolderModal } from "./hooks/useFolderModal";
+import { useAppUpdate } from "./hooks/useAppUpdate";
 
 import { Sidebar } from "./components/Sidebar";
 import { ServerTable } from "./components/ServerTable";
@@ -139,24 +140,10 @@ function App() {
 
     const dialogs = useDialogs();
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState<boolean>(false);
-  const [updateInfo, setUpdateInfo] = useState<{ latest: string; current: string; url: string } | null>(null);
-
-  useEffect(() => {
-    vault.checkUnlockStatus();
-    serversCtrl.loadServers();
-    serversCtrl.loadFavorites();
-    serversCtrl.loadCustomFolders();
-    checkForUpdate();
-  }, []);
-
-  const checkForUpdate = async () => {
-    try {
-      const res = await invoke<{ available: boolean; latest_version: string; current_version: string; download_url: string }>("check_for_update");
-      if (res.available) {
-        setUpdateInfo({ latest: res.latest_version, current: res.current_version, url: res.download_url });
-      }
-    } catch { }
-  };
+  const updater = useAppUpdate();
+  const updateInfo = updater.available
+    ? { latest: updater.latest, current: updater.current, url: updater.fallbackUrl }
+    : null;
 
   useEffect(() => {
     credentialsCtrl.loadCredentials();
@@ -365,9 +352,21 @@ function App() {
                   <div>OS Backend: Windows native PTY & Command integrations</div>
                   {updateInfo && (
                     <div style={{ marginTop: "8px" }}>
-                      <a href={updateInfo.url} target="_blank" style={{ color: "var(--accent-cyan)", textDecoration: "underline", cursor: "pointer" }}>
-                        Update available: {updateInfo.latest}
-                      </a>
+                      {updater.canInstallInApp ? (
+                        <button
+                          className="btn btn-primary"
+                          onClick={handleUpdateClick}
+                          disabled={updater.phase !== "idle"}
+                          style={{ opacity: updater.phase !== "idle" ? 0.6 : 1 }}>
+                          {updater.phase === "idle"
+                            ? `Install update ${updateInfo.latest} / Встановити`
+                            : "Updating… / Оновлення…"}
+                        </button>
+                      ) : (
+                        <a href={updateInfo.url} target="_blank" style={{ color: "var(--accent-cyan)", textDecoration: "underline", cursor: "pointer" }}>
+                          Update available: {updateInfo.latest}
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -423,7 +422,9 @@ function App() {
   };
 
   const handleUpdateClick = async () => {
-    if (updateInfo) {
+    if (updater.canInstallInApp) {
+      await updater.install();
+    } else if (updateInfo?.url) {
       await invoke("plugin:opener|open_url", { url: updateInfo.url });
     }
   };
@@ -448,14 +449,47 @@ function App() {
         <div style={{
           background: "linear-gradient(90deg, var(--accent-purple), var(--accent-cyan))",
           color: "#fff",
-          textAlign: "center",
           padding: "8px 16px",
           fontSize: "0.85rem",
           fontWeight: 500,
-          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: "12px",
           userSelect: "none"
-        }} onClick={handleUpdateClick}>
-          New version {updateInfo.latest} available &mdash; click to download
+        }}>
+          <span>
+            {updater.phase === "downloading" && updater.progress && updater.progress.total > 0
+              ? `Downloading update… ${Math.round((updater.progress.downloaded / updater.progress.total) * 100)}%`
+              : updater.phase === "installing"
+                ? "Installing update…"
+                : `New version ${updateInfo.latest} available`}
+          </span>
+          {updater.phase === "idle" && (
+            <button
+              onClick={handleUpdateClick}
+              style={{
+                background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.5)",
+                color: "#fff", borderRadius: 6, padding: "2px 12px",
+                cursor: "pointer", fontSize: "0.8rem", fontWeight: 600
+              }}>
+              {updater.canInstallInApp ? "Install now / Встановити" : "Get it / Завантажити"}
+            </button>
+          )}
+          {updater.error && (
+            <span title={updater.error} onClick={updater.dismissError} style={{ cursor: "pointer", fontSize: "0.78rem" }}>
+              ⚠ Update failed — click to dismiss
+            </span>
+          )}
+          {updater.phase !== "idle" && updater.progress && updater.progress.total > 0 && (
+            <div style={{ width: 200, height: 4, background: "rgba(255,255,255,0.25)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                width: `${Math.min(100, (updater.progress.downloaded / updater.progress.total) * 100)}%`,
+                height: "100%", background: "#fff", transition: "width 0.2s ease"
+              }} />
+            </div>
+          )}
         </div>
       )}
     <div className="app-container">

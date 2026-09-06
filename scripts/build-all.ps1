@@ -10,6 +10,16 @@ Write-Host ""
 Write-Host "=== $AppName v$Version - Full Build ===" -ForegroundColor Cyan
 Write-Host ""
 
+# Updater artifacts are signed: pick up the local signing key if present,
+# otherwise tauri build fails once bundle.createUpdaterArtifacts is enabled.
+$signingKey = "$env:USERPROFILE\.tauri\rdm-updater.key"
+if (Test-Path $signingKey) {
+    $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content $signingKey -Raw).Trim()
+    # Key has no password; without this var tauri hangs prompting for one.
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+    Write-Host "Using updater signing key: $signingKey" -ForegroundColor DarkGray
+}
+
 Write-Host "[1/2] Building installer via Tauri..." -ForegroundColor Yellow
 npm run tauri build
 if ($LASTEXITCODE -ne 0) { throw "Tauri installer build failed" }

@@ -11,7 +11,7 @@ pub use windows_core;
 use rand::{thread_rng, RngCore};
 use serde::Serialize;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::UpdaterExt;
 use uuid::Uuid;
@@ -1255,24 +1255,31 @@ async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo,
 #[tauri::command]
 async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
     let updater = app_handle.updater().map_err(|e| format!("Updater init failed: {}", e))?;
-    
+
     if let Some(update) = updater.check().await.map_err(|e| format!("Update check failed: {}", e))? {
+        let mut downloaded: u64 = 0;
         update.download_and_install(
             |chunk_length, content_length| {
-                // Progress callback
-                tracing::debug!("Downloaded {} of {} bytes", chunk_length, content_length.unwrap_or(0));
+                downloaded += chunk_length as u64;
+                let total = content_length.unwrap_or(0);
+                let _ = app_handle.emit("update://progress", serde_json::json!({
+                    "downloaded": downloaded,
+                    "total": total,
+                }));
             },
             || {
-                // Called when download completes
                 tracing::info!("Update download complete, installing...");
             }
         ).await.map_err(|e| format!("Update install failed: {}", e))?;
-        
-        // The updater will restart the app automatically
-        // We just need to exit
+
+        // Windows: the NSIS installer relaunches the app itself once it exits.
+        // macOS/Linux: the new version is already in place, just restart into it.
+        #[cfg(target_os = "windows")]
         std::process::exit(0);
+        #[cfg(not(target_os = "windows"))]
+        app_handle.restart();
     }
-    
+
     Ok(())
 }
 
