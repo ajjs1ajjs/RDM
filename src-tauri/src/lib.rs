@@ -1240,8 +1240,7 @@ async fn check_for_update() -> Result<UpdateInfo, String> {
 }
 
 #[tauri::command]
-async fn check_update_status() -> Result<UpdateInfo, String> {
-    let app_handle = tauri::AppHandle::try_from(tauri::Manager::try_get_webview_window("main", &()).unwrap());
+async fn check_update_status(app_handle: tauri::AppHandle) -> Result<UpdateInfo, String> {
     let updater = app_handle.updater();
     let update = updater.check().await.map_err(|e| format!("Update check failed: {}", e))?;
     
@@ -1254,8 +1253,7 @@ async fn check_update_status() -> Result<UpdateInfo, String> {
 }
 
 #[tauri::command]
-async fn install_update() -> Result<(), String> {
-    let app_handle = tauri::AppHandle::try_from(tauri::Manager::try_get_webview_window("main", &()).unwrap());
+async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
     let updater = app_handle.updater();
     
     if let Some(update) = updater.check().await.map_err(|e| format!("Update check failed: {}", e))? {
