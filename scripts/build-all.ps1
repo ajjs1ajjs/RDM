@@ -21,7 +21,7 @@ if (Test-Path $signingKey) {
 }
 
 Write-Host "[1/2] Building installer via Tauri..." -ForegroundColor Yellow
-npm run tauri build
+npx tauri build
 if ($LASTEXITCODE -ne 0) { throw "Tauri installer build failed" }
 Write-Host ""
 
