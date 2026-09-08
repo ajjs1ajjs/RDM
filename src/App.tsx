@@ -146,6 +146,10 @@ function App() {
     : null;
 
   useEffect(() => {
+    vault.checkUnlockStatus();
+    serversCtrl.loadServers();
+    serversCtrl.loadFavorites();
+    serversCtrl.loadCustomFolders();
     credentialsCtrl.loadCredentials();
   }, []);
 
@@ -189,6 +193,8 @@ function App() {
       const res = await invoke<string>("select_and_import_backup", { password });
       await dialogs.alert(`Database restored successfully from: ${res}`);
       serversCtrl.loadServers();
+      serversCtrl.loadFavorites();
+      serversCtrl.loadCustomFolders();
       credentialsCtrl.loadCredentials();
       serversCtrl.setSelectedServer(null);
     } catch (e: any) {
@@ -219,6 +225,8 @@ function App() {
       const count = await invoke<number>("select_and_import_devolutions_csv");
       await dialogs.alert(`Imported ${count} connections successfully!`);
       serversCtrl.loadServers();
+      serversCtrl.loadFavorites();
+      serversCtrl.loadCustomFolders();
       credentialsCtrl.loadCredentials();
     } catch (err: any) {
       if (err !== "Import cancelled") {

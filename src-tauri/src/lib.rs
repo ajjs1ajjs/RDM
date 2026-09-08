@@ -1536,7 +1536,10 @@ fn export_database_backup(
     }
 
     // Lock local connection
-    let _conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn_guard = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Checkpoint any WAL entries to rdm.db before copying so exports include all latest data
+    let _ = conn_guard.pragma_update(None, "wal_checkpoint", "TRUNCATE");
 
     let dest = std::path::Path::new(&destination_path);
     let temp = std::path::PathBuf::from(format!("{}.tmp", destination_path));
@@ -1671,11 +1674,17 @@ fn import_database_backup(
     let old_conn = std::mem::replace(&mut *conn_guard, temp_conn);
     drop(old_conn); // Closes rdm.db file handle
 
+    // Clean up stale WAL/SHM files so SQLite doesn't replay old WAL frames over the restored DB
+    let _ = std::fs::remove_file(app_dir.join("rdm.db-wal"));
+    let _ = std::fs::remove_file(app_dir.join("rdm.db-shm"));
+
     // Copy temp file over active database; restore the previous DB on failure
     if let Err(e) = std::fs::copy(&temp_db_path, &db_path) {
         let _ = std::fs::copy(&bak_db_path, &db_path);
         let restored = rusqlite::Connection::open(&db_path)
             .map_err(|e| format!("Failed to reopen database after restore: {}", e))?;
+        let _ = restored.pragma_update(None, "journal_mode", "WAL");
+        let _ = restored.execute("PRAGMA foreign_keys = ON;", []);
         *conn_guard = restored;
         let _ = std::fs::remove_file(&temp_db_path);
         let _ = std::fs::remove_file(&bak_db_path);
@@ -1688,6 +1697,9 @@ fn import_database_backup(
     // Reopen database connection
     let new_conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("Failed to reopen database: {}", e))?;
+
+    let _ = new_conn.pragma_update(None, "journal_mode", "WAL");
+    let _ = new_conn.execute("PRAGMA foreign_keys = ON;", []);
 
     *conn_guard = new_conn;
 

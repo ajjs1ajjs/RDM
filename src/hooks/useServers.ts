@@ -54,6 +54,12 @@ export function useServers() {
     }
   }, []);
 
+  useEffect(() => {
+    loadServers();
+    loadFavorites();
+    loadCustomFolders();
+  }, [loadServers, loadFavorites, loadCustomFolders]);
+
   const saveCustomFolders = useCallback(async (folders: string[]) => {
     setCustomFolders(folders);
     try {

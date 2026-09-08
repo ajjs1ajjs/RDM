@@ -1,8 +1,8 @@
 {
   "name": "rdm-manager",
   "private": true,
-  "version": "2.1.0",
-        "type": "module",
+  "version": "2.1.1",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
