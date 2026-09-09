@@ -1,6 +1,6 @@
 [package]
 name = "rdm-manager"
-version = "2.1.1"
+version = "2.1.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -41,7 +41,6 @@ rfd = "0.14.0"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_Input_KeyboardAndMouse"] }
 windows = { version = "0.58", features = ["Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }
 windows-core = "0.58"
-reqwest = { version = "0.12", features = ["json"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

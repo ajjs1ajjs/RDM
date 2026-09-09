@@ -8,6 +8,36 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Validates hostname per RFC 1123 / RFC 952
+fn validate_hostname(host: &str) -> Result<(), String> {
+    if host.is_empty() || host.len() > 253 {
+        return Err("Invalid hostname: length".into());
+    }
+    for label in host.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err("Invalid hostname: label length".into());
+        }
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("Invalid hostname: invalid character".into());
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err("Invalid hostname: hyphen position".into());
+        }
+    }
+    Ok(())
+}
+
+/// Validates username per POSIX (conservative subset)
+fn validate_username(user: &str) -> Result<(), String> {
+    if user.is_empty() || user.len() > 32 {
+        return Err("Invalid username: length".into());
+    }
+    if !user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
+        return Err("Invalid username: invalid character".into());
+    }
+    Ok(())
+}
+
 /// Strips ANSI/VT100 escape sequences from a string.
 /// Handles CSI, OSC, DCS, APC, PM, and SOS sequences.
 fn strip_ansi_codes(s: &str) -> String {
@@ -102,13 +132,8 @@ pub fn connect_ssh(
     rows: u32,
     server_id: Option<String>,
 ) -> Result<(), String> {
-    // Validate host and username to prevent option injection
-    if username.starts_with('-') || host.starts_with('-') {
-        return Err("Invalid username or hostname (cannot start with a hyphen)".to_string());
-    }
-    if username.contains(' ') || host.contains(' ') {
-        return Err("Username and hostname cannot contain spaces".to_string());
-    }
+    validate_hostname(host)?;
+    validate_username(username)?;
 
     let mut key_guard = None;
     let mut temp_key_path = None;
@@ -116,7 +141,7 @@ pub fn connect_ssh(
     let known_hosts = app_data_dir.join("known_hosts");
     let mut args = vec![
         "-o".to_string(),
-        "StrictHostKeyChecking=accept-new".to_string(),
+        "StrictHostKeyChecking=ask".to_string(),
         "-o".to_string(),
         format!("UserKnownHostsFile={}", known_hosts.display()),
         "-o".to_string(),
@@ -322,11 +347,14 @@ pub fn connect_ssh(
                         }
                     }
 
+                    // PERF-001: hard-bounded prompt buffer (4KB ring).
+                    const MAX_PROMPT_BUF: usize = 4096;
                     if drain_after_send {
                         output_accumulated.clear();
                         drain_after_send = false;
-                    } else if output_accumulated.len() > 2000 {
-                        output_accumulated.drain(..1000);
+                    } else if output_accumulated.len() > MAX_PROMPT_BUF {
+                        let excess = output_accumulated.len() - MAX_PROMPT_BUF;
+                        output_accumulated.drain(..excess);
                     }
 
                     let payload = SshOutputPayload {
@@ -429,4 +457,35 @@ pub fn disconnect_ssh_session(state: &SshState, session_id: &str) -> Result<(), 
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_option_injection() {
+        assert!(validate_hostname("-oProxyCommand=x").is_err());
+        assert!(validate_username("-oProxyCommand=x").is_err());
+        assert!(validate_hostname("example.com -oFoo").is_err());
+        assert!(validate_hostname("example.com; rm -rf /").is_err());
+        assert!(validate_hostname("a`id`b").is_err());
+    }
+
+    #[test]
+    fn accepts_valid_host_user() {
+        assert!(validate_hostname("example.com").is_ok());
+        assert!(validate_hostname("db.prod.local").is_ok());
+        assert!(validate_hostname("10.0.1.45").is_ok());
+        assert!(validate_username("root").is_ok());
+        assert!(validate_username("ubuntu_22.04").is_ok());
+    }
+
+    #[test]
+    fn rejects_bad_hyphen_and_length() {
+        assert!(validate_hostname("-bad.com").is_err());
+        assert!(validate_hostname("bad-.com").is_err());
+        assert!(validate_username("").is_err());
+        assert!(validate_hostname("").is_err());
+    }
 }

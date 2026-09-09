@@ -52,13 +52,13 @@ pub struct ConnectionHistory {
 }
 
 fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, rusqlite::Error> {
-    // Validate table name against whitelist to prevent SQL injection
+    // DB-002: no string interpolation — fixed PRAGMA, table allowlisted
     if table != "servers" {
         return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid table name"),
         )));
     }
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let mut stmt = conn.prepare("PRAGMA table_info(servers)")?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {
         let name: String = row.get(1)?;
@@ -457,4 +457,33 @@ pub fn get_history(conn: &Connection, server_id: &str) -> Result<Vec<ConnectionH
         list.push(item.map_err(|e| e.to_string())?);
     }
     Ok(list)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn column_exists_rejects_other_tables() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE servers (id TEXT PRIMARY KEY, name TEXT NOT NULL);", [])
+            .unwrap();
+        assert!(column_exists(&conn, "servers", "name").unwrap());
+        assert!(!column_exists(&conn, "servers", "nope").unwrap());
+        assert!(column_exists(&conn, "settings", "x").is_err());
+        // Injection attempt must not run as SQL
+        assert!(column_exists(&conn, "servers; DROP TABLE servers; --", "id").is_err());
+    }
+
+    #[test]
+    fn settings_roundtrip() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);", [])
+            .unwrap();
+        set_setting(&conn, "k", "v").unwrap();
+        assert_eq!(get_setting(&conn, "k").unwrap(), Some("v".to_string()));
+        delete_setting(&conn, "k").unwrap();
+        assert_eq!(get_setting(&conn, "k").unwrap(), None);
+    }
 }

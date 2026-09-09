@@ -1168,23 +1168,10 @@ fn send_rdp_key(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 fn bypass_rdp_warnings() -> Result<(), String> {
-    // Write to HKCU — no admin required
-    let _ = std::process::Command::new("reg")
-        .args(&[
-            "add",
-            "HKCU\\Software\\Microsoft\\Terminal Server Client",
-            "/v",
-            "AuthenticationLevelOverride",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "0",
-            "/f",
-        ])
-        .spawn()
-        .and_then(|mut c| c.wait());
-
-    Ok(())
+    // SEC-005: global AuthenticationLevelOverride disabled for security.
+    // It weakened cert validation for ALL mstsc connections machine-wide.
+    // RDM now relies on per-connection RDP file settings instead.
+    Err("Disabled for security: RDM no longer modifies global RDP authentication policy. Configure per-server authentication level instead.".to_string())
 }
 
 #[derive(Debug, Serialize)]
@@ -1193,50 +1180,6 @@ pub struct UpdateInfo {
     pub latest_version: String,
     pub current_version: String,
     pub download_url: String,
-}
-
-#[tauri::command]
-async fn check_for_update() -> Result<UpdateInfo, String> {
-    let current = env!("CARGO_PKG_VERSION").to_string();
-    let repo = "ajjs1ajjs/RDM";
-    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .user_agent("RDM-Manager")
-        .build()
-        .map_err(|e| format!("Client error: {}", e))?;
-    let resp: serde_json::Value = client
-        .get(&url)
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))?;
-
-    let tag = resp["tag_name"].as_str().unwrap_or("");
-    let html_url = resp["html_url"].as_str().unwrap_or("");
-    if tag.is_empty() || html_url.is_empty() {
-        return Ok(UpdateInfo {
-            available: false,
-            latest_version: String::new(),
-            current_version: current,
-            download_url: String::new(),
-        });
-    }
-
-    let latest_ver = tag.trim_start_matches('v');
-    let latest = semver_parse(latest_ver).unwrap_or((0, 0, 0));
-    let cur = semver_parse(&current).unwrap_or((0, 0, 0));
-
-    Ok(UpdateInfo {
-        available: latest > cur,
-        latest_version: tag.to_string(),
-        current_version: current,
-        download_url: format!("https://github.com/{}/releases/tag/{}", repo, tag),
-    })
 }
 
 #[tauri::command]
@@ -1281,18 +1224,6 @@ async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn semver_parse(v: &str) -> Option<(u32, u32, u32)> {
-    let parts: Vec<&str> = v.splitn(3, '.').collect();
-    if parts.len() < 3 {
-        return None;
-    }
-    Some((
-        parts[0].parse().ok()?,
-        parts[1].parse().ok()?,
-        parts[2].parse().ok()?,
-    ))
 }
 
 fn auto_setup_vault(
@@ -2493,7 +2424,6 @@ fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + S
         decrypt_server_password,
         bypass_rdp_warnings,
         save_server_from_connect,
-        check_for_update,
         check_update_status,
         install_update,
         migrate_vault_to_default,
@@ -2538,7 +2468,6 @@ fn build_invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + S
         select_and_import_backup,
         decrypt_server_password,
         save_server_from_connect,
-        check_for_update,
         check_update_status,
         install_update,
         migrate_vault_to_default,

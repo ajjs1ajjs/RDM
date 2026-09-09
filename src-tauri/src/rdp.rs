@@ -71,7 +71,6 @@ impl Drop for RdpState {
                 let _ = std::process::Command::new("taskkill")
                     .args(&["/f", "/pid", &pid.to_string()])
                     .output();
-                delete_rdp_credential_secure(&session.target_host);
                 if let Some(ref f) = session.rdp_file {
                     let _ = std::fs::remove_file(f);
                 }
@@ -134,106 +133,6 @@ fn find_mstsc_hwnd(pid: u32) -> Option<HWND> {
         );
     }
     data.hwnd
-}
-
-#[repr(C)]
-struct WinCredential {
-    flags: u32,
-    typ: u32,
-    target_name: *const u16,
-    comment: *const u16,
-    last_written: i64,
-    credential_blob_size: u32,
-    credential_blob: *const u8,
-    persist: u32,
-    attribute_count: u32,
-    attributes: *const std::ffi::c_void,
-    target_alias: *const u16,
-    user_name: *const u16,
-}
-
-#[link(name = "advapi32")]
-extern "system" {
-    fn CredWriteW(credential: *const WinCredential, flags: u32) -> BOOL;
-    fn CredDeleteW(target_name: *const u16, typ: u32, flags: u32) -> BOOL;
-}
-
-const CRED_TYPE_GENERIC: u32 = 1;
-const CRED_PERSIST_SESSION: u32 = 1;
-
-fn store_rdp_credential_secure(host: &str, username: &str, password: &str) {
-    let target_name: Vec<u16> = format!("TERMSRV/{}\0", host).encode_utf16().collect();
-    let user_name: Vec<u16> = format!("{}\0", username).encode_utf16().collect();
-    // mstsc expects password as UTF-16LE null-terminated in the credential blob
-    let password_utf16: Vec<u16> = format!("{}\0", password).encode_utf16().collect();
-    let password_bytes: Vec<u8> = password_utf16
-        .iter()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
-    let blob_size = password_bytes.len() as u32;
-
-    let mut cred = WinCredential {
-        flags: 0,
-        typ: CRED_TYPE_GENERIC,
-        target_name: target_name.as_ptr(),
-        comment: std::ptr::null(),
-        last_written: 0,
-        credential_blob_size: blob_size,
-        credential_blob: password_bytes.as_ptr(),
-        persist: CRED_PERSIST_SESSION,
-        attribute_count: 0,
-        attributes: std::ptr::null(),
-        target_alias: std::ptr::null(),
-        user_name: user_name.as_ptr(),
-    };
-
-    unsafe {
-        let result = CredWriteW(&mut cred, 0);
-        if result.as_bool() {
-            // Credential stored successfully
-        } else {
-            // Failed to store credential - log error to file
-            let _ = log_rdp_error(host, "Failed to store RDP credential");
-        }
-    }
-}
-
-fn delete_rdp_credential_secure(host: &str) {
-    let target_name: Vec<u16> = format!("TERMSRV/{}", host).encode_utf16().collect();
-    unsafe {
-        let result = CredDeleteW(target_name.as_ptr(), CRED_TYPE_GENERIC, 0);
-        if !result.as_bool() {
-            // Failed to delete credential - log error
-            let _ = log_rdp_error(host, "Failed to delete RDP credential");
-        }
-    }
-}
-
-fn log_rdp_error(host: &str, message: &str) -> std::io::Result<()> {
-    // Determine the app data directory using environment variables
-    let app_data_dir = if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        format!("{}/RDM", local)
-    } else if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}/RDM", appdata)
-    } else {
-        "RDM".to_string()
-    };
-    
-    let log_file = format!("{}/rdp_debug.log", app_data_dir);
-    
-    // Ensure directory exists
-    let _ = std::fs::create_dir_all(&app_data_dir);
-    
-    // Append to log file
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_file)?;
-    
-    let line = format!("[{}] {}\n", host, message);
-    std::io::Write::write_all(&mut file, line.as_bytes())?;
-    
-    Ok(())
 }
 
 /// Launches an external mstsc.exe RDP session
@@ -387,15 +286,6 @@ pub fn launch_rdp_embedded(
     let y_phys = (y as f64 * device_pixel_ratio).round() as i32;
     let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
     let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
-
-    // 0. Store RDP credentials via Windows Credential Manager API (secure, no cmdline exposure)
-    if let (Some(user), Some(pass)) = (username, password) {
-        log_debug(
-            &app_data_dir,
-            &format!("Storing credential for TERMSRV/{}", host),
-        );
-        store_rdp_credential_secure(host, user, pass);
-    }
 
     // 1. Compute screen coordinates BEFORE creating RDP file (so winposstr is accurate)
     let (screen_x, screen_y) = unsafe {
@@ -611,7 +501,6 @@ pub fn launch_rdp_embedded(
     let app_clone = app.clone();
     let session_id_clone = session_id.clone();
     let hwnd_raw = hwnd.0 as usize;
-    let host_clone = host.to_string();
     let sid_clone = session_id.clone();
     std::thread::spawn(move || {
         let thread_hwnd = HWND(hwnd_raw as *mut _);
@@ -661,8 +550,7 @@ pub fn launch_rdp_embedded(
                 }
             }
         }
-        // Cleanup stored credential and temporary .rdp file
-        delete_rdp_credential_secure(&host_clone);
+        // Cleanup temporary .rdp file
         if let Ok(mut sessions) = app_clone.state::<RdpState>().sessions.lock() {
             if let Some(sess) = sessions.remove(&session_id_clone) {
                 if let Some(ref f) = sess.rdp_file {
@@ -755,8 +643,7 @@ pub fn disconnect_rdp_embedded(
             // Send WM_CLOSE to gracefully close the mstsc window
             let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
         }
-        // Remove the stored RDP credential and temporary .rdp file for this host
-        delete_rdp_credential_secure(&session.target_host);
+        // Remove the temporary .rdp file for this host
         if let Some(ref f) = session.rdp_file {
             let _ = std::fs::remove_file(f);
         }

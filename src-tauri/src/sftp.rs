@@ -5,6 +5,36 @@ use std::path::PathBuf;
 
 pub use crate::tempkey::TempKeyGuard;
 
+/// Validates hostname per RFC 1123 / RFC 952
+fn validate_hostname(host: &str) -> Result<(), String> {
+    if host.is_empty() || host.len() > 253 {
+        return Err("Invalid hostname: length".into());
+    }
+    for label in host.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err("Invalid hostname: label length".into());
+        }
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("Invalid hostname: invalid character".into());
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err("Invalid hostname: hyphen position".into());
+        }
+    }
+    Ok(())
+}
+
+/// Validates username per POSIX (conservative subset)
+fn validate_username(user: &str) -> Result<(), String> {
+    if user.is_empty() || user.len() > 32 {
+        return Err("Invalid username: length".into());
+    }
+    if !user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
+        return Err("Invalid username: invalid character".into());
+    }
+    Ok(())
+}
+
 pub fn run_ssh_command_sync(
     app_data_dir: PathBuf,
     cmd_name: &str,
@@ -13,6 +43,16 @@ pub fn run_ssh_command_sync(
     private_key: Option<&str>,
     passphrase: Option<&str>,
 ) -> Result<String, String> {
+    // args[0] should be "user@host" - validate host and username parts
+    if let Some(first_arg) = args.first() {
+        if let Some(at_pos) = first_arg.find('@') {
+            let username = &first_arg[..at_pos];
+            let host = &first_arg[at_pos + 1..];
+            validate_username(username)?;
+            validate_hostname(host)?;
+        }
+    }
+
     let keys_dir = app_data_dir.join("temp_keys");
     let mut _key_guard = None;
     let mut actual_args = vec![];
@@ -20,7 +60,7 @@ pub fn run_ssh_command_sync(
     if cmd_name == "ssh" || cmd_name == "scp" {
         let known_hosts = app_data_dir.join("known_hosts");
         actual_args.push("-o".to_string());
-        actual_args.push("StrictHostKeyChecking=accept-new".to_string());
+        actual_args.push("StrictHostKeyChecking=ask".to_string());
         actual_args.push("-o".to_string());
         actual_args.push(format!("UserKnownHostsFile={}", known_hosts.display()));
         actual_args.push("-o".to_string());
@@ -104,15 +144,24 @@ pub fn run_ssh_command_sync(
         }
     });
 
+    // RES-001 / PERF-001: bounded output + guaranteed child kill on timeout.
+    const MAX_OUTPUT_BYTES: usize = 512 * 1024;
     loop {
         if start.elapsed() > timeout {
             let _ = child.kill();
-            return Err("Command timed out".to_string());
+            drop(writer);
+            return Err("Command timed out after 30s".to_string());
         }
 
         if let Ok(chunk) = rx.recv_timeout(Duration::from_millis(50)) {
+            if output.len() + chunk.len() > MAX_OUTPUT_BYTES {
+                let _ = child.kill();
+                return Err("Command output exceeded 512KB limit".to_string());
+            }
             output.push_str(&chunk);
-            let lower_out = output.to_lowercase();
+            // Only scan the tail for prompts to keep this O(1) per chunk.
+            let tail_start = output.len().saturating_sub(2000);
+            let lower_out = output[tail_start..].to_lowercase();
 
             if !password_sent {
                 if let Some(pw) = password {
@@ -135,6 +184,9 @@ pub fn run_ssh_command_sync(
 
         if let Ok(Some(status)) = child.try_wait() {
             while let Ok(chunk) = rx.try_recv() {
+                if output.len() + chunk.len() > MAX_OUTPUT_BYTES {
+                    return Err("Command output exceeded 512KB limit".to_string());
+                }
                 output.push_str(&chunk);
             }
             if status.success() {
@@ -143,5 +195,18 @@ pub fn run_ssh_command_sync(
                 return Err(format!("Command failed with exit code: {:?}. Output: {}", status.exit_code(), output));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sftp_validation_rejects_injection() {
+        assert!(validate_hostname("host -oProxyCommand=x").is_err());
+        assert!(validate_username("user;id").is_err());
+        assert!(validate_hostname("ok.example.com").is_ok());
+        assert!(validate_username("deploy").is_ok());
     }
 }

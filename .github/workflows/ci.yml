@@ -42,3 +42,16 @@ jobs:
     - name: Clippy
       working-directory: src-tauri
       run: cargo clippy --all-targets
+
+    - name: Cargo tests (crypto/db/validation)
+      working-directory: src-tauri
+      run: cargo test
+
+    - name: npm audit (high+)
+      run: npm audit --audit-level=high
+
+    - name: Cargo audit
+      working-directory: src-tauri
+      run: |
+        cargo install cargo-audit --locked
+        cargo audit

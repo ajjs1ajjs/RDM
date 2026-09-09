@@ -10,11 +10,11 @@ export interface UpdateProgress {
 export type UpdatePhase = "idle" | "downloading" | "installing" | "done";
 
 export interface AppUpdateState {
-  /** An update is available (via signed updater or GitHub API fallback). */
+  /** An update is available (signed updater only). */
   available: boolean;
   latest: string;
   current: string;
-  /** Fallback releases page — used only when the in-app updater is unavailable. */
+  /** Deprecated — kept for API compat, always empty (unsigned fallback removed, SEC-003). */
   fallbackUrl: string;
   /** True when the update can be installed fully in-app (signed updater path). */
   canInstallInApp: boolean;
@@ -29,7 +29,7 @@ export function useAppUpdate(): AppUpdateState {
   const [available, setAvailable] = useState(false);
   const [latest, setLatest] = useState("");
   const [current, setCurrent] = useState("");
-  const [fallbackUrl, setFallbackUrl] = useState("");
+  const [fallbackUrl] = useState("");
   const [canInstallInApp, setCanInstallInApp] = useState(false);
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
@@ -40,7 +40,7 @@ export function useAppUpdate(): AppUpdateState {
     let cancelled = false;
 
     const check = async () => {
-      // Preferred path: signed Tauri updater — downloads and installs without
+      // Only use signed Tauri updater — downloads and installs without
       // ever leaving the app. Requires the release to publish latest.json.
       try {
         const res = await invoke<{ available: boolean; latest_version: string; current_version: string; download_url: string }>("check_update_status");
@@ -51,22 +51,9 @@ export function useAppUpdate(): AppUpdateState {
           setLatest(res.latest_version.startsWith("v") ? res.latest_version : `v${res.latest_version}`);
           setCanInstallInApp(true);
         }
-        return;
       } catch {
         // Updater unavailable (no latest.json yet, portable build, network…) —
-        // fall back to a plain GitHub API check and open the releases page.
-      }
-      try {
-        const res = await invoke<{ available: boolean; latest_version: string; current_version: string; download_url: string }>("check_for_update");
-        if (cancelled) return;
-        setCurrent(res.current_version);
-        if (res.available) {
-          setAvailable(true);
-          setLatest(res.latest_version);
-          setFallbackUrl(res.download_url);
-        }
-      } catch {
-        // No update information available — stay silent.
+        // stay silent. No fallback to unsigned GitHub API (SSRF risk).
       }
     };
 
