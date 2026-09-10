@@ -54,18 +54,20 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       const x = Math.round(rect.left);
       const y = Math.round(rect.top);
       await invoke("connect_rdp_embedded", {
-        sessionId: sid,
-        serverId,
-        host,
-        port,
-        credentialId: credentialId || null,
-        manualUsername: manualUser || null,
-        manualPassword: manualPass || null,
-        x,
-        y,
-        width: finalWidth,
-        height: finalHeight,
-        devicePixelRatio: window.devicePixelRatio || 1.0,
+        params: {
+          sessionId: sid,
+          serverId,
+          host,
+          port,
+          credentialId: credentialId || null,
+          manualUsername: manualUser || null,
+          manualPassword: manualPass || null,
+          x,
+          y,
+          width: finalWidth,
+          height: finalHeight,
+          devicePixelRatio: window.devicePixelRatio || 1.0,
+        },
       });
 
       if (activeRef.current) {
@@ -74,23 +76,27 @@ export const RdpTab: React.FC<RdpTabProps> = ({
         const x2 = Math.round(rect.left);
         const y2 = Math.round(rect.top);
         await invoke("resize_rdp_embedded", {
-          sessionId: sid,
-          x: x2,
-          y: y2,
-          width: finalWidth,
-          height: finalHeight,
-          devicePixelRatio: window.devicePixelRatio || 1.0,
+          params: {
+            sessionId: sid,
+            x: x2,
+            y: y2,
+            width: finalWidth,
+            height: finalHeight,
+            devicePixelRatio: window.devicePixelRatio || 1.0,
+          },
         });
         // Save manually entered credentials on successful connect
         if (manualUser && manualPass && serverId) {
           setSaving(true);
           invoke("save_server_from_connect", {
-            serverId,
-            host,
-            port,
-            protocol: "rdp",
-            username: manualUser,
-            password: manualPass,
+            params: {
+              serverId,
+              host,
+              port,
+              protocol: "rdp",
+              username: manualUser,
+              password: manualPass,
+            },
           }).catch((e: any) => console.error("Save server error:", e))
             .finally(() => setSaving(false));
         }
@@ -164,22 +170,26 @@ export const RdpTab: React.FC<RdpTabProps> = ({
       if (!isActive || w < 10 || h < 10) {
         // Hide window when tab is not active or size is invalid
         invoke("resize_rdp_embedded", {
-          sessionId: sid,
-          x: 0,
-          y: 0,
-          width: 0,
-          height: 0,
-          devicePixelRatio: window.devicePixelRatio || 1.0,
+          params: {
+            sessionId: sid,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            devicePixelRatio: window.devicePixelRatio || 1.0,
+          },
         }).catch((err) => console.error("RDP hide error:", err));
       } else {
         // Move & resize child window
         invoke("resize_rdp_embedded", {
-          sessionId: sid,
-          x,
-          y,
-          width: w,
-          height: h,
-          devicePixelRatio: window.devicePixelRatio || 1.0,
+          params: {
+            sessionId: sid,
+            x,
+            y,
+            width: w,
+            height: h,
+            devicePixelRatio: window.devicePixelRatio || 1.0,
+          },
         }).catch((err) => console.error("RDP resize error:", err));
       }
     };
@@ -355,9 +365,11 @@ export const RdpTab: React.FC<RdpTabProps> = ({
                   <button
                     onClick={() => {
                       invoke("connect_rdp", {
-                        serverId, host, port,
-                        credentialId: credentialId || null,
-                        fullscreen: false,
+                        params: {
+                          serverId, host, port,
+                          credentialId: credentialId || null,
+                          fullscreen: false,
+                        },
                       }).catch((err) => console.error("Failed to launch externally:", err));
                     }}
                     style={{

@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.3
+
+- **Clippy audit cleanup (15 warnings resolved, zero remaining):**
+  - Grouped oversized argument lists into config/params structs: `RdpConfig`, `RdpEmbeddedParams`, `RdpResizeParams` (`rdp.rs`), `SshConnectParams` (`ssh.rs`), `ServerParams`, `ConnectSshParams`, `ConnectRdpParams`, `ConnectRdpEmbeddedParams`, `ResizeRdpParams`, `SaveServerParams`, `SftpParams` (`lib.rs`).
+  - Removed redundant `fullscreen` parameter from `launch_rdp_session` (now sourced from `RdpConfig.fullscreen`).
+  - Fixed redundant closures in `ssh.rs` and factored the SSH credential tuple into the `SshCredsResult` type alias.
+  - Updated all frontend `invoke` calls (`RdpTab`, `SftpTab`, `TerminalTab`, `useServerForm`, `useServers`) to the new `{ params }` payload shape with camelCase field mapping.
+  - Verified: `cargo clippy --all-targets` clean, `tsc --noEmit` clean, `cargo test` 7 passed.
+
 ## v2.1.1
 
 - **Виправлено зникнення списку серверів після перезапуску (Restore Backup / старт програми):**

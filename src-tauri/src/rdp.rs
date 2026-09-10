@@ -13,6 +13,20 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_SYSMENU, WS_THICKFRAME,
 };
 
+/// RDP session configuration options
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RdpConfig {
+    pub clipboard: bool,
+    pub drives: bool,
+    pub printers: bool,
+    pub smart_sizing: bool,
+    pub audio: u32,
+    pub smartcards: bool,
+    pub webauthn: bool,
+    pub multimon: bool,
+    pub fullscreen: bool,
+}
+
 struct OwnerData(isize);
 
 #[derive(Clone, Copy)]
@@ -29,7 +43,7 @@ unsafe extern "system" fn resize_child_fill(hwnd: HWND, lparam: LPARAM) -> BOOL 
 
 unsafe extern "system" fn enum_owned_hwnd_top(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let data = &mut *(lparam.0 as *mut OwnerData);
-    let owner_hwnd = data.0 as isize;
+    let owner_hwnd = data.0;
     let owner = GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
     if owner == owner_hwnd {
         let _ = SetWindowPos(
@@ -66,10 +80,10 @@ impl Drop for RdpState {
         // Kill only our spawned mstsc/RdpHost processes by PID, clean up any
         // stored RDP credentials and temporary .rdp files so they never linger.
         if let Ok(sessions) = self.sessions.lock() {
-            for (_, session) in sessions.iter() {
+            for session in sessions.values() {
                 let pid = session.pid;
                 let _ = std::process::Command::new("taskkill")
-                    .args(&["/f", "/pid", &pid.to_string()])
+                    .args(["/f", "/pid", &pid.to_string()])
                     .output();
                 if let Some(ref f) = session.rdp_file {
                     let _ = std::fs::remove_file(f);
@@ -139,19 +153,11 @@ fn find_mstsc_hwnd(pid: u32) -> Option<HWND> {
 pub fn launch_rdp_session(
     host: &str,
     port: u32,
-    fullscreen: bool,
     username: Option<&str>,
     _password: Option<&str>,
     app_data_dir: PathBuf,
     server_id: Option<String>,
-    rdp_clipboard: bool,
-    rdp_drives: bool,
-    rdp_printers: bool,
-    rdp_smart_sizing: bool,
-    rdp_audio: u32,
-    rdp_smartcards: bool,
-    rdp_webauthn: bool,
-    rdp_multimon: bool,
+    config: RdpConfig,
 ) -> Result<(), String> {
     let connection_string = if port == 3389 || port == 0 {
         host.to_string()
@@ -175,20 +181,20 @@ pub fn launch_rdp_session(
         String::new()
     };
 
-    let screen_mode = if fullscreen { 2 } else { 1 };
-    let multimon_line = if rdp_multimon {
+    let screen_mode = if config.fullscreen { 2 } else { 1 };
+    let multimon_line = if config.multimon {
         "use multimon:i:1\r\n"
     } else {
         ""
     };
 
-    let smart_sizing_val = if rdp_smart_sizing { 1 } else { 0 };
-    let redirect_clipboard = if rdp_clipboard { 1 } else { 0 };
-    let redirect_drives = if rdp_drives { 1 } else { 0 };
-    let redirect_printers = if rdp_printers { 1 } else { 0 };
-    let redirect_smartcards = if rdp_smartcards { 1 } else { 0 };
-    let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
-    let audio_val = match rdp_audio {
+    let smart_sizing_val = if config.smart_sizing { 1 } else { 0 };
+    let redirect_clipboard = if config.clipboard { 1 } else { 0 };
+    let redirect_drives = if config.drives { 1 } else { 0 };
+    let redirect_printers = if config.printers { 1 } else { 0 };
+    let redirect_smartcards = if config.smartcards { 1 } else { 0 };
+    let redirect_webauthn = if config.webauthn { 1 } else { 0 };
+    let audio_val = match config.audio {
         0 => 0,
         1 => 1,
         2 => 2,
@@ -251,41 +257,41 @@ pub fn launch_rdp_session(
         .map_err(|e| format!("Failed to spawn mstsc process: {}", e))
 }
 
+/// Parameters for launching an embedded RDP session
+#[derive(Debug)]
+pub struct RdpEmbeddedParams {
+    pub session_id: String,
+    pub host: String,
+    pub port: u32,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub parent_hwnd: windows::Win32::Foundation::HWND,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub device_pixel_ratio: f64,
+    pub server_id: Option<String>,
+}
+
 /// Launches an embedded (reparented) mstsc.exe RDP session
 pub fn launch_rdp_embedded(
-    session_id: String,
-    host: &str,
-    port: u32,
-    username: Option<&str>,
-    password: Option<&str>,
-    parent_hwnd: windows::Win32::Foundation::HWND,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-    device_pixel_ratio: f64,
+    params: RdpEmbeddedParams,
     app_data_dir: PathBuf,
     app: tauri::AppHandle,
-    server_id: Option<String>,
-    rdp_clipboard: bool,
-    rdp_drives: bool,
-    rdp_printers: bool,
-    rdp_smart_sizing: bool,
-    rdp_audio: u32,
-    rdp_smartcards: bool,
-    rdp_webauthn: bool,
+    config: RdpConfig,
 ) -> Result<(), String> {
-    let port = if port == 0 { 3389 } else { port };
+    let port = if params.port == 0 { 3389 } else { params.port };
     let connection_string = if port == 3389 {
-        host.to_string()
+        params.host.clone()
     } else {
-        format!("{}:{}", host, port)
+        format!("{}:{}", params.host, port)
     };
 
-    let x_phys = (x as f64 * device_pixel_ratio).round() as i32;
-    let y_phys = (y as f64 * device_pixel_ratio).round() as i32;
-    let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
-    let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
+    let x_phys = (params.x as f64 * params.device_pixel_ratio).round() as i32;
+    let y_phys = (params.y as f64 * params.device_pixel_ratio).round() as i32;
+    let width_phys = (params.width as f64 * params.device_pixel_ratio).round() as i32;
+    let height_phys = (params.height as f64 * params.device_pixel_ratio).round() as i32;
 
     // 1. Compute screen coordinates BEFORE creating RDP file (so winposstr is accurate)
     let (screen_x, screen_y) = unsafe {
@@ -295,7 +301,7 @@ pub fn launch_rdp_embedded(
             x: x_phys,
             y: y_phys,
         };
-        let _ = ClientToScreen(parent_hwnd, &mut pt);
+        let _ = ClientToScreen(params.parent_hwnd, &mut pt);
         (pt.x, pt.y)
     };
 
@@ -306,16 +312,17 @@ pub fn launch_rdp_embedded(
     let file_name = format!("session_emb-{}.rdp", uuid::Uuid::new_v4());
     let rdp_file_path = rdp_sessions_dir.join(file_name);
 
-    let user_line = username
+    let user_line = params.username
+        .as_deref()
         .map(|u| format!("username:s:{}\r\n", u))
         .unwrap_or_default();
-    let smart_sizing_val = if rdp_smart_sizing { 1 } else { 0 };
-    let redirect_clipboard = if rdp_clipboard { 1 } else { 0 };
-    let redirect_drives = if rdp_drives { 1 } else { 0 };
-    let redirect_printers = if rdp_printers { 1 } else { 0 };
-    let redirect_smartcards = if rdp_smartcards { 1 } else { 0 };
-    let redirect_webauthn = if rdp_webauthn { 1 } else { 0 };
-    let audio_val = match rdp_audio {
+    let smart_sizing_val = if config.smart_sizing { 1 } else { 0 };
+    let redirect_clipboard = if config.clipboard { 1 } else { 0 };
+    let redirect_drives = if config.drives { 1 } else { 0 };
+    let redirect_printers = if config.printers { 1 } else { 0 };
+    let redirect_smartcards = if config.smartcards { 1 } else { 0 };
+    let redirect_webauthn = if config.webauthn { 1 } else { 0 };
+    let audio_val = match config.audio {
         0 => 0,
         1 => 1,
         2 => 2,
@@ -324,7 +331,7 @@ pub fn launch_rdp_embedded(
     let win_right = screen_x + width_phys;
     let win_bottom = screen_y + height_phys;
 
-    let has_creds = password.is_some();
+    let has_creds = params.password.is_some();
     let auth_level = if has_creds { 2 } else { 0 };
     let server_auth = if has_creds { 1 } else { 0 };
     let credssp = if has_creds { 1 } else { 0 };
@@ -408,18 +415,15 @@ pub fn launch_rdp_embedded(
     let mut mstsc_hwnd = None;
     for _ in 0..200 {
         std::thread::sleep(Duration::from_millis(50));
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                log_debug(
-                    &app_data_dir,
-                    &format!("mstsc exited prematurely with code {:?}", status.code()),
-                );
-                return Err(format!(
-                    "mstsc exited prematurely (code {:?})",
-                    status.code()
-                ));
-            }
-            _ => {}
+        if let Ok(Some(status)) = child.try_wait() {
+            log_debug(
+                &app_data_dir,
+                &format!("mstsc exited prematurely with code {:?}", status.code()),
+            );
+            return Err(format!(
+                "mstsc exited prematurely (code {:?})",
+                status.code()
+            ));
         }
         if let Some(hwnd) = find_mstsc_hwnd(pid) {
             mstsc_hwnd = Some(hwnd);
@@ -447,7 +451,7 @@ pub fn launch_rdp_embedded(
         SetWindowLongW(hwnd, GWL_STYLE, style as i32);
 
         // Set owner so mstsc follows app minimize/restore (visible flag prevents SSH interference)
-        let _ = SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, parent_hwnd.0 as isize);
+        let _ = SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, params.parent_hwnd.0 as isize);
 
         // Position at screen coords
         let _ = SetWindowPos(
@@ -485,10 +489,10 @@ pub fn launch_rdp_embedded(
     {
         let mut sessions = state.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(
-            session_id.clone(),
+            params.session_id.clone(),
             RdpSession {
-                target_host: host.to_string(),
-                server_id,
+                target_host: params.host.to_string(),
+                server_id: params.server_id.clone(),
                 rdp_file: Some(rdp_file_path.clone()),
                 mstsc_hwnd: hwnd.0 as isize,
                 pid,
@@ -499,9 +503,9 @@ pub fn launch_rdp_embedded(
 
     // 6. Monitor thread (keeps mstsc on top only while visible flag is true)
     let app_clone = app.clone();
-    let session_id_clone = session_id.clone();
+    let session_id_clone = params.session_id.clone();
     let hwnd_raw = hwnd.0 as usize;
-    let sid_clone = session_id.clone();
+    let sid_clone = params.session_id.clone();
     std::thread::spawn(move || {
         let thread_hwnd = HWND(hwnd_raw as *mut _);
         loop {
@@ -564,13 +568,19 @@ pub fn launch_rdp_embedded(
     Ok(())
 }
 
+/// Geometry parameters for resizing an embedded RDP session
+#[derive(Debug)]
+pub struct RdpResizeParams {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub device_pixel_ratio: f64,
+}
+
 pub fn resize_rdp_embedded(
     session_id: &str,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-    device_pixel_ratio: f64,
+    geometry: RdpResizeParams,
     app: &tauri::AppHandle,
     state: &RdpState,
 ) -> Result<(), String> {
@@ -578,7 +588,7 @@ pub fn resize_rdp_embedded(
     if let Some(session) = sessions.get_mut(session_id) {
         let hwnd = HWND(session.mstsc_hwnd as *mut _);
         unsafe {
-            if width <= 0 || height <= 0 {
+            if geometry.width <= 0 || geometry.height <= 0 {
                 let _ = ShowWindow(hwnd, SW_HIDE);
                 session.visible = false;
                 // Move off-screen so even if mstsc re-shows, it's hidden
@@ -600,10 +610,10 @@ pub fn resize_rdp_embedded(
                 use windows::Win32::Foundation::POINT;
                 use windows::Win32::Graphics::Gdi::ClientToScreen;
 
-                let x_phys = (x as f64 * device_pixel_ratio).round() as i32;
-                let y_phys = (y as f64 * device_pixel_ratio).round() as i32;
-                let width_phys = (width as f64 * device_pixel_ratio).round() as i32;
-                let height_phys = (height as f64 * device_pixel_ratio).round() as i32;
+                let x_phys = (geometry.x as f64 * geometry.device_pixel_ratio).round() as i32;
+                let y_phys = (geometry.y as f64 * geometry.device_pixel_ratio).round() as i32;
+                let width_phys = (geometry.width as f64 * geometry.device_pixel_ratio).round() as i32;
+                let height_phys = (geometry.height as f64 * geometry.device_pixel_ratio).round() as i32;
 
                 let mut pt = POINT {
                     x: x_phys,

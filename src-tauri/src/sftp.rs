@@ -82,7 +82,7 @@ pub fn run_ssh_command_sync(
         #[cfg(windows)]
         {
             let _ = std::process::Command::new("icacls")
-                .args(&[
+                .args([
                     key_file.to_string_lossy().as_ref(),
                     "/inheritance:r",
                     "/grant:r",

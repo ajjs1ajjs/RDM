@@ -39,6 +39,12 @@ pub struct SessionState {
     pub kek: Mutex<Option<[u8; 32]>>,
 }
 
+impl Default for SessionState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionState {
     pub fn new() -> Self {
         Self {
@@ -268,7 +274,7 @@ fn unlock_vault_impl(
             } else {
                 // Exponential backoff for early attempts: 30s, 60s, 120s
                 let base = 30u64;
-                let delay_multiplier = 1u64.pow(attempts.saturating_sub(1) as u32);
+                let delay_multiplier = 1u64.pow(attempts.saturating_sub(1));
                 base * delay_multiplier
             };
             let lockout_until = std::time::SystemTime::now()
@@ -574,42 +580,22 @@ fn get_servers(db: State<'_, DbState>) -> Result<Vec<db::Server>, String> {
 
 #[tauri::command]
 fn add_server(
-    name: String,
-    hostname: String,
-    ip: String,
-    port: u32,
-    protocol: String,
-    os: String,
-    folder_path: String,
-    tags: String,
-    description: String,
-    credential_id: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
-    rdp_clipboard: Option<i32>,
-    rdp_drives: Option<i32>,
-    rdp_printers: Option<i32>,
-    rdp_smart_sizing: Option<i32>,
-    rdp_audio: Option<i32>,
-    rdp_smartcards: Option<i32>,
-    rdp_webauthn: Option<i32>,
-    rdp_fullscreen: Option<i32>,
-    rdp_multimon: Option<i32>,
+    params: ServerParams,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut encrypted_password = None;
 
-    if let Some(ref pass_val) = password {
+    if let Some(ref pass_val) = params.password {
         if !pass_val.is_empty() {
             let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
             let kek = kek_guard
                 .ok_or_else(|| "Vault is locked. Cannot store custom password.".to_string())?;
             // Validate protocol is either "ssh" or "rdp"
             let valid_protocols = ["ssh", "rdp"];
-            if !valid_protocols.iter().any(|&p| p == protocol.as_str()) {
-                return Err(format!("Invalid protocol: {}. Must be one of: {}", protocol, valid_protocols.join(", ")));
+            if !valid_protocols.contains(&params.protocol.as_str()) {
+                return Err(format!("Invalid protocol: {}. Must be one of: {}", params.protocol, valid_protocols.join(", ")));
             }
             let encrypted = crypto::encrypt_secret(&kek, pass_val)?;
             let encrypted_json = serde_json::to_string(&encrypted)
@@ -620,29 +606,29 @@ fn add_server(
 
     let srv = db::Server {
         id: Uuid::new_v4().to_string(),
-        name,
-        hostname,
-        ip,
-        port,
-        protocol,
-        os,
-        folder_path,
-        tags,
-        description,
-        credential_id,
-        username,
+        name: params.name,
+        hostname: params.hostname,
+        ip: params.ip,
+        port: params.port,
+        protocol: params.protocol,
+        os: params.os,
+        folder_path: params.folder_path,
+        tags: params.tags,
+        description: params.description,
+        credential_id: params.credential_id,
+        username: params.username,
         encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
-        rdp_clipboard,
-        rdp_drives,
-        rdp_printers,
-        rdp_smart_sizing,
-        rdp_audio,
-        rdp_smartcards,
-        rdp_webauthn,
-        rdp_fullscreen,
-        rdp_multimon,
+        rdp_clipboard: params.rdp_clipboard,
+        rdp_drives: params.rdp_drives,
+        rdp_printers: params.rdp_printers,
+        rdp_smart_sizing: params.rdp_smart_sizing,
+        rdp_audio: params.rdp_audio,
+        rdp_smartcards: params.rdp_smartcards,
+        rdp_webauthn: params.rdp_webauthn,
+        rdp_fullscreen: params.rdp_fullscreen,
+        rdp_multimon: params.rdp_multimon,
     };
 
     db::add_server(&conn, &srv)
@@ -651,35 +637,15 @@ fn add_server(
 #[tauri::command]
 fn update_server(
     id: String,
-    name: String,
-    hostname: String,
-    ip: String,
-    port: u32,
-    protocol: String,
-    os: String,
-    folder_path: String,
-    tags: String,
-    description: String,
-    credential_id: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
+    params: ServerParams,
     password_changed: bool,
-    rdp_clipboard: Option<i32>,
-    rdp_drives: Option<i32>,
-    rdp_printers: Option<i32>,
-    rdp_smart_sizing: Option<i32>,
-    rdp_audio: Option<i32>,
-    rdp_smartcards: Option<i32>,
-    rdp_webauthn: Option<i32>,
-    rdp_fullscreen: Option<i32>,
-    rdp_multimon: Option<i32>,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut encrypted_password = None;
 
-    if let Some(ref pass_val) = password {
+    if let Some(ref pass_val) = params.password {
         if password_changed && !pass_val.is_empty() {
             let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
             let kek = kek_guard
@@ -698,29 +664,29 @@ fn update_server(
 
     let srv = db::Server {
         id,
-        name,
-        hostname,
-        ip,
-        port,
-        protocol,
-        os,
-        folder_path,
-        tags,
-        description,
-        credential_id,
-        username,
+        name: params.name,
+        hostname: params.hostname,
+        ip: params.ip,
+        port: params.port,
+        protocol: params.protocol,
+        os: params.os,
+        folder_path: params.folder_path,
+        tags: params.tags,
+        description: params.description,
+        credential_id: params.credential_id,
+        username: params.username,
         encrypted_password,
         created_at: String::new(),
         updated_at: String::new(),
-        rdp_clipboard,
-        rdp_drives,
-        rdp_printers,
-        rdp_smart_sizing,
-        rdp_audio,
-        rdp_smartcards,
-        rdp_webauthn,
-        rdp_fullscreen,
-        rdp_multimon,
+        rdp_clipboard: params.rdp_clipboard,
+        rdp_drives: params.rdp_drives,
+        rdp_printers: params.rdp_printers,
+        rdp_smart_sizing: params.rdp_smart_sizing,
+        rdp_audio: params.rdp_audio,
+        rdp_smartcards: params.rdp_smartcards,
+        rdp_webauthn: params.rdp_webauthn,
+        rdp_fullscreen: params.rdp_fullscreen,
+        rdp_multimon: params.rdp_multimon,
     };
 
     db::update_server(&conn, &srv)
@@ -763,14 +729,7 @@ fn add_connection_history(
 // Connect commands
 #[tauri::command]
 fn connect_ssh(
-    session_id: String,
-    host: String,
-    port: u16,
-    username: String,
-    credential_id: Option<String>,
-    server_id: Option<String>,
-    cols: u32,
-    rows: u32,
+    params: ConnectSshParams,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
@@ -781,26 +740,26 @@ fn connect_ssh(
         .as_ref()
         .ok_or_else(|| "Vault is locked".to_string())?;
 
-    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, &username)?;
-    let final_username = auth.username.unwrap_or(username);
+    let auth = resolve_auth(&conn, kek, &params.server_id, &params.credential_id, &params.username)?;
+    let final_username = auth.username.unwrap_or(params.username.clone());
 
-    tracing::info!(host = %host, port = %port, username = %final_username, "Initiating SSH connection");
+    tracing::info!(host = %params.host, port = %params.port, username = %final_username, "Initiating SSH connection");
 
-    let res = ssh::connect_ssh(
-        app,
-        session_id,
-        &host,
-        port,
-        &final_username,
-        zeroizing_opt_as_str(&auth.password),
-        zeroizing_opt_as_str(&auth.private_key),
-        zeroizing_opt_as_str(&auth.passphrase),
-        cols,
-        rows,
-        server_id.clone(),
-    );
+    let ssh_params = ssh::SshConnectParams {
+        host: params.host.clone(),
+        port: params.port,
+        username: final_username.clone(),
+        password: auth.password.as_ref().map(|s| s.to_string()),
+        private_key: auth.private_key.as_ref().map(|s| s.to_string()),
+        passphrase: auth.passphrase.as_ref().map(|s| s.to_string()),
+        cols: params.cols,
+        rows: params.rows,
+        server_id: params.server_id.clone(),
+    };
 
-    if let Some(ref srv_id) = server_id {
+    let res = ssh::connect_ssh(app, params.session_id.clone(), ssh_params);
+
+    if let Some(ref srv_id) = params.server_id {
         let hist = db::ConnectionHistory {
             id: Uuid::new_v4().to_string(),
             server_id: srv_id.clone(),
@@ -811,7 +770,7 @@ fn connect_ssh(
                 "failed".to_string()
             },
             log: if res.is_ok() {
-                format!("SSH session initiated to {}:{}", host, port)
+                format!("SSH session initiated to {}:{}", params.host, params.port)
             } else {
                 format!(
                     "Failed to initiate SSH session: {}",
@@ -852,11 +811,7 @@ fn disconnect_ssh(session_id: String, ssh_state: State<'_, ssh::SshState>) -> Re
 #[cfg(target_os = "windows")]
 #[tauri::command]
 fn connect_rdp(
-    host: String,
-    port: u32,
-    fullscreen: bool,
-    credential_id: Option<String>,
-    server_id: Option<String>,
+    params: ConnectRdpParams,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
@@ -877,7 +832,7 @@ fn connect_rdp(
     let mut rdp_webauthn = false;
 
     // Check if server has manual credentials first
-    if let Some(ref srv_id) = server_id {
+    if let Some(ref srv_id) = params.server_id {
         if let Some(srv) = db::get_server_by_id(&conn, srv_id)? {
             rdp_multimon = srv.rdp_multimon.unwrap_or(0) != 0;
             rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
@@ -890,29 +845,33 @@ fn connect_rdp(
         }
     }
 
-    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
+    let auth = resolve_auth(&conn, kek, &params.server_id, &params.credential_id, "")?;
 
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
+    let config = rdp::RdpConfig {
+        clipboard: rdp_clipboard,
+        drives: rdp_drives,
+        printers: rdp_printers,
+        smart_sizing: rdp_smart_sizing,
+        audio: rdp_audio,
+        smartcards: rdp_smartcards,
+        webauthn: rdp_webauthn,
+        multimon: rdp_multimon,
+        fullscreen: params.fullscreen,
+    };
+
     let res = rdp::launch_rdp_session(
-        &host,
-        port,
-        fullscreen,
+        &params.host,
+        params.port,
         auth.username.as_deref(),
         zeroizing_opt_as_str(&auth.password),
         app_data_dir,
-        server_id.clone(),
-        rdp_clipboard,
-        rdp_drives,
-        rdp_printers,
-        rdp_smart_sizing,
-        rdp_audio,
-        rdp_smartcards,
-        rdp_webauthn,
-        rdp_multimon,
+        params.server_id.clone(),
+        config,
     );
 
-    if let Some(ref srv_id) = server_id {
+    if let Some(ref srv_id) = params.server_id {
         let hist = db::ConnectionHistory {
             id: Uuid::new_v4().to_string(),
             server_id: srv_id.clone(),
@@ -923,7 +882,7 @@ fn connect_rdp(
                 "failed".to_string()
             },
             log: if res.is_ok() {
-                format!("External RDP session launched to {}:{}", host, port)
+                format!("External RDP session launched to {}:{}", params.host, params.port)
             } else {
                 format!(
                     "Failed to launch RDP session: {}",
@@ -940,18 +899,7 @@ fn connect_rdp(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 fn connect_rdp_embedded(
-    session_id: String,
-    host: String,
-    port: u32,
-    credential_id: Option<String>,
-    server_id: Option<String>,
-    manual_username: Option<String>,
-    manual_password: Option<String>,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-    device_pixel_ratio: f64,
+    params: ConnectRdpEmbeddedParams,
     app: AppHandle,
     state: State<'_, SessionState>,
     _rdp_state: State<'_, rdp::RdpState>,
@@ -973,7 +921,7 @@ fn connect_rdp_embedded(
     let mut rdp_fullscreen = false;
     let mut rdp_multimon = false;
 
-    if let Some(ref srv_id) = server_id {
+    if let Some(ref srv_id) = params.server_id {
         if let Some(srv) = db::get_server_by_id(&conn, srv_id)? {
             rdp_clipboard = srv.rdp_clipboard.unwrap_or(1) != 0;
             rdp_drives = srv.rdp_drives.unwrap_or(0) != 0;
@@ -987,10 +935,10 @@ fn connect_rdp_embedded(
         }
     }
 
-    let auth = resolve_auth(&conn, kek, &server_id, &credential_id, "")?;
+    let auth = resolve_auth(&conn, kek, &params.server_id, &params.credential_id, "")?;
     // Manual credentials override stored ones (clone to avoid partial move)
-    let rdp_username = manual_username.or(auth.username.clone());
-    let rdp_password = manual_password
+    let rdp_username = params.manual_username.or(auth.username.clone());
+    let rdp_password = params.manual_password
         .map(zeroize::Zeroizing::new)
         .or(auth.password.clone());
 
@@ -1028,52 +976,52 @@ fn connect_rdp_embedded(
     }
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
+    let config = rdp::RdpConfig {
+        clipboard: rdp_clipboard,
+        drives: rdp_drives,
+        printers: rdp_printers,
+        smart_sizing: rdp_smart_sizing,
+        audio: rdp_audio,
+        smartcards: rdp_smartcards,
+        webauthn: rdp_webauthn,
+        multimon: rdp_multimon,
+        fullscreen: rdp_fullscreen,
+    };
+
     let res = if rdp_fullscreen || rdp_multimon {
         // If fullscreen or multimon, we must launch externally because embedding breaks these modes
         rdp::launch_rdp_session(
-            &host,
-            port,
-            rdp_fullscreen, // fullscreen parameter
+            &params.host,
+            params.port,
             auth.username.as_deref(),
             zeroizing_opt_as_str(&auth.password),
             app_data_dir,
-            server_id.clone(),
-            rdp_clipboard,
-            rdp_drives,
-            rdp_printers,
-            rdp_smart_sizing,
-            rdp_audio,
-            rdp_smartcards,
-            rdp_webauthn,
-            rdp_multimon, // we need to add this param to launch_rdp_session
+            params.server_id.clone(),
+            config,
         )
     } else {
         rdp::launch_rdp_embedded(
-            session_id,
-            &host,
-            port,
-            rdp_username.as_deref(),
-            zeroizing_opt_as_str(&rdp_password),
-            parent_hwnd,
-            x,
-            y,
-            width,
-            height,
-            device_pixel_ratio,
+            rdp::RdpEmbeddedParams {
+                session_id: params.session_id.clone(),
+                host: params.host.clone(),
+                port: params.port,
+                username: rdp_username.clone(),
+                password: rdp_password.as_ref().map(|p| p.as_str().to_string()),
+                parent_hwnd,
+                x: params.x,
+                y: params.y,
+                width: params.width,
+                height: params.height,
+                device_pixel_ratio: params.device_pixel_ratio,
+                server_id: params.server_id.clone(),
+            },
             app_data_dir,
             app.clone(),
-            server_id.clone(),
-            rdp_clipboard,
-            rdp_drives,
-            rdp_printers,
-            rdp_smart_sizing,
-            rdp_audio,
-            rdp_smartcards,
-            rdp_webauthn,
+            config,
         )
     };
 
-    if let Some(ref srv_id) = server_id {
+    if let Some(ref srv_id) = params.server_id {
         let hist = db::ConnectionHistory {
             id: Uuid::new_v4().to_string(),
             server_id: srv_id.clone(),
@@ -1084,7 +1032,7 @@ fn connect_rdp_embedded(
                 "failed".to_string()
             },
             log: if res.is_ok() {
-                format!("Embedded RDP session launched to {}:{}", host, port)
+                format!("Embedded RDP session launched to {}:{}", params.host, params.port)
             } else {
                 format!(
                     "Failed to launch embedded RDP session: {}",
@@ -1101,22 +1049,19 @@ fn connect_rdp_embedded(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 fn resize_rdp_embedded(
-    session_id: String,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-    device_pixel_ratio: f64,
+    params: ResizeRdpParams,
     app: AppHandle,
     rdp_state: State<'_, rdp::RdpState>,
 ) -> Result<(), String> {
     rdp::resize_rdp_embedded(
-        &session_id,
-        x,
-        y,
-        width,
-        height,
-        device_pixel_ratio,
+        &params.session_id,
+        rdp::RdpResizeParams {
+            x: params.x,
+            y: params.y,
+            width: params.width,
+            height: params.height,
+            device_pixel_ratio: params.device_pixel_ratio,
+        },
         &app,
         rdp_state.inner(),
     )
@@ -1695,10 +1640,7 @@ fn import_devolutions_csv(
     for (idx, header) in headers.iter().enumerate() {
         let h = header
             .to_lowercase()
-            .replace(' ', "")
-            .replace('_', "")
-            .replace('-', "")
-            .replace('/', "");
+            .replace([' ', '_', '-', '/'], "");
         if h == "name"
             || h == "connectionname"
             || h == "displayname"
@@ -1963,7 +1905,7 @@ fn select_and_import_devolutions_csv(
 
     if let Some(path) = file_path {
         let path = path.as_path().ok_or("Invalid file path")?;
-        let content = std::fs::read_to_string(&path)
+        let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read CSV file: {}", e))?;
         import_devolutions_csv(content, state, db)
     } else {
@@ -2028,6 +1970,119 @@ struct ResolvedAuth {
     passphrase: Option<zeroize::Zeroizing<String>>,
 }
 
+/// Server creation/update parameters
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerParams {
+    pub name: String,
+    pub hostname: String,
+    pub ip: String,
+    pub port: u32,
+    pub protocol: String,
+    pub os: String,
+    pub folder_path: String,
+    pub tags: String,
+    pub description: String,
+    pub credential_id: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub rdp_clipboard: Option<i32>,
+    pub rdp_drives: Option<i32>,
+    pub rdp_printers: Option<i32>,
+    pub rdp_smart_sizing: Option<i32>,
+    pub rdp_audio: Option<i32>,
+    pub rdp_smartcards: Option<i32>,
+    pub rdp_webauthn: Option<i32>,
+    pub rdp_fullscreen: Option<i32>,
+    pub rdp_multimon: Option<i32>,
+}
+
+/// SFTP connection parameters
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpParams {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub credential_id: Option<String>,
+    pub server_id: Option<String>,
+}
+
+/// SSH connect parameters (Tauri command wrapper)
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectSshParams {
+    pub session_id: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub credential_id: Option<String>,
+    pub server_id: Option<String>,
+    pub cols: u32,
+    pub rows: u32,
+}
+
+/// RDP connect parameters (Tauri command wrapper)
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectRdpParams {
+    pub host: String,
+    pub port: u32,
+    pub fullscreen: bool,
+    pub credential_id: Option<String>,
+    pub server_id: Option<String>,
+}
+
+/// RDP embedded connect parameters (Tauri command wrapper)
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectRdpEmbeddedParams {
+    pub session_id: String,
+    pub host: String,
+    pub port: u32,
+    pub credential_id: Option<String>,
+    pub server_id: Option<String>,
+    pub manual_username: Option<String>,
+    pub manual_password: Option<String>,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub device_pixel_ratio: f64,
+}
+
+/// RDP resize parameters (Tauri command wrapper)
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeRdpParams {
+    pub session_id: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub device_pixel_ratio: f64,
+}
+
+/// Save server from connect dialog parameters
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveServerParams {
+    pub server_id: Option<String>,
+    pub host: String,
+    pub port: u32,
+    pub protocol: String,
+    pub username: String,
+    pub password: String,
+}
+
+/// SSH credential resolution result type
+pub type SshCredsResult = (
+    String,
+    Option<zeroize::Zeroizing<String>>,
+    Option<zeroize::Zeroizing<String>>,
+    Option<zeroize::Zeroizing<String>>,
+);
+
 /// Borrows a Zeroizing-wrapped secret as `Option<&str>` for API boundaries.
 fn zeroizing_opt_as_str(v: &Option<zeroize::Zeroizing<String>>) -> Option<&str> {
     v.as_deref().map(|s| s.as_str())
@@ -2035,12 +2090,7 @@ fn zeroizing_opt_as_str(v: &Option<zeroize::Zeroizing<String>>) -> Option<&str> 
 
 #[tauri::command]
 fn save_server_from_connect(
-    server_id: Option<String>,
-    host: String,
-    port: u32,
-    protocol: String,
-    username: String,
-    password: String,
+    params: SaveServerParams,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<(), String> {
@@ -2051,32 +2101,32 @@ fn save_server_from_connect(
         .ok_or_else(|| "Vault is locked".to_string())?;
 
     // Check if server already exists by hostname
-    let found = match server_id {
+    let found = match params.server_id {
         Some(ref id) => db::get_server_by_id(&conn, id)?,
         None => None,
     };
 
-    let server_name = host
+    let server_name = params.host
         .trim_start_matches("http://")
         .trim_start_matches("https://")
         .split('.')
         .next()
-        .unwrap_or(&host);
+        .unwrap_or(&params.host);
 
     if let Some(srv) = found {
         // Update existing server with credentials
-        let encrypted = crypto::encrypt_secret(kek, &password)?;
+        let encrypted = crypto::encrypt_secret(kek, &params.password)?;
         let encrypted_json = serde_json::to_string(&encrypted)
             .map_err(|e| format!("Failed to serialize password: {}", e))?;
         let mut updated = srv.clone();
-        updated.username = Some(username);
+        updated.username = Some(params.username);
         updated.encrypted_password = Some(encrypted_json);
         db::update_server(&conn, &updated)?;
     } else {
         // Create new server
         use uuid::Uuid;
         let new_id = format!("srv-{}", Uuid::new_v4());
-        let encrypted = crypto::encrypt_secret(kek, &password)?;
+        let encrypted = crypto::encrypt_secret(kek, &params.password)?;
         let encrypted_json = serde_json::to_string(&encrypted)
             .map_err(|e| format!("Failed to serialize password: {}", e))?;
         let now = std::time::SystemTime::now()
@@ -2086,16 +2136,16 @@ fn save_server_from_connect(
         let new_srv = db::Server {
             id: new_id,
             name: server_name.to_string(),
-            hostname: host.clone(),
-            ip: host.clone(),
-            port,
-            protocol: protocol.clone(),
+            hostname: params.host.clone(),
+            ip: params.host.clone(),
+            port: params.port,
+            protocol: params.protocol.clone(),
             os: String::new(),
             folder_path: String::new(),
             tags: String::new(),
             description: String::new(),
             credential_id: None,
-            username: Some(username),
+            username: Some(params.username),
             encrypted_password: Some(encrypted_json),
             created_at: now.clone(),
             updated_at: now,
@@ -2237,15 +2287,7 @@ fn get_ssh_creds(
     app_username: &str,
     state: &State<'_, SessionState>,
     db: &State<'_, DbState>,
-) -> Result<
-    (
-        String,
-        Option<zeroize::Zeroizing<String>>,
-        Option<zeroize::Zeroizing<String>>,
-        Option<zeroize::Zeroizing<String>>,
-    ),
-    String,
-> {
+) -> Result<SshCredsResult, String> {
     // Single source of truth for credential resolution — same logic as connect_ssh.
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let kek_guard = state.kek.lock().map_err(|e| e.to_string())?;
@@ -2264,18 +2306,14 @@ fn get_ssh_creds(
 
 #[tauri::command]
 fn sftp_ls(
-    host: String,
-    port: u16,
-    username: String,
+    params: SftpParams,
     path: String,
-    credential_id: Option<String>,
-    server_id: Option<String>,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
-        get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+        get_ssh_creds(&params.server_id, &params.credential_id, &params.username, &state, &db)?;
     let app_data = app
         .path()
         .app_data_dir()
@@ -2285,8 +2323,8 @@ fn sftp_ls(
     // so spaces and special characters are safe — no injection surface here.
     let mut args = vec![
         "-p".to_string(),
-        port.to_string(),
-        format!("{}@{}", final_user, host),
+        params.port.to_string(),
+        format!("{}@{}", final_user, params.host),
         "ls".to_string(),
         "-la".to_string(),
     ];
@@ -2304,19 +2342,15 @@ fn sftp_ls(
 
 #[tauri::command]
 fn sftp_download(
-    host: String,
-    port: u16,
-    username: String,
+    params: SftpParams,
     remote_path: String,
     local_path: String,
-    credential_id: Option<String>,
-    server_id: Option<String>,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
-        get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+        get_ssh_creds(&params.server_id, &params.credential_id, &params.username, &state, &db)?;
     let app_data = app
         .path()
         .app_data_dir()
@@ -2324,8 +2358,8 @@ fn sftp_download(
 
     let args = vec![
         "-P".to_string(),
-        port.to_string(),
-        format!("{}@{}:{}", final_user, host, remote_path),
+        params.port.to_string(),
+        format!("{}@{}:{}", final_user, params.host, remote_path),
         local_path,
     ];
 
@@ -2341,19 +2375,15 @@ fn sftp_download(
 
 #[tauri::command]
 fn sftp_upload(
-    host: String,
-    port: u16,
-    username: String,
+    params: SftpParams,
     local_path: String,
     remote_path: String,
-    credential_id: Option<String>,
-    server_id: Option<String>,
     app: AppHandle,
     state: State<'_, SessionState>,
     db: State<'_, DbState>,
 ) -> Result<String, String> {
     let (final_user, pwd, key, passphrase) =
-        get_ssh_creds(&server_id, &credential_id, &username, &state, &db)?;
+        get_ssh_creds(&params.server_id, &params.credential_id, &params.username, &state, &db)?;
     let app_data = app
         .path()
         .app_data_dir()
@@ -2361,9 +2391,9 @@ fn sftp_upload(
 
     let args = vec![
         "-P".to_string(),
-        port.to_string(),
+        params.port.to_string(),
         local_path,
-        format!("{}@{}:{}", final_user, host, remote_path),
+        format!("{}@{}:{}", final_user, params.host, remote_path),
     ];
 
     sftp::run_ssh_command_sync(

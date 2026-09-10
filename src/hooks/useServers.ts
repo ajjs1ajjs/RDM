@@ -95,17 +95,19 @@ export function useServers() {
         }
 
         await invoke("update_server", {
-          id: s.id, name: s.name, hostname: s.hostname, ip: s.ip,
+          id: s.id,
+          params: { name: s.name, hostname: s.hostname, ip: s.ip,
           port: s.port, protocol: s.protocol, os: s.os,
           folderPath: updatedFolderPath, tags: s.tags,
           description: s.description, credentialId: s.credential_id || null,
           username: s.username || null, password: "",
-          passwordChanged: false,
           rdpClipboard: s.rdp_clipboard, rdpDrives: s.rdp_drives,
           rdpPrinters: s.rdp_printers, rdpSmartSizing: s.rdp_smart_sizing,
           rdpAudio: s.rdp_audio, rdpSmartcards: s.rdp_smartcards,
           rdpWebauthn: s.rdp_webauthn, rdpFullscreen: s.rdp_fullscreen,
           rdpMultimon: s.rdp_multimon,
+          },
+          passwordChanged: false,
         });
       }
 

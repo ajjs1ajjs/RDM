@@ -341,14 +341,16 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         if (!isDestroyed) {
           // Trigger SSH connection on backend
           await invoke("connect_ssh", {
-            sessionId,
-            host,
-            port,
-            username,
-            credentialId: credentialId || null,
-            serverId: serverId || null,
-            cols: term.cols,
-            rows: term.rows,
+            params: {
+              sessionId,
+              host,
+              port,
+              username,
+              credentialId: credentialId || null,
+              serverId: serverId || null,
+              cols: term.cols,
+              rows: term.rows,
+            },
           });
           isConnectedRef.current = true;
           setStatus('connected');

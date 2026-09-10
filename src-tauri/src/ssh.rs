@@ -8,6 +8,20 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Connection parameters for SSH sessions
+#[derive(Debug)]
+pub struct SshConnectParams {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub private_key: Option<String>,
+    pub passphrase: Option<String>,
+    pub cols: u32,
+    pub rows: u32,
+    pub server_id: Option<String>,
+}
+
 /// Validates hostname per RFC 1123 / RFC 952
 fn validate_hostname(host: &str) -> Result<(), String> {
     if host.is_empty() || host.len() > 253 {
@@ -49,7 +63,7 @@ fn strip_ansi_codes(s: &str) -> String {
                 // CSI: ESC [ params... terminator (0x40-0x7E)
                 Some('[') => {
                     while let Some(&ch) = chars.peek() {
-                        if ch >= '\x40' && ch <= '\x7e' {
+                        if ('\x40'..='\x7e').contains(&ch) {
                             chars.next();
                             break;
                         }
@@ -62,21 +76,19 @@ fn strip_ansi_codes(s: &str) -> String {
                         if ch == '\x07' {
                             break;
                         }
-                        if ch == '\x1b' {
-                            if chars.next() == Some('\\') {
+                        if ch == '\x1b'
+                            && chars.next() == Some('\\') {
                                 break;
                             }
-                        }
                     }
                 }
                 // DCS (P), APC (_), PM (^), SOS (X): ... ST
                 Some('P') | Some('_') | Some('^') | Some('X') => {
                     while let Some(ch) = chars.next() {
-                        if ch == '\x1b' {
-                            if chars.next() == Some('\\') {
+                        if ch == '\x1b'
+                            && chars.next() == Some('\\') {
                                 break;
                             }
-                        }
                     }
                 }
                 // Two-character sequences: ESC N (SS2), ESC O (SS3)
@@ -122,18 +134,10 @@ impl SshState {
 pub fn connect_ssh(
     app: AppHandle,
     session_id: String,
-    host: &str,
-    port: u16,
-    username: &str,
-    password: Option<&str>,
-    private_key: Option<&str>,
-    passphrase: Option<&str>,
-    cols: u32,
-    rows: u32,
-    server_id: Option<String>,
+    params: SshConnectParams,
 ) -> Result<(), String> {
-    validate_hostname(host)?;
-    validate_username(username)?;
+    validate_hostname(&params.host)?;
+    validate_username(&params.username)?;
 
     let mut key_guard = None;
     let mut temp_key_path = None;
@@ -147,16 +151,16 @@ pub fn connect_ssh(
         "-o".to_string(),
         "BatchMode=no".to_string(),
         "-p".to_string(),
-        port.to_string(),
+        params.port.to_string(),
     ];
 
     // Force PTY allocation for proper password prompts on Windows
-    if password.is_some() || passphrase.is_some() {
+    if params.password.is_some() || params.passphrase.is_some() {
         args.push("-tt".to_string());
     }
 
     // If private key is provided, write to secure temp file
-    if let Some(key_content) = private_key {
+    if let Some(ref key_content) = params.private_key {
         let app_dir = app.path().app_data_dir().map_err(|e| format!("Cannot resolve app data dir: {}", e))?;
         let keys_dir = app_dir.join("temp_keys");
         std::fs::create_dir_all(&keys_dir)
@@ -176,7 +180,7 @@ pub fn connect_ssh(
         {
             // Restrict key file to current user only using icacls
             let icacls_result = std::process::Command::new("icacls")
-                .args(&[
+                .args([
                     key_file.to_string_lossy().as_ref(),
                     "/inheritance:r",
                     "/grant:r",
@@ -190,37 +194,37 @@ pub fn connect_ssh(
                     // icacls failed - set file permissions to owner-only read
                     // Using chmod equivalent via icacls fallback
                     let _ = std::process::Command::new("cmd")
-                        .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/setowner", "&", &std::env::var("USERNAME").unwrap_or_default()])
+                        .args(["/C", "icacls", key_file.to_string_lossy().as_ref(), "/setowner", "&", &std::env::var("USERNAME").unwrap_or_default()])
                         .output();
                     // Set minimal permissions
                     let _ = std::process::Command::new("cmd")
-                        .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
+                        .args(["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
                         .output();
                 }
             } else {
                 // Could not run icacls - try basic permissions
                 let _ = std::process::Command::new("cmd")
-                    .args(&["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
+                    .args(["/C", "icacls", key_file.to_string_lossy().as_ref(), "/grant", "&", &std::env::var("USERNAME").unwrap_or_default(), ":R"])
                     .output();
             }
         }
 
-        args.push("-i".to_string());
-        args.push(key_file.to_string_lossy().to_string());
-        key_guard = Some(TempKeyGuard {
-            path: Some(key_file.clone()),
-        });
-        temp_key_path = Some(key_file);
+    args.push("-i".to_string());
+    args.push(key_file.to_string_lossy().to_string());
+    key_guard = Some(TempKeyGuard {
+        path: Some(key_file.clone()),
+    });
+    temp_key_path = Some(key_file);
     }
 
-    args.push(format!("{}@{}", username, host));
+    args.push(format!("{}@{}", params.username, params.host));
 
     // Open PTY
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
-            rows: rows as u16,
-            cols: cols as u16,
+            rows: params.rows as u16,
+            cols: params.cols as u16,
             pixel_width: 0,
             pixel_height: 0,
         })
@@ -257,11 +261,11 @@ pub fn connect_ssh(
     let master_arc = Arc::new(Mutex::new(pair.master));
 
     let session_id_clone = session_id.clone();
-    let password_clone = password.map(|s| zeroize::Zeroizing::new(s.to_string()));
-    let passphrase_clone = passphrase.map(|s| zeroize::Zeroizing::new(s.to_string()));
+    let password_clone = params.password.map(zeroize::Zeroizing::new);
+    let passphrase_clone = params.passphrase.map(zeroize::Zeroizing::new);
     let app_clone = app.clone();
     let temp_key_path_for_thread = key_guard.as_mut().and_then(|g| g.path.take());
-    let server_id_clone = server_id;
+    let server_id_clone = params.server_id;
 
     // Spawn reader thread
     thread::spawn(move || {

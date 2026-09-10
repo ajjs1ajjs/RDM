@@ -92,30 +92,34 @@ export function useServerForm(
     try {
       if (editingServer) {
         await invoke("update_server", {
-            id: editingServer.id, name: srvName, hostname: srvHost, ip: srvIp,
+            id: editingServer.id,
+            params: { name: srvName, hostname: srvHost, ip: srvIp,
             port: srvPort, protocol: srvProto, os: srvOs,
             folderPath: srvFolder, tags: srvTags, description: srvDesc,
             credentialId: srvCredId || null, username: srvUsername || null,
             password: srvPassword || null,
-            passwordChanged: srvPasswordChanged,
             rdpClipboard: rdpClipboard ? 1 : 0, rdpDrives: rdpDrives ? 1 : 0,
             rdpPrinters: rdpPrinters ? 1 : 0, rdpSmartSizing: rdpSmartSizing ? 1 : 0,
             rdpAudio: rdpAudio, rdpSmartcards: rdpSmartcards ? 1 : 0,
             rdpWebauthn: rdpWebauthn ? 1 : 0, rdpFullscreen: rdpFullscreen ? 1 : 0,
             rdpMultimon: rdpMultimon ? 1 : 0,
+            },
+            passwordChanged: srvPasswordChanged,
           });
       } else {
         await invoke("add_server", {
-          name: srvName, hostname: srvHost, ip: srvIp, port: srvPort,
-          protocol: srvProto, os: srvOs, folderPath: srvFolder,
-          tags: srvTags, description: srvDesc,
-          credentialId: srvCredId || null, username: srvUsername || null,
-          password: srvPassword || null,
-          rdpClipboard: rdpClipboard ? 1 : 0, rdpDrives: rdpDrives ? 1 : 0,
-          rdpPrinters: rdpPrinters ? 1 : 0, rdpSmartSizing: rdpSmartSizing ? 1 : 0,
-          rdpAudio: rdpAudio, rdpSmartcards: rdpSmartcards ? 1 : 0,
-          rdpWebauthn: rdpWebauthn ? 1 : 0, rdpFullscreen: rdpFullscreen ? 1 : 0,
-          rdpMultimon: rdpMultimon ? 1 : 0,
+          params: {
+            name: srvName, hostname: srvHost, ip: srvIp, port: srvPort,
+            protocol: srvProto, os: srvOs, folderPath: srvFolder,
+            tags: srvTags, description: srvDesc,
+            credentialId: srvCredId || null, username: srvUsername || null,
+            password: srvPassword || null,
+            rdpClipboard: rdpClipboard ? 1 : 0, rdpDrives: rdpDrives ? 1 : 0,
+            rdpPrinters: rdpPrinters ? 1 : 0, rdpSmartSizing: rdpSmartSizing ? 1 : 0,
+            rdpAudio: rdpAudio, rdpSmartcards: rdpSmartcards ? 1 : 0,
+            rdpWebauthn: rdpWebauthn ? 1 : 0, rdpFullscreen: rdpFullscreen ? 1 : 0,
+            rdpMultimon: rdpMultimon ? 1 : 0,
+          },
         });
       }
       setServerModalOpen(false);

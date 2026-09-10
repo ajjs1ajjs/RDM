@@ -38,12 +38,14 @@ const fetchFiles = async (path: string) => {
     setError(null);
     try {
       const output = await invoke<string>("sftp_ls", {
-        host,
-        port,
-        username,
+        params: {
+          host,
+          port,
+          username,
+          credentialId: credentialId || null,
+          serverId: serverId || null,
+        },
         path,
-        credentialId: credentialId || null,
-        serverId: serverId || null,
       });
 
       const lines = output.split("\n").map(l => l.trim()).filter(l => l.length > 0);
@@ -164,13 +166,15 @@ const fetchFiles = async (path: string) => {
 
       setLoading(true);
       await invoke("sftp_download", {
-        host,
-        port,
-        username,
+        params: {
+          host,
+          port,
+          username,
+          credentialId: credentialId || null,
+          serverId: serverId || null,
+        },
         remotePath: currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`,
         localPath,
-        credentialId: credentialId || null,
-        serverId: serverId || null,
       });
       await dialogs.alert("Download completed!");
     } catch (err: any) {
@@ -193,13 +197,15 @@ const fetchFiles = async (path: string) => {
 
       setLoading(true);
       await invoke("sftp_upload", {
-        host,
-        port,
-        username,
+        params: {
+          host,
+          port,
+          username,
+          credentialId: credentialId || null,
+          serverId: serverId || null,
+        },
         localPath,
         remotePath: currentPath === "/" ? `/${filename}` : `${currentPath}/${filename}`,
-        credentialId: credentialId || null,
-        serverId: serverId || null,
       });
       await dialogs.alert("Upload completed!");
       fetchFiles(currentPath);
