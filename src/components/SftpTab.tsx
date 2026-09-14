@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { save, open } from "@tauri-apps/plugin-dialog";
 import { useDialogs } from "./AppDialogs";
 import { File, Folder, Download, Upload, RefreshCw, ChevronRight, HardDrive } from "lucide-react";
 
@@ -158,8 +159,6 @@ const fetchFiles = async (path: string) => {
 
   const handleDownload = async (file: FileItem) => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const { save } = await import('@tauri-apps/plugin-dialog');
       
       const localPath = await save({ defaultPath: file.name });
       if (!localPath) return;
@@ -186,8 +185,6 @@ const fetchFiles = async (path: string) => {
 
   const handleUpload = async () => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const { open } = await import('@tauri-apps/plugin-dialog');
       
       const localPath = await open({ multiple: false });
       if (!localPath || typeof localPath !== 'string') return;

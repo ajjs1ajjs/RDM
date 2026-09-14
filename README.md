@@ -25,6 +25,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-26A69A)](LICENSE)
 
 </div>
+
 ## 🖼️ Screenshots
 
 <p align="center">
@@ -35,7 +36,7 @@
 ---
 
 ## 🚀 Основний функціонал
-* **SSH-підключення (Linux)**: вбудований термінал на базі `xterm.js` із автоматичною підгонкою розміру сітки, що працює через системний PTY на Rust. Автозаповнення паролів/парольних фраз та робота з тимчасовими файлами приватних ключів (які безслідно видаляються з диска відразу після закриття сесії).
+* **SSH-підключення**: вбудований термінал на базі `xterm.js` із автоматичною підгонкою розміру сітки, що працює через системний PTY на Rust. Автозаповнення паролів/парольних фраз та робота з тимчасовими файлами приватних ключів (які безслідно видаляються з диска відразу після закриття сесії).
 * **RDP-підключення (Windows)**: вбудовані у вкладки додатку RDP-сесії на базі нативного клієнта `mstsc`. Завдяки Win32 reparenting та маніпулюванню стилями вікон, сесія інтегрується безпосередньо у вікно RDM Manager (як у Devolutions RDM) та підтримує плавне масштабування (`smart sizing`) при зміні розмірів вкладки чи приховуванні бічного сайдбара.
 * **SFTP**: вбудований файл-менеджер для передачі файлів поверх SSH.
 * **Сейф облікових записів (Credential Vault)**: безпечне зберігання логінів, паролів та SSH-ключів із AES-256-GCM шифруванням.
@@ -50,12 +51,12 @@
 
 ## 🖥️ Підтримка платформ
 
-| Платформа | SSH / SFTP | Credential Vault | RDP | CI збірка |
-|-----------|-----------|------------------|-----|-----------|
-| **Windows**   | ✅         | ✅ (Credential Manager) | ✅ | ✅ (NSIS/MSI/portable) |
+| Платформа | SSH / SFTP | Credential Vault | RDP (embedded) | CI збірка |
+|-----------|-----------|------------------|----------------|-----------|
+| **Windows 10/11 (x64)** | ✅ | ✅ (Credential Manager) | ✅ | ✅ (NSIS + MSI + portable) |
+| **macOS 11+ (Apple Silicon M1–M4)** | ✅ | ✅ (Keychain) | ❌ | ✅ (DMG arm64 native) |
+| **macOS 11+ (Intel x64)** | ✅ | ✅ (Keychain) | ❌ | ✅ (DMG x64) |
 | **Linux (Ubuntu/Debian)** | ✅ | ✅ (Secret Service / GNOME Keyring) | ❌ | ✅ (AppImage/DEB) |
-| **macOS (Intel x64)** | ✅ | ✅ (Keychain) | ❌ | ✅ (DMG) |
-| **macOS (Apple Silicon M1–M4)** | ✅ | ✅ (Keychain) | ❌ | ✅ (DMG) |
 
 RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюють лише на Windows.
 
@@ -65,17 +66,36 @@ RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюют�
 
 Виберіть на [сторінці релізів](https://github.com/ajjs1ajjs/RDM/releases/latest):
 
-| Платформа | Файл | Опис |
-|-----------|------|------|
-| 🪟 **Windows** | `RDM-Manager-<ver>-setup.exe` | **Універсальний інсталятор (NSIS)** — встановлення в `%LOCALAPPDATA%`, ярлик у меню «Пуск», коректне видалення. |
-| 🪟 **Windows** | `RDM-Manager-<ver>-portable.zip` | Портативна версія — розпакуйте і запустіть `rdm-manager.exe`. |
-| 🪟 **Windows** | `RDM-Manager-<ver>-setup.msi` | MSI-інсталятор для GPO/SCCM корпоративного розгортання. |
-| 🐧 **Linux (Ubuntu/Debian)** | `RDM-Manager-<ver>-linux.AppImage` | Universal Linux binary — `chmod +x` і запуск. |
-| 🐧 **Linux (Ubuntu/Debian)** | `RDM-Manager-<ver>-linux.deb` | DEB пакет для `apt install`. |
-| 🍎 **macOS (Intel x64)** | `RDM-Manager-<ver>-macos-x64.dmg` | DMG образ для macOS 13+ на Intel. |
-| 🍎 **macOS (Apple Silicon M1–M4)** | `RDM-Manager-<ver>-macos-arm64.dmg` | Нативний DMG для Apple Silicon (M1/M2/M3/M4). |
+### 🪟 Windows 10/11 (x64)
 
-> **Авто-оновлення**: Після встановлення програма перевіряє наявність нових версій і пропонує оновитися всередині інтерфейсу з прогрес-баром (Windows/Linux/macOS).
+| Файл | Опис |
+|------|------|
+| `RDM-Manager-<ver>-setup.exe` | **Універсальний інсталятор (NSIS)** — встановлення в `%LOCALAPPDATA%`, ярлик у меню «Пуск», коректне видалення. |
+| `RDM-Manager-<ver>-setup.msi` | **MSI-інсталятор** для GPO/SCCM корпоративного розгортання. |
+| `RDM-Manager-<ver>-portable.zip` | **Портативна версія** — розпакуйте і запустіть `rdm-manager.exe`. |
+
+> **Авто-оновлення**: Після встановлення програма перевіряє наявність нових версій і пропонує оновитися всередині інтерфейсу з прогрес-баром.
+
+### 🍎 macOS 11+ (Apple Silicon + Intel x64)
+
+| Файл | Опис |
+|------|------|
+| `RDM-Manager-<ver>-macos-arm64.dmg` | **Нативний DMG для Apple Silicon** (ARM64/aarch64). Робота без Rosetta 2. |
+| `RDM-Manager-<ver>-macos-x64.dmg` | **DMG для Intel Mac** (x64). |
+
+> Підтримує процесори Apple Silicon: **M1, M2, M3, M4** та новіші. Мінімальна версія macOS — **11.0 (Big Sur)**.
+
+### 🐧 Linux (Ubuntu/Debian)
+
+| Файл | Опис |
+|------|------|
+| `RDM-Manager-<ver>-linux.AppImage` | Universal Linux binary — `chmod +x` і запуск. |
+| `RDM-Manager-<ver>-linux.deb` | DEB пакет для `apt install`. |
+
+---
+
+## 🛡️ Безпека
+
 1. **KEK (Key Encryption Key)**: Випадковий 256-бітний ключ шифрування генерується локально (OS CSPRNG) і **зберігається в системному сховищі ключів ОС (OS keyring)** — Windows Credential Manager або macOS Keychain. У базі даних зберігається лише маркер використання сховища, а не сам ключ. Існуючі сейфи, створені з Windows DPAPI, автоматично мігруються в ключове сховище при першому запуску.
 2. **AES-256-GCM**: Облікові дані шифруються за допомогою симетричного алгоритму AES-256-GCM із випадковим 12-байтовим nonce.
 3. **Безпека пам'яті**: Ключ дешифрування тримається виключно в оперативній пам'яті бекенду Rust та миттєво занулюється (zeroized) при виході або блокуванні сейфа.
@@ -100,24 +120,121 @@ RDP-сесії (вбудований `mstsc`, Win32 reparenting) працюют�
 Для збірки необхідні встановлені:
 * **Node.js** (v20+)
 * **Rust & Cargo** (v1.75+)
-* **C++ Build Tools** (компілятор MSVC або MinGW на Windows)
+* **C++ Build Tools** (MSVC на Windows; Clang на macOS; build-essential на Linux)
 
-### Запуск у режимі розробки
-Встановіть залежності та запустіть Tauri-сервер:
+### Windows
+
+**Додаткові залежності:**
+* **OpenSSH Client** — встановити через `Settings → Apps → Optional Features → Add a feature → OpenSSH Client`
+* **.NET 10 SDK (x64)** — для вбудованих RDP-сесій (RdpHost). Завантажити з [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/10.0)
+* **WebView2** — встановлюється автоматично з інсталятором NSIS; для portable-версії переконайтеся, що `WebView2Loader.dll` знаходиться поруч з `rdm-manager.exe`
+
+**Запуск у режимі розробки:**
+```powershell
+npm install
+npm run tauri dev
+```
+
+**Збірка релізної версії:**
+```powershell
+# Повна збірка: NSIS + MSI + portable
+npm run build:all
+
+# Або через Tauri напряму:
+npm run tauri build
+```
+Готові файли збірки будуть знаходитись у каталозі `src-tauri/target/release/bundle/`.
+
+### macOS (Apple Silicon)
+
+**Додаткові залежності:**
+* **OpenSSH** — встановлюється через Xcode Command Line Tools: `xcode-select --install`
+* **CMake** — для збірки `rusqlite` з bundled SQLite: `brew install cmake`
+* **Підпис додатку** (опціонально, для розгортання за межами CI): Apple Developer Account
+
+**Запуск у режимі розробки:**
 ```bash
 npm install
 npm run tauri dev
 ```
 
-### Збірка релізної версії
-Для створення оптимізованого `.exe` файлу та інсталяторів (`.msi` та setup `.exe` через NSIS):
+**Збірка релізної версії (ARM64):**
+```bash
+# Збірка тільки для Apple Silicon (aarch64)
+npm run tauri build -- --target aarch64-apple-darwin --bundles app,dmg
+```
+
+### Linux (Ubuntu/Debian)
+
+**Додаткові залежності:**
+```bash
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libudev-dev patchelf openssh-client
+```
+
+**Запуск у режимі розробки:**
+```bash
+npm install
+npm run tauri dev
+```
+
+**Збірка релізної версії:**
 ```bash
 npm run tauri build
 ```
-Готові файли збірки будуть знаходитись у каталозі `src-tauri/target/release/bundle/`.
 
-### Де зберігається база даних?
+---
+
+## 🧪 Базова перевірка працездатності
+
+Після встановлення:
+
+1. **Запустіть програму** — має з'явитися головне вікно з деревом папок.
+2. **Перевірте Credential Vault** — при першому запуску сейф автоматично ініціалізується з випадковим ключем у сховищі ОС. Додайте тестовий обліковий запис.
+3. **Перевірте SSH-підключення** — додайте сервер, виберіть тестовий SSH-хост, натисніть підключення. У вбудованому терміналі має з'явитися командний рядок.
+4. **Перевірте SFTP** — відкрийте вкладку SFTP для цього сервера, перелічіть файли, спробуйте завантажити/вивантажити файл.
+5. **Перевірте бекап/відновлення** — Settings → Backup & Restore → Export, потім Import.
+6. **Перевірте авто-оновлення** — натисніть "Check for updates" в налаштуваннях, переконайтеся, що додаток коректно виявляє поточну версію.
+
+---
+
+## 📂 Де зберігається база даних?
+
 Локальний файл бази даних зберігається за шляхом:
-`C:\Users\<Ваш_Користувач>\AppData\Roaming\com.admin.rdm-manager\rdm.db`
+
+* **Windows**: `C:\Users\<Ваш_Користувач>\AppData\Roaming\com.admin.rdm-manager\rdm.db`
+* **macOS**: `~/Library/Application Support/com.admin.rdm-manager/rdm.db`
+* **Linux**: `~/.local/share/com.admin.rdm-manager/rdm.db`
 
 Увага: файл бази прив'язаний до поточного користувача через **системне сховище ключів ОС (keyring)**. Копіювання файлу працює як бекап на тій самій машині, але для перенесення/синхронізації між пристроями використовуйте **Експорт/Імпорт резервної копії** (Settings → Backup & Restore) — він захищається паролем і не залежить від локального сховища ключів.
+
+---
+
+## 🔧 Розробка
+
+### Структура проєкту
+```
+RDM/
+├── src/                  # React frontend (TypeScript + Vite)
+├── src-tauri/
+│   ├── src/              # Rust backend
+│   │   ├── lib.rs        # Tauri commands, vault logic
+│   │   ├── crypto.rs     # AES-256-GCM, PBKDF2, keyring
+│   │   ├── ssh.rs        # SSH/PTY backend
+│   │   ├── sftp.rs       # SFTP via ssh/scp
+│   │   ├── rdp.rs        # RDP launcher (Windows only)
+│   │   └── RdpHost/      # C# WinForms RDP host (embedded)
+│   ├── Cargo.toml        # Rust dependencies
+│   └── tauri.conf.json   # Tauri app configuration
+├── scripts/              # PowerShell build/release scripts
+└── docs/                 # Documentation assets
+```
+
+### Додаткові скрипти
+```powershell
+# Збірка тільки portable-версії (Windows)
+npm run build:portable
+
+# Повна збірка (NSIS + MSI + portable)
+npm run build:all
+```

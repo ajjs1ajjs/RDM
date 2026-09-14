@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.4
+
+- **Release pipeline:** added MSI (wix) to Tauri bundle targets so the release workflow actually produces the MSI artifact; macOS `minimumSystemVersion` raised 10.15 -> 11.0.
+- **Docs:** README platform matrix and install section now match CI (Windows NSIS+MSI+portable, macOS ARM64+x64 DMG, Linux AppImage+DEB).
+- **Frontend:** single initial data load orchestrated from `App.tsx` (removed duplicate autoload effects in `useServers`/`useCredentials`); `SftpTab` uses static dialog imports; heavy tabs (`TerminalTab`, `RdpTab`, `SftpTab`) lazy-loaded, main bundle 585 KB -> 277 KB.
+- **Backend:** `unwrap()` cleanup in `lib.rs` (`unwrap_err`, `ok_or_else`, `file_name` fallback instead of panics).
+
+
 ## v2.1.3
 
 - **Clippy audit cleanup (15 warnings resolved, zero remaining):**

@@ -1,0 +1,62 @@
+name: Deferred Release (quota reset Oct 1)
+
+# This workflow does NOT build anything itself. On Oct 1, after the monthly
+# Actions quota resets, it pushes the release tag — that tag push triggers
+# the cross-platform build in release.yml automatically.
+# Manual fallback at any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # Oct 1, 12:00 UTC (15:00 Kyiv) — safely after the quota reset.
+    - cron: '0 12 1 10 *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (default: v<version from tauri.conf.json>)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  tag-and-release:
+    name: Push release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          # PAT, not GITHUB_TOKEN: a tag pushed with GITHUB_TOKEN would NOT
+          # trigger the release workflow (GitHub loop protection).
+          token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            TAG="v$VER"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
+
+      - name: Skip if tag already exists
+        id: exists
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ steps.tag.outputs.tag }}$"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag already exists on remote, nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.exists.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.tag.outputs.tag }}" -m "Release ${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"

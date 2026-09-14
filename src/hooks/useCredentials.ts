@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Credential } from "../types";
 
@@ -14,9 +14,6 @@ export function useCredentials() {
     }
   }, []);
 
-  useEffect(() => {
-    loadCredentials();
-  }, [loadCredentials]);
 
   return { credentials, setCredentials, loadCredentials };
 }

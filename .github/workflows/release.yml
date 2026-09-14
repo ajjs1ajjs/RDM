@@ -78,6 +78,7 @@ jobs:
         token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
         files: |
           src-tauri/target/release/bundle/nsis/*.exe
+          src-tauri/target/release/bundle/msi/*.msi
           dist-portable/*.zip
 
   build-linux:

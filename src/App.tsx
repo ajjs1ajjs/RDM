@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useVault } from "./hooks/useVault";
 import { useServers } from "./hooks/useServers";
@@ -13,9 +13,15 @@ import { useAppUpdate } from "./hooks/useAppUpdate";
 import { Sidebar } from "./components/Sidebar";
 import { ServerTable } from "./components/ServerTable";
 import { DetailsPanel } from "./components/DetailsPanel";
-import { TerminalTab } from "./components/TerminalTab";
-import { RdpTab } from "./components/RdpTab";
-import { SftpTab } from "./components/SftpTab";
+const TerminalTab = lazy(() =>
+  import("./components/TerminalTab").then((m) => ({ default: m.TerminalTab })),
+);
+const RdpTab = lazy(() =>
+  import("./components/RdpTab").then((m) => ({ default: m.RdpTab })),
+);
+const SftpTab = lazy(() =>
+  import("./components/SftpTab").then((m) => ({ default: m.SftpTab })),
+);
 import { CommandPalette } from "./components/CommandPalette";
 import { Taskbar } from "./components/Taskbar";
 import { useDialogs } from "./components/AppDialogs";
@@ -573,7 +579,9 @@ function App() {
           </div>
 
           <div className="tab-content">
-            {renderTabContent()}
+            <Suspense fallback={<div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading tab...</div>}>
+              {renderTabContent()}
+            </Suspense>
           </div>
         </div>
       </div>

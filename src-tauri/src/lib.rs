@@ -774,7 +774,7 @@ fn connect_ssh(
             } else {
                 format!(
                     "Failed to initiate SSH session: {}",
-                    res.as_ref().err().unwrap()
+                    res.as_ref().unwrap_err()
                 )
             },
         };
@@ -886,7 +886,7 @@ fn connect_rdp(
             } else {
                 format!(
                     "Failed to launch RDP session: {}",
-                    res.as_ref().err().unwrap()
+                    res.as_ref().unwrap_err()
                 )
             },
         };
@@ -1036,7 +1036,7 @@ fn connect_rdp_embedded(
             } else {
                 format!(
                     "Failed to launch embedded RDP session: {}",
-                    res.as_ref().err().unwrap()
+                    res.as_ref().unwrap_err()
                 )
             },
         };
@@ -1224,7 +1224,7 @@ fn auto_setup_vault(
     //    transparently migrate to a random keyring-bound KEK.
     let salt_hex = db::get_setting(conn, "salt")?.ok_or_else(|| "Vault salt not found".to_string())?;
     let salt = hex::decode(&salt_hex).map_err(|e| format!("Invalid salt encoding: {}", e))?;
-    let sentinel_json = sentinel.as_ref().unwrap();
+    let sentinel_json = sentinel.as_ref().ok_or_else(|| "Vault is corrupted: sentinel not found".to_string())?;
     let encrypted: crypto::EncryptedData = serde_json::from_str(sentinel_json)
         .map_err(|e| format!("Failed to parse sentinel: {}", e))?;
     let default_kek = crypto::derive_key_legacy("default_rdm_key", &salt)?;
@@ -1932,7 +1932,7 @@ fn select_and_export_backup(
         let path = path.as_path().ok_or("Invalid file path")?;
         let dest = path.to_string_lossy().to_string();
         export_database_backup(dest, password, app, state, db)?;
-        Ok(path.file_name().unwrap().to_string_lossy().to_string())
+        Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string_lossy().into_owned()))
     } else {
         Err("Save cancelled".to_string())
     }
@@ -1956,7 +1956,7 @@ fn select_and_import_backup(
         let path = path.as_path().ok_or("Invalid file path")?;
         let src = path.to_string_lossy().to_string();
         import_database_backup(src, password, app, state, db)?;
-        Ok(path.file_name().unwrap().to_string_lossy().to_string())
+        Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string_lossy().into_owned()))
     } else {
         Err("Import cancelled".to_string())
     }
